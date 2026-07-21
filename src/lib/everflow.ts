@@ -1,4 +1,5 @@
 import { aggregateDashboard, berlinDateRange, type DashboardData, type Period, type Redirect } from './dashboard';
+import { aggregatePortfolio, type Portfolio } from './portfolio';
 const BASE='https://api.eflow.team/v1';
 type Fetcher=typeof fetch;
 type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
@@ -13,4 +14,13 @@ export async function loadDashboard(period:Period,apiKey:string,fetcher:Fetcher=
  const [baseResponse,eventResponse]=await Promise.all([false,true].map(events=>json(fetcher,`${BASE}/networks/reporting/entity/table`,{method:'POST',headers,body:JSON.stringify(body(events))}))) as [{table?:ReportRow[]},{table?:ReportRow[]}];
  const validate=(rows:ReportRow[])=>{for(const row of rows){const ids=Object.fromEntries(row.columns.map(c=>[c.column_type,String(c.id)]));if(ids.campaign!=='169'||ids.offer!=='57')throw new Error('Everflow-Filter wurde ignoriert');}return rows;};
  return aggregateDashboard(redirects,validate(baseResponse.table||[]),validate(eventResponse.table||[]),range);
+}
+
+export async function loadPortfolio(period:Period,apiKey:string,fetcher:Fetcher=fetch,now=new Date()):Promise<Portfolio>{
+ if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');
+ const headers={'X-Eflow-API-Key':apiKey,'Content-Type':'application/json'};
+ const range=berlinDateRange(period,now);
+ const body=(events:boolean)=>({from:range.from,to:range.to,timezone_id:80,currency_id:'EUR',columns:['affiliate','offer','campaign','offer_url',...(events?['event_name']:[])].map(column=>({column})),query:{filters:[],search_terms:[]}});
+ const [baseResponse,eventResponse]=await Promise.all([false,true].map(events=>json(fetcher,`${BASE}/networks/reporting/entity/table`,{method:'POST',headers,body:JSON.stringify(body(events))}))) as [{table?:ReportRow[]},{table?:ReportRow[]}];
+ return aggregatePortfolio(baseResponse.table||[],eventResponse.table||[],range);
 }

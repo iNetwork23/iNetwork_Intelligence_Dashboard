@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadDashboard } from './everflow';
+import { loadDashboard,loadPortfolio } from './everflow';
 
 const response=(body:unknown)=>Promise.resolve({ok:true,status:200,json:()=>Promise.resolve(body),text:()=>Promise.resolve(JSON.stringify(body))} as Response);
 
@@ -14,5 +14,18 @@ describe('loadDashboard',()=>{
   expect(fetcher).toHaveBeenCalledTimes(3);
   const reportBody=JSON.parse(fetcher.mock.calls[1][1].body);
   expect(reportBody.query.filters).toEqual([{resource_type:'offer',filter_id_value:'57'},{resource_type:'campaign',filter_id_value:'169'}]);
+ });
+});
+
+describe('loadPortfolio',()=>{
+ it('requests the complete account without offer or campaign filters',async()=>{
+  const row={columns:[{column_type:'affiliate',id:'1',label:'Partner'},{column_type:'offer',id:'8',label:'Offer'},{column_type:'campaign',id:'0',label:'N/A'},{column_type:'offer_url',id:'10',label:'LP'}],reporting:{total_click:10,cv:2,payout:6,revenue:9,profit:3}};
+  const fetcher=vi.fn().mockImplementationOnce(()=>response({table:[row]})).mockImplementationOnce(()=>response({table:[]}));
+  const result=await loadPortfolio('30d','secret',fetcher,new Date('2026-07-21T18:00:00Z'));
+  expect(result.offers[0]).toMatchObject({id:'8',clicks:10,profit:3});
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  const body=JSON.parse(fetcher.mock.calls[0][1].body);
+  expect(body.query.filters).toEqual([]);
+  expect(body.columns.map((x:{column:string})=>x.column)).toEqual(['affiliate','offer','campaign','offer_url']);
  });
 });
