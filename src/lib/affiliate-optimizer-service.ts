@@ -1,2 +1,4 @@
-import{getDashboard}from'./dashboard-service';import{analyzeAffiliateTraffic}from'./affiliate-optimizer';
+import{unstable_cache}from'next/cache';import type{Period}from'./dashboard';import{getDashboard}from'./dashboard-service';import{analyzeAffiliateTraffic}from'./affiliate-optimizer';import{loadAffiliateSourceRows}from'./everflow';import{mergeSourceWindows}from'./source-breakdown';
 export async function getAffiliateOptimizations(){const[today,days7,days30]=await Promise.all([getDashboard('today'),getDashboard('7d'),getDashboard('30d')]);return analyzeAffiliateTraffic(today,days7,days30)}
+const sourceWindow=(affiliateId:string,period:Period)=>unstable_cache(()=>loadAffiliateSourceRows(period,affiliateId,process.env.EVERFLOW_API_KEY||''),['affiliate-source-breakdown',affiliateId,period],{revalidate:60,tags:[`affiliate-source-${affiliateId}`]})();
+export async function getAffiliateSourceBreakdown(affiliateId:string){const[today,days7,days30]=await Promise.all([sourceWindow(affiliateId,'today'),sourceWindow(affiliateId,'7d'),sourceWindow(affiliateId,'30d')]);return mergeSourceWindows(today,days7,days30)}

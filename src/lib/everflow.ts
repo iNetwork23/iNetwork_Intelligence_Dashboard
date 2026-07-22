@@ -25,6 +25,9 @@ export async function loadPortfolio(period:Period,apiKey:string,fetcher:Fetcher=
  const [baseResponse,eventResponse]=await Promise.all([false,true].map(events=>json(fetcher,`${BASE}/networks/reporting/entity/table`,{method:'POST',headers,body:JSON.stringify(body(events))}))) as [{table?:ReportRow[]},{table?:ReportRow[]}];
  return aggregatePortfolio(baseResponse.table||[],eventResponse.table||[],range);
 }
+export async function loadAffiliateSourceRows(period:Period,affiliateId:string,apiKey:string,fetcher:Fetcher=fetch,now=new Date()):Promise<ReportRow[]>{
+ if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');if(!/^\d+$/.test(affiliateId))throw new Error('Ungültige Affiliate-ID');const headers={'X-Eflow-API-Key':apiKey,'Content-Type':'application/json'},range=berlinDateRange(period,now),body={from:range.from,to:range.to,timezone_id:80,currency_id:'EUR',columns:['affiliate','offer','campaign','offer_url','source_id','sub1'].map(column=>({column})),query:{filters:[{resource_type:'affiliate',filter_id_value:affiliateId}],search_terms:[]}},response=await json(fetcher,`${BASE}/networks/reporting/entity/table`,{method:'POST',headers,body:JSON.stringify(body)})as{table?:ReportRow[]};for(const row of response.table||[]){const affiliate=row.columns.find(c=>c.column_type==='affiliate');if(affiliate&&String(affiliate.id)!==affiliateId)throw new Error('Everflow Affiliate-Filter wurde ignoriert')}return response.table||[]
+}
 
 function berlinDay(now:Date){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export async function loadSmartlinkInsight(campaignId:number,apiKey:string,fetcher:Fetcher=fetch,now=new Date()){
