@@ -11,7 +11,6 @@ export const maxDuration=300;
 async function authorized(request:NextRequest){
   const secret=process.env.CRON_SECRET;
   if(secret&&request.headers.get('authorization')===`Bearer ${secret}`)return true;
-  if(request.headers.get('user-agent')?.startsWith('vercel-cron/'))return true;
   return Boolean(await currentUser());
 }
 

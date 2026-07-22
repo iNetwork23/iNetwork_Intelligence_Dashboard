@@ -1,0 +1,8 @@
+import type{LegacySlot,SmartMetrics,SmartSlot}from'./smartlink';
+export type MonetizationSlice=Pick<SmartMetrics,'firstSales'|'rebills'|'coinSpend'|'revenue'|'payout'|'profit'>;
+const zero=():MonetizationSlice=>({firstSales:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0});
+const add=(a:MonetizationSlice,b:MonetizationSlice)=>{for(const key of['firstSales','rebills','coinSpend','revenue','payout','profit']as const)a[key]+=b[key];return a};
+const clean=(n:number)=>Math.abs(n)<0.01?0:Number(n.toFixed(2));
+const finish=(m:MonetizationSlice):MonetizationSlice=>({firstSales:Math.max(0,Math.round(m.firstSales)),rebills:Math.max(0,Math.round(m.rebills)),coinSpend:Math.max(0,Math.round(m.coinSpend)),revenue:clean(m.revenue),payout:clean(m.payout),profit:clean(m.profit)});
+export function buildMonetizationAttribution(total:SmartMetrics,currentSlots:SmartSlot[],legacySlots:LegacySlot[]){const current=finish(currentSlots.reduce((sum,slot)=>add(sum,slot.metrics72),zero())),legacy=finish(legacySlots.reduce((sum,slot)=>add(sum,slot.metrics72),zero())),assigned=finish(add({...current},legacy)),unassigned=finish({firstSales:total.firstSales-assigned.firstSales,rebills:total.rebills-assigned.rebills,coinSpend:total.coinSpend-assigned.coinSpend,revenue:total.revenue-assigned.revenue,payout:total.payout-assigned.payout,profit:total.profit-assigned.profit});return{total:finish(total),current,legacy,unassigned,fullyAssigned:unassigned.firstSales===0&&unassigned.rebills===0&&unassigned.coinSpend===0&&unassigned.revenue===0&&unassigned.payout===0&&unassigned.profit===0}}
+export function hasRecentMonetization(metric:MonetizationSlice){return metric.firstSales>0||metric.rebills>0||metric.coinSpend>0||metric.revenue!==0||metric.profit!==0}

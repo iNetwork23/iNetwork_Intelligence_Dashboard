@@ -1,6 +1,6 @@
 import 'server-only';
 import type {EverflowConversion,ReportRow} from './history-cache';
-import {loadAllReportPages} from './history-cache';
+import {loadDailyReportSlices} from './history-cache';
 
 const BASE='https://api.eflow.team/v1';
 type Fetcher=typeof fetch;
@@ -33,11 +33,10 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
       return rows;
     },
     async loadReports(from:string,to:string){
-      const pageSize=10_000;
-      const [base,events]=await Promise.all([false,true].map(includeEvents=>loadAllReportPages(async page=>{
-        const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table?page=${page}&page_size=${pageSize}`,reportBody(from,to,includeEvents),apiKey,fetcher);
+      const [base,events]=await Promise.all([false,true].map(includeEvents=>loadDailyReportSlices(from,to,async day=>{
+        const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,reportBody(day,day,includeEvents),apiKey,fetcher);
         return result.table||[];
-      },pageSize)));
+      })));
       return{base,events};
     },
   };

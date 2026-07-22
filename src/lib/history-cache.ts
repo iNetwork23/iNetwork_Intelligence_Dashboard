@@ -15,7 +15,7 @@ export type EverflowConversion={
 
 export type ConversionCacheRow={
   id:string;type:'soi'|'first_sale'|'rebill';converted_at:string;offer_url_id:string|null;source_id:string|null;sub_source:string|null;
-  cost:number;revenue:number;payout:number;lead_id:string;raw:EverflowConversion;status:string|null;affiliate_id:string|null;affiliate_name:string|null;
+  cost:number;revenue:number;payout:number;lead_id:string;raw:Record<string,unknown>;status:string|null;affiliate_id:string|null;affiliate_name:string|null;
   offer_id:string|null;offer_name:string|null;offer_url_name:string|null;campaign_id:string|null;campaign_name:string|null;
 };
 
@@ -30,14 +30,14 @@ const isoDay=(value:Date)=>value.toISOString().slice(0,10);
 const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
 const shift=(value:string,days:number)=>isoDay(new Date(fromDay(value).getTime()+days*DAY));
 
-export async function loadAllReportPages<T>(loadPage:(page:number)=>Promise<T[]>,pageSize=10_000){
+export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(day:string)=>Promise<T[]>,rowCap=10_000){
   const rows:T[]=[];
-  for(let page=1;page<=100;page++){
-    const batch=await loadPage(page);
+  for(let day=from;day<=to;day=shift(day,1)){
+    const batch=await loadDay(day);
+    if(batch.length>=rowCap)throw new Error(`Everflow daily entity report reached the ${rowCap.toLocaleString('en-US')}-row cap for ${day}`);
     rows.push(...batch);
-    if(batch.length<pageSize)return rows;
   }
-  throw new Error('Everflow entity report exceeded 100 pages');
+  return rows;
 }
 
 export function initialSyncState(now=new Date()):SyncState{
@@ -73,7 +73,7 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),
     offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:text(row.source_id),sub_source:text(row.sub1),cost:amount(row.cost),
-    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:row,status:text(row.status),
+    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{},status:text(row.status),
     affiliate_id:text(relationship.affiliate?.network_affiliate_id),affiliate_name:text(relationship.affiliate?.name),offer_id:text(relationship.offer?.network_offer_id),
     offer_name:text(relationship.offer?.name),offer_url_name:text(relationship.offer_url?.name),campaign_id:text(relationship.campaign?.network_campaign_id),
     campaign_name:text(relationship.campaign?.name),
@@ -105,7 +105,8 @@ export async function runHistorySync(input:{
   }
   const window=selectSyncWindow(state,now);
   const [rawConversions,reports]=await Promise.all([input.loadConversions(window.from,window.to),input.loadReports(window.from,window.to)]);
-  const conversions=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null);
+  const mappedConversions=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null);
+  const conversions=Array.from(new Map(mappedConversions.map(row=>[row.id,row])).values());
   const metrics=metricRows(reports.base,reports.events);
   await input.store.upsertConversions(conversions);
   await input.store.upsertMetrics(metrics);
@@ -123,7 +124,7 @@ export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetr
       offer_id:dim(row,'offer').id||'0',offer_name:dim(row,'offer').label||'N/A',campaign_id:dim(row,'campaign').id||'0',campaign_name:dim(row,'campaign').label||'N/A',
       offer_url_id:dim(row,'offer_url').id||'0',offer_url_name:dim(row,'offer_url').label||'N/A',source_id:dim(row,'source_id').id||'',sub_source:dim(row,'sub1').id||'',
       clicks:amount(q.total_click),sois:amount(q.cv),first_sales:0,rebills:0,coin_spend:0,payout:amount(q.payout),revenue:amount(q.revenue),
-      profit:amount(q.profit??(amount(q.revenue)-amount(q.payout))),raw:{base:row},
+      profit:amount(q.profit??(amount(q.revenue)-amount(q.payout))),raw:{},
     });
   }
   for(const row of eventRows){

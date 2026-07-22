@@ -1,6 +1,6 @@
 # Everflow-Historiencache mit Supabase
 
-Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten dauerhaft in Supabase. Der Vercel-Cron arbeitet den 365-Tage-Backfill in höchstens sieben Tagen pro Lauf rückwärts ab. Danach synchronisiert dieselbe Route stündlich das rollierende 30-Tage-Fenster; die weiterhin alle zehn Minuten gestarteten Cron-Aufrufe werden bis zur nächsten vollen Stunde übersprungen.
+Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten dauerhaft in Supabase. Jeder Lauf arbeitet den 365-Tage-Backfill in höchstens sieben Tagen rückwärts ab. Auf Vercel Pro läuft `/api/sync` einmal pro Stunde. Nach Abschluss des Backfills aktualisiert derselbe Cron das rollierende 30-Tage-Fenster höchstens stündlich.
 
 ## Einmalige Einrichtung
 
@@ -16,7 +16,7 @@ EVERFLOW_API_KEY=<everflow-api-key>
 
 Der Service-Role-Key darf niemals mit `NEXT_PUBLIC_` beginnen oder im Browser-Code verwendet werden. Die Tabellen haben RLS ohne Client-Policies; Zugriffe erfolgen ausschließlich serverseitig. Optional kann `CRON_SECRET` gesetzt werden. Vercel sendet diesen Wert dann automatisch als Bearer-Token an Cron-Routen.
 
-4. Neu deployen. `vercel.json` startet `/api/sync` alle zehn Minuten.
+4. Neu deployen. `vercel.json` startet `/api/sync` auf Vercel Pro stündlich zur vollen Stunde.
 
 ## Tabellen
 

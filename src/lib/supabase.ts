@@ -15,8 +15,8 @@ export function getSupabaseAdmin(){
 const throwIfError=(error:{message:string}|null,operation:string)=>{if(error)throw new Error(`Supabase ${operation}: ${error.message}`)};
 async function upsertBatches(table:'conversions'|'daily_metrics',rows:ConversionCacheRow[]|DailyMetricRow[]){
   const supabase=getSupabaseAdmin();
-  for(let start=0;start<rows.length;start+=500){
-    const batch=rows.slice(start,start+500);
+  for(let start=0;start<rows.length;start+=100){
+    const batch=rows.slice(start,start+100);
     const {error}=await supabase.from(table).upsert(batch as never[],{onConflict:'id'});
     throwIfError(error,`${table} upsert`);
   }

@@ -1,4 +1,4 @@
 import{describe,expect,it,vi}from'vitest';
-import{loadAllReportPages}from'./history-cache';
+import{loadDailyReportSlices}from'./history-cache';
 
-describe('Everflow entity-report pagination',()=>{it('loads pages until Everflow returns fewer rows than the page size',async()=>{const row={columns:[],reporting:{}};const load=vi.fn(async(page:number)=>page===1?Array.from({length:10_000},()=>row):[row,row]);const rows=await loadAllReportPages(load,10_000);expect(rows).toHaveLength(10_002);expect(load).toHaveBeenCalledTimes(2);expect(load).toHaveBeenNthCalledWith(1,1);expect(load).toHaveBeenNthCalledWith(2,2);});});
+describe('Everflow entity-report slicing',()=>{it('loads every calendar day separately so a seven-day result is not truncated at 10,000 rows',async()=>{const load=vi.fn(async(day:string)=>[{day}]);const rows=await loadDailyReportSlices('2026-07-16','2026-07-22',load);expect(rows).toEqual(['16','17','18','19','20','21','22'].map(day=>({day:`2026-07-${day}`})));expect(load).toHaveBeenCalledTimes(7);expect(load).toHaveBeenNthCalledWith(1,'2026-07-16');expect(load).toHaveBeenNthCalledWith(7,'2026-07-22');});it('fails closed when even one daily report reaches Everflow’s 10,000-row cap',async()=>{await expect(loadDailyReportSlices('2026-07-22','2026-07-22',async()=>Array.from({length:10_000},()=>({})))).rejects.toThrow('10,000-row cap');});});

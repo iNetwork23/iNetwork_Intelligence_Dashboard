@@ -21,7 +21,8 @@ describe('history cache sync windows',()=>{
 describe('Everflow conversion mapping',()=>{
   const base:EverflowConversion={conversion_id:'cv-1',transaction_id:'lead-1',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',status:'approved',payout:3,revenue:0,source_id:'src',sub1:'sub',relationship:{affiliate:{network_affiliate_id:6,name:'Partner'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2774,name:'LP'}}};
   it('uses the stable conversion id and transaction id for the LTV chain',()=>{
-    expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0});
+    expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{}});
+    expect(conversionToCacheRow(base)?.raw).toEqual({});
   });
   it('maps Sale and Rebill events and excludes unrelated events',()=>{
     expect(conversionToCacheRow({...base,conversion_id:'sale',is_event:true,event:'Sale'})?.type).toBe('first_sale');
@@ -45,7 +46,8 @@ describe('daily metric mapping',()=>{
     const sale:ReportRow={columns:[...columns,{column_type:'event_name',id:'1',label:'Sale'}],reporting:{event:2}};
     const rebill:ReportRow={columns:[...columns,{column_type:'event_name',id:'2',label:'Rebill'}],reporting:{event:3}};
     const [row]=metricRows([base],[sale,rebill]);
-    expect(row).toMatchObject({metric_date:'2026-07-22',affiliate_id:'6',offer_id:'57',campaign_id:'2',offer_url_id:'2774',source_id:'src',sub_source:'sub',clicks:100,sois:10,first_sales:2,rebills:3,payout:30,revenue:80,profit:50});
+    expect(row).toMatchObject({metric_date:'2026-07-22',affiliate_id:'6',offer_id:'57',campaign_id:'2',offer_url_id:'2774',source_id:'src',sub_source:'sub',clicks:100,sois:10,first_sales:2,rebills:3,payout:30,revenue:80,profit:50,raw:{}});
+    expect(row.raw).toEqual({});
     expect(row.id).toMatch(/^metric:/);
   });
 });
@@ -62,7 +64,7 @@ describe('sync orchestration',()=>{
     };
     const conversion:EverflowConversion={conversion_id:'cv',transaction_id:'lead',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI'};
     const columns=[{column_type:'date',id:'1784692800',label:'1784692800'}];
-    const result=await runHistorySync({store,now:new Date('2026-07-22T12:00:00Z'),loadConversions:async()=>[conversion],loadReports:async()=>({base:[{columns,reporting:{cv:1}}],events:[]})});
+    const result=await runHistorySync({store,now:new Date('2026-07-22T12:00:00Z'),loadConversions:async()=>[conversion,conversion],loadReports:async()=>({base:[{columns,reporting:{cv:1}}],events:[]})});
     expect(calls).toEqual(['conversions:1','metrics:1','state']);
     expect(savedState).toMatchObject({phase:'backfill',next_end:'2026-07-15'});
     expect(result).toMatchObject({mode:'backfill',from:'2026-07-16',to:'2026-07-22',upsertedConversions:1,upsertedMetrics:1});
