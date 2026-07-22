@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadDashboard,loadPortfolio,loadSmartlinkInsight,searchCampaigns } from './everflow';
+import { loadAffiliateConversions,loadDashboard,loadPortfolio,loadSmartlinkInsight,searchCampaigns } from './everflow';
 
 const response=(body:unknown)=>Promise.resolve({ok:true,status:200,json:()=>Promise.resolve(body),text:()=>Promise.resolve(JSON.stringify(body))} as Response);
 
@@ -28,6 +28,10 @@ describe('loadPortfolio',()=>{
   expect(body.query.filters).toEqual([]);
   expect(body.columns.map((x:{column:string})=>x.column)).toEqual(['affiliate','offer','campaign','offer_url']);
  });
+});
+
+describe('affiliate conversion history',()=>{
+ it('paginates and constrains the conversion report to one direct-link affiliate',async()=>{const conversion={transaction_id:'tx',event:'SOI',is_event:false,conversion_unix_timestamp:1,relationship:{affiliate:{network_affiliate_id:376}}};const fetcher=vi.fn().mockImplementationOnce(()=>response({conversions:[conversion],paging:{total_count:2001}})).mockImplementationOnce(()=>response({conversions:[{...conversion,transaction_id:'tx2'}],paging:{total_count:2001}}));const rows=await loadAffiliateConversions('376','secret',90,fetcher,new Date('2026-07-22T12:00:00Z'));expect(rows).toHaveLength(2);expect(fetcher).toHaveBeenCalledTimes(2);const body=JSON.parse(fetcher.mock.calls[0][1].body);expect(body.query.filters).toEqual([{resource_type:'affiliate',filter_id_value:'376'},{resource_type:'campaign',filter_id_value:'0'}]);expect(body).toMatchObject({show_conversions:true,show_events:true})});
 });
 
 describe('smartlink intelligence loader',()=>{
