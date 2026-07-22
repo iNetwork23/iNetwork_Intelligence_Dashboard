@@ -1,5 +1,6 @@
 import { aggregateDashboard, berlinDateRange, type DashboardData, type Period, type Redirect } from './dashboard';
 import { aggregatePortfolio, type Portfolio } from './portfolio';
+import { buildSmartlinkInsight, type CampaignShape } from './smartlink';
 const BASE='https://api.eflow.team/v1';
 type Fetcher=typeof fetch;
 type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
@@ -24,3 +25,12 @@ export async function loadPortfolio(period:Period,apiKey:string,fetcher:Fetcher=
  const [baseResponse,eventResponse]=await Promise.all([false,true].map(events=>json(fetcher,`${BASE}/networks/reporting/entity/table`,{method:'POST',headers,body:JSON.stringify(body(events))}))) as [{table?:ReportRow[]},{table?:ReportRow[]}];
  return aggregatePortfolio(baseResponse.table||[],eventResponse.table||[],range);
 }
+
+function berlinDay(now:Date){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
+export async function loadSmartlinkInsight(campaignId:number,apiKey:string,fetcher:Fetcher=fetch,now=new Date()){
+ if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');if(!Number.isInteger(campaignId)||campaignId<=0)throw new Error('Ungültige Campaign-ID');const headers={'X-Eflow-API-Key':apiKey,'Content-Type':'application/json'};const to=berlinDay(now),end=Date.parse(`${to}T00:00:00Z`),from=new Date(end-14*86400000).toISOString().slice(0,10);const filter=[{resource_type:'campaign',filter_id_value:String(campaignId)}];const body=(events:boolean)=>({from,to,timezone_id:80,currency_id:'EUR',columns:['campaign','affiliate','offer','offer_url','hour',...(events?['event_name']:[])].map(column=>({column})),query:{filters:filter,search_terms:[]}});
+ const [campaign,baseResponse,eventResponse]=await Promise.all([json(fetcher,`${BASE}/networks/campaigns/${campaignId}?relationship=redirects`,{headers}),...([false,true].map(events=>json(fetcher,`${BASE}/networks/reporting/entity/table`,{method:'POST',headers,body:JSON.stringify(body(events))})))]) as [CampaignShape,{table?:ReportRow[]},{table?:ReportRow[]}];
+ if(Number(campaign.network_campaign_id)!==campaignId)throw new Error('Unerwartete Campaign');return buildSmartlinkInsight(campaign,baseResponse.table||[],eventResponse.table||[],now);
+}
+export type CampaignSearchItem={network_campaign_id:number;campaign_name:string;campaign_status:string};
+export async function searchCampaigns(term:string,apiKey:string,fetcher:Fetcher=fetch):Promise<CampaignSearchItem[]>{if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');const data=await json(fetcher,`${BASE}/networks/campaigns`,{headers:{'X-Eflow-API-Key':apiKey,'Content-Type':'application/json'}}) as {campaigns?:CampaignSearchItem[]};const q=term.trim().toLowerCase(),exact=/^\d+$/.test(q)?Number(q):null;const matches=(data.campaigns||[]).filter(c=>exact!==null?c.network_campaign_id===exact:c.campaign_name.toLowerCase().includes(q)).sort((a,b)=>(a.campaign_status==='active'?0:1)-(b.campaign_status==='active'?0:1)||a.network_campaign_id-b.network_campaign_id);return q?matches.slice(0,20):matches}

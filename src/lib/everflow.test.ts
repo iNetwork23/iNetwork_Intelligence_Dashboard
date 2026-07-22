@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadDashboard,loadPortfolio } from './everflow';
+import { loadDashboard,loadPortfolio,loadSmartlinkInsight,searchCampaigns } from './everflow';
 
 const response=(body:unknown)=>Promise.resolve({ok:true,status:200,json:()=>Promise.resolve(body),text:()=>Promise.resolve(JSON.stringify(body))} as Response);
 
@@ -28,4 +28,16 @@ describe('loadPortfolio',()=>{
   expect(body.query.filters).toEqual([]);
   expect(body.columns.map((x:{column:string})=>x.column)).toEqual(['affiliate','offer','campaign','offer_url']);
  });
+});
+
+describe('smartlink intelligence loader',()=>{
+ it('loads one campaign plus hourly base and event reports with exact campaign filter',async()=>{
+  const campaign={network_campaign_id:146,campaign_name:'Global',campaign_status:'active',redirect_routing_type:'weight',relationship:{redirects:{entries:[]}}};
+  const fetcher=vi.fn().mockImplementationOnce(()=>response(campaign)).mockImplementationOnce(()=>response({table:[]})).mockImplementationOnce(()=>response({table:[]}));
+  const result=await loadSmartlinkInsight(146,'secret',fetcher,new Date('2026-07-22T12:00:00Z'));
+  expect(result.identity.campaignId).toBe(146);expect(fetcher).toHaveBeenCalledTimes(3);
+  for(const call of fetcher.mock.calls.slice(1)){const body=JSON.parse(call[1].body);expect(body.query.filters).toEqual([{resource_type:'campaign',filter_id_value:'146'}]);expect(body.columns.map((x:{column:string})=>x.column)).toContain('hour');}
+ });
+ it('searches campaigns by ID or name',async()=>{const fetcher=vi.fn().mockImplementation(()=>response({campaigns:[{network_campaign_id:2,campaign_name:'TrafficPartner',campaign_status:'active'},{network_campaign_id:146,campaign_name:'Global TrafficCompany',campaign_status:'active'}]}));expect((await searchCampaigns('trafficcompany','secret',fetcher))[0].network_campaign_id).toBe(146);expect((await searchCampaigns('2','secret',fetcher))[0].network_campaign_id).toBe(2);});
+ it('returns the complete directory for client-side cached search',async()=>{const campaigns=Array.from({length:30},(_,i)=>({network_campaign_id:i+1,campaign_name:`Campaign ${i+1}`,campaign_status:'active'}));const fetcher=vi.fn().mockImplementation(()=>response({campaigns}));expect(await searchCampaigns('','secret',fetcher)).toHaveLength(30);});
 });
