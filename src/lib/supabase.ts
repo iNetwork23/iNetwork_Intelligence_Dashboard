@@ -1,0 +1,39 @@
+import 'server-only';
+import {createClient,type SupabaseClient} from '@supabase/supabase-js';
+import type {ConversionCacheRow,DailyMetricRow,SyncState,SyncStore} from './history-cache';
+
+let client:SupabaseClient|null=null;
+export function getSupabaseAdmin(){
+  if(client)return client;
+  const url=process.env.SUPABASE_URL;
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key)throw new Error('SUPABASE_URL oder SUPABASE_SERVICE_ROLE_KEY fehlt');
+  client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  return client;
+}
+
+const throwIfError=(error:{message:string}|null,operation:string)=>{if(error)throw new Error(`Supabase ${operation}: ${error.message}`)};
+async function upsertBatches(table:'conversions'|'daily_metrics',rows:ConversionCacheRow[]|DailyMetricRow[]){
+  const supabase=getSupabaseAdmin();
+  for(let start=0;start<rows.length;start+=500){
+    const batch=rows.slice(start,start+500);
+    const {error}=await supabase.from(table).upsert(batch as never[],{onConflict:'id'});
+    throwIfError(error,`${table} upsert`);
+  }
+}
+
+export function createSupabaseSyncStore():SyncStore{
+  return{
+    async getState(){
+      const {data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key','everflow_history').maybeSingle();
+      throwIfError(error,'sync_state read');
+      return(data?.value as SyncState|undefined)||null;
+    },
+    async upsertConversions(rows){if(rows.length)await upsertBatches('conversions',rows)},
+    async upsertMetrics(rows){if(rows.length)await upsertBatches('daily_metrics',rows)},
+    async setState(state){
+      const {error}=await getSupabaseAdmin().from('sync_state').upsert({key:'everflow_history',value:state},{onConflict:'key'});
+      throwIfError(error,'sync_state write');
+    },
+  };
+}
