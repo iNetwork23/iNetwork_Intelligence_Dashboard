@@ -2,6 +2,7 @@ export type SyncPhase='backfill'|'rolling';
 export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null};
 export type SyncWindow={mode:SyncPhase;from:string;to:string};
 export type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
+import{isApiOffer}from'./affiliate-source-dimensions';
 
 export type EverflowConversion={
   conversion_id?:string;transaction_id:string;conversion_unix_timestamp:number;is_event:boolean;event:string;status?:string;
@@ -73,7 +74,7 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),
     offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:text(row.source_id),sub_source:text(row.sub1),cost:amount(row.cost),
-    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{},status:text(row.status),
+    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
     affiliate_id:text(relationship.affiliate?.network_affiliate_id),affiliate_name:text(relationship.affiliate?.name),offer_id:text(relationship.offer?.network_offer_id),
     offer_name:text(relationship.offer?.name),offer_url_name:text(relationship.offer_url?.name),campaign_id:text(relationship.campaign?.network_campaign_id),
     campaign_name:text(relationship.campaign?.name),
@@ -81,16 +82,27 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
 }
 
 const dim=(row:ReportRow,type:string)=>row.columns.find(column=>column.column_type===type)||{id:'',label:''};
-const metricKey=(row:ReportRow)=>['date','affiliate','offer','campaign','offer_url','source_id','sub1'].map(type=>dim(row,type).id||'').join('|');
+const metricDimensions=['date','affiliate','offer','campaign','offer_url','source_id','sub1','adv1','adv2'];
+const legacyMetricDimensions=['date','affiliate','offer','campaign','offer_url','source_id','sub1'];
+const metricKey=(row:ReportRow)=>metricDimensions.map(type=>dim(row,type).id||'').join('|');
 const dayFromDimension=(row:ReportRow)=>new Date(Number(dim(row,'date').id)*1000).toISOString().slice(0,10);
-const stableMetricId=(row:ReportRow)=>`metric:${['date','affiliate','offer','campaign','offer_url','source_id','sub1'].map(type=>encodeURIComponent(dim(row,type).id||'')).join(':')}`;
+const stableMetricId=(row:ReportRow)=>`metric:${metricDimensions.map(type=>encodeURIComponent(dim(row,type).id||'')).join(':')}`;
+const legacyStableMetricId=(row:ReportRow)=>`metric:${legacyMetricDimensions.map(type=>encodeURIComponent(dim(row,type).id||'')).join(':')}`;
 
 export type SyncStore={
   getState:()=>Promise<SyncState|null>;
   upsertConversions:(rows:ConversionCacheRow[])=>Promise<void>;
   upsertMetrics:(rows:DailyMetricRow[])=>Promise<void>;
+  replaceMetrics?:(from:string,to:string,rows:DailyMetricRow[])=>Promise<void>;
   setState:(state:SyncState)=>Promise<void>;
 };
+
+export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
+  const[rawConversions,reports]=input.includeConversions===false?[[],await input.loadReports(input.from,input.to)]:await Promise.all([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);
+  const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events);
+  await input.store.upsertConversions(conversions);if(input.store.replaceMetrics)await input.store.replaceMetrics(input.from,input.to,metrics);else await input.store.upsertMetrics(metrics);
+  return{conversions,metrics};
+}
 
 export async function runHistorySync(input:{
   store:SyncStore;now?:Date;
@@ -104,15 +116,7 @@ export async function runHistorySync(input:{
     return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true};
   }
   const window=selectSyncWindow(state,now);
-  const persist=async(from:string,to:string)=>{
-    const [rawConversions,reports]=await Promise.all([input.loadConversions(from,to),input.loadReports(from,to)]);
-    const mappedConversions=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null);
-    const conversions=Array.from(new Map(mappedConversions.map(row=>[row.id,row])).values());
-    const metrics=metricRows(reports.base,reports.events);
-    await input.store.upsertConversions(conversions);
-    await input.store.upsertMetrics(metrics);
-    return{conversions,metrics};
-  };
+  const persist=(from:string,to:string)=>refreshHistoryRange({...input,from,to});
   const today=isoDay(now);
   if(window.mode==='backfill'&&window.to<today)await persist(today,today);
   const{conversions,metrics}=await persist(window.from,window.to);
@@ -130,7 +134,7 @@ export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetr
       offer_id:dim(row,'offer').id||'0',offer_name:dim(row,'offer').label||'N/A',campaign_id:dim(row,'campaign').id||'0',campaign_name:dim(row,'campaign').label||'N/A',
       offer_url_id:dim(row,'offer_url').id||'0',offer_url_name:dim(row,'offer_url').label||'N/A',source_id:dim(row,'source_id').id||'',sub_source:dim(row,'sub1').id||'',
       clicks:amount(q.total_click),sois:amount(q.cv),first_sales:0,rebills:0,coin_spend:0,payout:amount(q.payout),revenue:amount(q.revenue),
-      profit:amount(q.profit??(amount(q.revenue)-amount(q.payout))),raw:{},
+      profit:amount(q.revenue)-amount(q.payout),raw:{traffic_mode:isApiOffer(dim(row,'offer').label||'')?'api':'tracked',adv1:dim(row,'adv1').id||'',adv2:dim(row,'adv2').id||'',canonical_id:legacyStableMetricId(row)},
     });
   }
   for(const row of eventRows){
@@ -143,3 +147,14 @@ export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetr
   }
   return Array.from(map.values());
 }
+
+export function canonicalMetricRows(rows:DailyMetricRow[]):DailyMetricRow[]{
+  const grouped=new Map<string,DailyMetricRow>();
+  for(const row of rows){
+    const id=String(row.raw.canonical_id||row.id),current=grouped.get(id)||{...row,id,clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0,raw:{}};
+    for(const metric of['clicks','sois','first_sales','rebills','coin_spend','payout','revenue','profit']as const)current[metric]+=row[metric];
+    grouped.set(id,current);
+  }
+  return Array.from(grouped.values());
+}
+export const staleMetricIds=(existingIds:string[],currentRows:DailyMetricRow[])=>{const current=new Set(currentRows.map(row=>row.id));return existingIds.filter(id=>!current.has(id))};

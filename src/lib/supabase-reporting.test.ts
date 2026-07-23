@@ -6,7 +6,7 @@ describe('Supabase reporting periods',()=>{
   it('supports 90 days, 12 months, all history and a custom range',()=>{
     expect(reportingRange('90d',now)).toMatchObject({from:'2026-04-24',to:'2026-07-22'});
     expect(reportingRange('12m',now)).toMatchObject({from:'2025-07-23',to:'2026-07-22'});
-    expect(reportingRange('all',now)).toMatchObject({from:null,to:'2026-07-22'});
+    expect(reportingRange('all',now)).toMatchObject({from:'2025-07-23',to:'2026-07-22'});
     expect(reportingRange('custom',now,{from:'2024-01-03',to:'2024-02-04'})).toMatchObject({from:'2024-01-03',to:'2024-02-04'});
   });
 });

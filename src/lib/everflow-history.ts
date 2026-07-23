@@ -13,7 +13,7 @@ async function request<T>(url:string,body:unknown,apiKey:string,fetcher:Fetcher)
 
 const reportBody=(from:string,to:string,events:boolean)=>({
   from,to,timezone_id:80,currency_id:'EUR',
-  columns:['date','affiliate','offer','campaign','offer_url','source_id','sub1',...(events?['event_name']:[])].map(column=>({column})),
+  columns:['date','affiliate','offer','campaign','offer_url','source_id','sub1','adv1','adv2',...(events?['event_name']:[])].map(column=>({column})),
   query:{filters:[],search_terms:[]},
 });
 

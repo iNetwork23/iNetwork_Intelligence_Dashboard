@@ -1,27 +1,38 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {currentUser} from '@/lib/session';
 import {createEverflowHistorySource} from '@/lib/everflow-history';
-import {runHistorySync} from '@/lib/history-cache';
-import {createSupabaseSyncStore} from '@/lib/supabase';
+import {refreshHistoryRange,runHistorySync} from '@/lib/history-cache';
+import {acquireHistorySyncLock,createSupabaseSyncStore} from '@/lib/supabase';
+import {syncCampaignSnapshots} from '@/lib/campaign-snapshots';
+import {reportingRange} from '@/lib/supabase-reporting';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 export const maxDuration=300;
 
-async function authorized(request:NextRequest){
-  const secret=process.env.CRON_SECRET;
-  if(secret&&request.headers.get('authorization')===`Bearer ${secret}`)return true;
-  return Boolean(await currentUser());
-}
+function authorized(request:NextRequest){const secret=process.env.CRON_SECRET;return Boolean(secret&&request.headers.get('authorization')===`Bearer ${secret}`)}
+const denied=()=>NextResponse.json({error:'Nicht autorisiert'},{status:401});
 
 export async function GET(request:NextRequest){
-  if(!await authorized(request))return NextResponse.json({error:'Nicht autorisiert'},{status:401});
+  if(!authorized(request))return denied();
+  if(request.nextUrl.searchParams.has('refresh'))return NextResponse.json({error:'Manuelle Refreshes erfordern POST'},{status:405});
   try{
-    const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');
-    const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});
-    return NextResponse.json(result);
-  }catch(error){
-    console.error('Everflow history sync failed',error);
-    return NextResponse.json({error:error instanceof Error?error.message:'Sync fehlgeschlagen'},{status:500});
-  }
+    const release=await acquireHistorySyncLock();try{const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',12);return NextResponse.json({...result,campaigns})}finally{await release()}
+  }catch(error){return failure(error)}
 }
+
+export async function POST(request:NextRequest){
+  if(!authorized(request))return denied();
+  try{
+    const release=await acquireHistorySyncLock();try{
+    const refresh=request.nextUrl.searchParams.get('refresh');
+    if(refresh==='campaigns')return NextResponse.json({mode:'campaign-metadata',campaigns:await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',60)});
+
+    if(refresh!=='30d')return NextResponse.json({error:'Unbekannter Refresh-Modus'},{status:400});
+    const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),range=reportingRange('30d'),store=createSupabaseSyncStore();
+    const refreshed=await refreshHistoryRange({store,from:range.from!,to:range.to,includeConversions:false,loadConversions:source.loadConversions,loadReports:source.loadReports});
+    const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',60);
+    return NextResponse.json({mode:'manual-30d',from:range.from,to:range.to,upsertedConversions:refreshed.conversions.length,upsertedMetrics:refreshed.metrics.length,campaigns});
+    }finally{await release()}
+  }catch(error){return failure(error)}
+}
+function failure(error:unknown){console.error('Everflow history sync failed',error);return NextResponse.json({error:error instanceof Error?error.message:'Sync fehlgeschlagen'},{status:500})}

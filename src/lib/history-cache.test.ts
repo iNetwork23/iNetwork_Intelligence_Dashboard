@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {advanceSyncState,conversionToCacheRow,initialSyncState,metricRows,runHistorySync,selectSyncWindow,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
+import {advanceSyncState,canonicalMetricRows,conversionToCacheRow,initialSyncState,metricRows,refreshHistoryRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
 
 describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
@@ -21,8 +21,8 @@ describe('history cache sync windows',()=>{
 describe('Everflow conversion mapping',()=>{
   const base:EverflowConversion={conversion_id:'cv-1',transaction_id:'lead-1',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',status:'approved',payout:3,revenue:0,source_id:'src',sub1:'sub',relationship:{affiliate:{network_affiliate_id:6,name:'Partner'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2774,name:'LP'}}};
   it('uses the stable conversion id and transaction id for the LTV chain',()=>{
-    expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{}});
-    expect(conversionToCacheRow(base)?.raw).toEqual({});
+    expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{transaction_id:'lead-1',event:'SOI',is_event:false,relationship:{offer:{network_offer_id:57},offer_url:{network_offer_url_id:2774}}}});
+    expect(conversionToCacheRow(base)?.raw).not.toHaveProperty('conversion_id');
   });
   it('maps Sale and Rebill events and excludes unrelated events',()=>{
     expect(conversionToCacheRow({...base,conversion_id:'sale',is_event:true,event:'Sale'})?.type).toBe('first_sale');
@@ -46,9 +46,32 @@ describe('daily metric mapping',()=>{
     const sale:ReportRow={columns:[...columns,{column_type:'event_name',id:'1',label:'Sale'}],reporting:{event:2}};
     const rebill:ReportRow={columns:[...columns,{column_type:'event_name',id:'2',label:'Rebill'}],reporting:{event:3}};
     const [row]=metricRows([base],[sale,rebill]);
-    expect(row).toMatchObject({metric_date:'2026-07-22',affiliate_id:'6',offer_id:'57',campaign_id:'2',offer_url_id:'2774',source_id:'src',sub_source:'sub',clicks:100,sois:10,first_sales:2,rebills:3,payout:30,revenue:80,profit:50,raw:{}});
-    expect(row.raw).toEqual({});
+    expect(row).toMatchObject({metric_date:'2026-07-22',affiliate_id:'6',offer_id:'57',campaign_id:'2',offer_url_id:'2774',source_id:'src',sub_source:'sub',clicks:100,sois:10,first_sales:2,rebills:3,payout:30,revenue:80,profit:50});
+    expect(row.raw).toMatchObject({traffic_mode:'tracked',adv1:'',adv2:''});
     expect(row.id).toMatch(/^metric:/);
+  });
+  it('preserves ADV1 and ADV2 as distinct API source dimensions',()=>{
+    const apiColumns=[
+      {column_type:'date',id:'1784692800',label:'1784692800'},
+      {column_type:'affiliate',id:'30',label:'API Partner'},
+      {column_type:'offer',id:'20',label:'XLOVES API'},
+      {column_type:'campaign',id:'0',label:'Direct'},
+      {column_type:'offer_url',id:'0',label:'API'},
+      {column_type:'adv1',id:'publisher-a',label:'publisher-a'},
+      {column_type:'adv2',id:'placement-b',label:'placement-b'},
+    ];
+    const [row]=metricRows([{columns:apiColumns,reporting:{cv:12,payout:36,revenue:90,profit:54}}],[]);
+    expect(row).toMatchObject({raw:{traffic_mode:'api',adv1:'publisher-a',adv2:'placement-b'},source_id:'',sub_source:'',sois:12,profit:54});
+    expect(row.id).toContain('publisher-a');
+    expect(row.id).toContain('placement-b');
+  });
+  it('keeps ADV rows granular for source snapshots but aggregates canonical portfolio totals into the legacy id',()=>{
+    const columns=[{column_type:'date',id:'1784692800',label:'1784692800'},{column_type:'affiliate',id:'30',label:'API Partner'},{column_type:'offer',id:'20',label:'XLOVES API'},{column_type:'campaign',id:'0',label:'Direct'},{column_type:'offer_url',id:'0',label:'API'},{column_type:'adv1',id:'N/A',label:'N/A'}];
+    const granular=metricRows([{columns:[...columns,{column_type:'adv2',id:'placement-a',label:'placement-a'}],reporting:{cv:4,payout:12,revenue:30,profit:18}},{columns:[...columns,{column_type:'adv2',id:'placement-b',label:'placement-b'}],reporting:{cv:6,payout:18,revenue:45,profit:27}}],[]),canonical=canonicalMetricRows(granular);
+    expect(granular).toHaveLength(2);expect(canonical).toHaveLength(1);expect(canonical[0]).toMatchObject({sois:10,payout:30,revenue:75,profit:45,raw:{}});expect(canonical[0].id).not.toContain('placement');
+  });
+  it('identifies canonical ids that disappeared so replacement can tombstone them without deleting the range',()=>{
+    const current=[{id:'kept'}]as Parameters<typeof staleMetricIds>[1];expect(staleMetricIds(['kept','removed'],current)).toEqual(['removed']);expect(staleMetricIds(['removed'],[])).toEqual(['removed']);
   });
 });
 
@@ -77,6 +100,14 @@ describe('sync orchestration',()=>{
     expect(savedState).toMatchObject({phase:'backfill',next_end:'2026-07-15'});
     expect(result).toMatchObject({mode:'backfill',from:'2026-07-16',to:'2026-07-22',upsertedConversions:1,upsertedMetrics:1});
   });
+  it('replaces a refreshed metric range so old collapsed source rows cannot double-count',async()=>{
+    const calls:string[]=[];
+    const store:SyncStore={getState:async()=>null,upsertConversions:async()=>{calls.push('conversions')},upsertMetrics:async()=>{throw new Error('must replace')},replaceMetrics:async(from,to,rows)=>{calls.push(`replace:${from}:${to}:${rows.length}`)},setState:async()=>{}};
+    const columns=[{column_type:'date',id:'1784692800',label:'1784692800'},{column_type:'offer',id:'20',label:'XLOVES API'},{column_type:'adv2',id:'placement',label:'placement'}];
+    await refreshHistoryRange({store,from:'2026-07-22',to:'2026-07-22',loadConversions:async()=>[],loadReports:async()=>({base:[{columns,reporting:{cv:1}}],events:[]})});
+    expect(calls).toEqual(['conversions','replace:2026-07-22:2026-07-22:1']);
+  });
+  it('can refresh report snapshots without re-downloading immutable historical conversions',async()=>{let conversionLoads=0,conversionWrites=0;const store:SyncStore={getState:async()=>null,upsertConversions:async()=>{conversionWrites++},upsertMetrics:async()=>{},replaceMetrics:async()=>{},setState:async()=>{}};const result=await refreshHistoryRange({store,from:'2026-06-24',to:'2026-07-23',includeConversions:false,loadConversions:async()=>{conversionLoads++;return[]},loadReports:async()=>({base:[],events:[]})});expect(conversionLoads).toBe(0);expect(conversionWrites).toBe(1);expect(result.conversions).toEqual([])});
   it('lets the ten-minute cron skip rolling syncs until one hour has elapsed',async()=>{
     const state={phase:'rolling' as const,backfill_start:'2025-07-23',next_end:'2025-07-22',last_success_at:'2026-07-22T11:30:00.000Z'};
     const store:SyncStore={getState:async()=>state,upsertConversions:async()=>{throw new Error('unexpected')},upsertMetrics:async()=>{throw new Error('unexpected')},setState:async()=>{throw new Error('unexpected')}};
