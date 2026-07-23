@@ -1,0 +1,2 @@
+const normalize=(value:string)=>{const url=new URL(value,'https://dashboard.local'),params=new URLSearchParams();[...url.searchParams.entries()].sort(([ak,av],[bk,bv])=>ak.localeCompare(bk)||av.localeCompare(bv)).forEach(([key,val])=>params.append(key,val));const pathname=url.pathname.replace(/\/$/,'')||'/';return `${pathname}${params.size?`?${params}`:''}`};
+export const isSameRouteTarget=(target:string,current:string)=>normalize(target)===normalize(current);
