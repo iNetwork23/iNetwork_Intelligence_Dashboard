@@ -104,12 +104,18 @@ export async function runHistorySync(input:{
     return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true};
   }
   const window=selectSyncWindow(state,now);
-  const [rawConversions,reports]=await Promise.all([input.loadConversions(window.from,window.to),input.loadReports(window.from,window.to)]);
-  const mappedConversions=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null);
-  const conversions=Array.from(new Map(mappedConversions.map(row=>[row.id,row])).values());
-  const metrics=metricRows(reports.base,reports.events);
-  await input.store.upsertConversions(conversions);
-  await input.store.upsertMetrics(metrics);
+  const persist=async(from:string,to:string)=>{
+    const [rawConversions,reports]=await Promise.all([input.loadConversions(from,to),input.loadReports(from,to)]);
+    const mappedConversions=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null);
+    const conversions=Array.from(new Map(mappedConversions.map(row=>[row.id,row])).values());
+    const metrics=metricRows(reports.base,reports.events);
+    await input.store.upsertConversions(conversions);
+    await input.store.upsertMetrics(metrics);
+    return{conversions,metrics};
+  };
+  const today=isoDay(now);
+  if(window.mode==='backfill'&&window.to<today)await persist(today,today);
+  const{conversions,metrics}=await persist(window.from,window.to);
   const next=advanceSyncState(state,window,now);
   await input.store.setState(next);
   return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling'};

@@ -53,6 +53,14 @@ describe('daily metric mapping',()=>{
 });
 
 describe('sync orchestration',()=>{
+  it('refreshes today before continuing an older backfill window',async()=>{
+    const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-12-17',last_success_at:'2026-07-23T06:00:00.000Z'};
+    const loaded:string[]=[],written:string[]=[];
+    const store:SyncStore={getState:async()=>state,upsertConversions:async rows=>{written.push(`conversions:${rows.length}`)},upsertMetrics:async rows=>{written.push(`metrics:${rows.length}`)},setState:async()=>{written.push('state')}};
+    await runHistorySync({store,now:new Date('2026-07-23T11:00:00Z'),loadConversions:async(from,to)=>{loaded.push(`conversions:${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`reports:${from}:${to}`);return{base:[],events:[]}}});
+    expect(loaded).toEqual(['conversions:2026-07-23:2026-07-23','reports:2026-07-23:2026-07-23','conversions:2025-12-11:2025-12-17','reports:2025-12-11:2025-12-17']);
+    expect(written).toEqual(['conversions:0','metrics:0','conversions:0','metrics:0','state']);
+  });
   it('persists conversions, daily metrics and progress only after both writes succeed',async()=>{
     const calls:string[]=[];
     let savedState:ReturnType<typeof initialSyncState>|null=null;
