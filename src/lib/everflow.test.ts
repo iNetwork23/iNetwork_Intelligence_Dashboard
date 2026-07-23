@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadAffiliateConversions,loadAffiliateSmartlinkInsights,loadCampaignAffiliateRows,loadDashboard,loadPortfolio,loadSmartlinkInsight,searchCampaigns } from './everflow';
+import { loadAffiliateConversions,loadAffiliateSmartlinkInsights,loadAffiliateSourceRowsRange,loadCampaignAffiliateRows,loadDashboard,loadPortfolio,loadSmartlinkInsight,searchCampaigns } from './everflow';
 
 const response=(body:unknown)=>Promise.resolve({ok:true,status:200,json:()=>Promise.resolve(body),text:()=>Promise.resolve(JSON.stringify(body))} as Response);
 
@@ -32,6 +32,19 @@ describe('loadPortfolio',()=>{
 
 describe('affiliate conversion history',()=>{
  it('paginates and constrains the conversion report to one direct-link affiliate',async()=>{const conversion={transaction_id:'tx',event:'SOI',is_event:false,conversion_unix_timestamp:1,relationship:{affiliate:{network_affiliate_id:376}}};const fetcher=vi.fn().mockImplementationOnce(()=>response({conversions:[conversion],paging:{total_count:2001}})).mockImplementationOnce(()=>response({conversions:[{...conversion,transaction_id:'tx2'}],paging:{total_count:2001}}));const rows=await loadAffiliateConversions('376','secret',90,fetcher,new Date('2026-07-22T12:00:00Z'));expect(rows).toHaveLength(2);expect(fetcher).toHaveBeenCalledTimes(2);const body=JSON.parse(fetcher.mock.calls[0][1].body);expect(body.query.filters).toEqual([{resource_type:'affiliate',filter_id_value:'376'},{resource_type:'campaign',filter_id_value:'0'}]);expect(body).toMatchObject({show_conversions:true,show_events:true})});
+});
+
+describe('affiliate source reporting',()=>{
+ it('requests ADV1 and ADV2 and maps them only for API offers',async()=>{
+  const api={columns:[{column_type:'affiliate',id:'154',label:'API Partner'},{column_type:'offer',id:'20',label:'XLOVES - API'},{column_type:'campaign',id:'0',label:'N/A'},{column_type:'offer_url',id:'0',label:'Default'},{column_type:'source_id',id:'legacy-source',label:'legacy-source'},{column_type:'sub1',id:'legacy-sub',label:'legacy-sub'},{column_type:'adv1',id:'publisher',label:'publisher'},{column_type:'adv2',id:'placement',label:'placement'}],reporting:{cv:2}};
+  const tracked={...api,columns:api.columns.map(column=>column.column_type==='offer'?{...column,id:'8',label:'Michverlieben - CPL SOI'}:column)};
+  const fetcher=vi.fn().mockImplementation(()=>response({table:[api,tracked]}));
+  const rows=await loadAffiliateSourceRowsRange({from:'2026-07-01',to:'2026-07-22'},'154','secret',fetcher);
+  const dimensions=(row:typeof api)=>Object.fromEntries(row.columns.map(column=>[column.column_type,column.id]));
+  expect(dimensions(rows[0] as typeof api)).toMatchObject({source_id:'publisher',sub1:'placement'});
+  expect(dimensions(rows[1] as typeof api)).toMatchObject({source_id:'legacy-source',sub1:'legacy-sub'});
+  const body=JSON.parse(fetcher.mock.calls[0][1].body);expect(body.columns.map((x:{column:string})=>x.column)).toEqual(['affiliate','offer','campaign','offer_url','source_id','sub1','adv1','adv2']);
+ });
 });
 
 describe('smartlink intelligence loader',()=>{

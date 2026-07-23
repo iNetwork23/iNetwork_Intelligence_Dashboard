@@ -2,7 +2,7 @@ export type SmartlinkReportRow={columns:{column_type:string;id:string;label:stri
 export type CampaignShape={network_campaign_id:number;campaign_name:string;campaign_status:string;redirect_routing_type:string;time_saved?:number;relationship?:{redirects?:{entries?:Array<{redirect_network_offer_id:number;redirect_network_offer_url_id:number;routing_value:number;relationship?:{offer_url?:{name?:string;url_status?:string}}}>}}};
 export type SmartMetrics={clicks:number;sois:number;cvr:number;firstSales:number;firstSaleRate:number;rebills:number;coinSpend:number;revenue:number;payout:number;profit:number;profitEpc:number};
 export type SmartSlot={id:string;name:string;offerId:string;weight:number;status:string;metrics24:SmartMetrics;metrics72:SmartMetrics;metrics14:SmartMetrics;hoursTo50Sois:number|null};
-export type LegacySlot={id:string;name:string;offerId:string;metrics72:SmartMetrics;metrics14:SmartMetrics};
+export type LegacySlot={id:string;name:string;offerId:string;metrics72?:SmartMetrics;metrics14:SmartMetrics};
 export type SlotRecommendation={slotId:string;action:'stop'|'rotate'|'scale'|'protect'|'hold';severity:'critical'|'warning'|'positive'|'neutral';reasonCode:string;title:string;detail:string};
 const blank=():SmartMetrics=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0});
 const round=(n:number,d=2)=>Number(n.toFixed(d));
