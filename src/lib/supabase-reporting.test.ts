@@ -1,5 +1,6 @@
 import {describe,expect,it,vi} from 'vitest';
 import {loadPortfolioFromCache,reportingRange} from './supabase-reporting';
+import{readFileSync}from'node:fs';import{join}from'node:path';
 
 describe('Supabase reporting periods',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
@@ -12,6 +13,7 @@ describe('Supabase reporting periods',()=>{
 });
 
 describe('portfolio cache adapter',()=>{
+  it('loads compact daily snapshots in small batches so cold JSON reads stay below the database statement timeout',()=>{const code=readFileSync(join(process.cwd(),'src/lib/supabase-reporting.ts'),'utf8');expect(code).toContain("start<keys.length;start+=5");expect(code).toContain("keys.slice(start,start+5)");expect(code).not.toContain("keys.slice(start,start+50)")});
   it('loads aggregated facts through the Postgres RPC and preserves existing KPI aggregation',async()=>{
     const rpc=vi.fn().mockResolvedValue({data:[{affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Offer',campaign_id:'2',campaign_name:'Campaign',offer_url_id:'2774',offer_url_name:'LP',clicks:100,sois:10,first_sales:2,rebills:3,coin_spend:4,payout:30,revenue:80,profit:50}],error:null});
     const result=await loadPortfolioFromCache('90d',{rpc} as never,new Date('2026-07-22T12:00:00Z'));
