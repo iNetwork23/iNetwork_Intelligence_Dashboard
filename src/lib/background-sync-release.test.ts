@@ -20,5 +20,7 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(rollups).toContain('CRON_SECRET');
   expect(rollups).toContain('refreshLongPortfolioRangeSnapshots');
   expect(rollups).toContain('maxDuration=240');
+  const cachedSmartlinks=read('src/lib/cached-smartlinks.ts');
+  expect(cachedSmartlinks).toContain('Promise.all(snapshotBatches.map');
  });
 });
