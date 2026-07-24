@@ -8,6 +8,11 @@ const metrics=['clicks','sois','first_sales','rebills','coin_spend','payout','re
 
 export type PortfolioRangeSnapshot={version:1;from:string;to:string;rows:PortfolioSnapshotRow[]};
 export type PortfolioRangeSnapshotRecord={key:string;value:PortfolioRangeSnapshot};
+export type PortfolioAggregateRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number};
+
+export function buildPortfolioRangeSnapshotRecordFromAggregates(from:string,to:string,rows:PortfolioAggregateRow[]):PortfolioRangeSnapshotRecord{
+ return{key:`portfolio_range:${from}:${to}`,value:{version:1,from,to,rows:rows.map(row=>({a:row.affiliate_id,an:row.affiliate_name,o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:'',ss:'',cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit}))}};
+}
 
 function aggregateRange(rows:DailyMetricRow[],from:string,to:string){
  const grouped=new Map<string,DailyMetricRow>();
