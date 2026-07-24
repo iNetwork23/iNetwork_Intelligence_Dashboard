@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-import {loadPortfolioFromCache,publishPortfolioRangeRecords,reportingRange} from './supabase-reporting';
+import {backgroundPortfolioPeriods,loadPortfolioFromCache,publishPortfolioRangeRecords,reportingRange} from './supabase-reporting';
 import{buildPortfolioRangeSnapshotRecordFromAggregates}from'./portfolio-range-snapshots';
 import{readFileSync}from'node:fs';import{join}from'node:path';
 
@@ -10,6 +10,9 @@ describe('Supabase reporting periods',()=>{
     expect(reportingRange('12m',now)).toMatchObject({from:'2025-07-23',to:'2026-07-22'});
     expect(reportingRange('all',now)).toMatchObject({from:'2025-07-23',to:'2026-07-22'});
     expect(reportingRange('custom',now,{from:'2024-01-03',to:'2024-02-04'})).toMatchObject({from:'2024-01-03',to:'2024-02-04'});
+  });
+  it('refreshes every frequently used rolling range while historical backfill is still running',()=>{
+    expect(backgroundPortfolioPeriods).toEqual(['7d','30d','90d','all']);
   });
 });
 

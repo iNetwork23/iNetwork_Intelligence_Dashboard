@@ -5,6 +5,7 @@ import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggre
 import{newSnapshotGeneration}from'./snapshot-generation';
 
 export type ReportingPeriod='today'|'7d'|'30d'|'90d'|'12m'|'all'|'custom';
+export const backgroundPortfolioPeriods=['7d','30d','90d','all']as const;
 export type ReportingRange={from:string|null;to:string;label:string};
 type RpcClient={rpc:(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string}|null}>};
 type CacheClient=RpcClient&{from?:SupabaseClient['from']};
@@ -91,7 +92,7 @@ export async function publishPortfolioRangeRecords(client:CacheClient,records:Po
 export async function refreshLongPortfolioRangeSnapshots(client:CacheClient,now=new Date()){
  if(!client.from)throw new Error('Supabase range rollups require a table client');
  const records=[];
- for(const period of['90d','all']as const){
+ for(const period of backgroundPortfolioPeriods){
   const range=reportingRange(period,now),rows=await loadMetricRows(client,range,false);
   records.push(buildPortfolioRangeSnapshotRecordFromAggregates(range.from!,range.to,rows.map(row=>({...row,clicks:number(row.clicks),sois:number(row.sois),first_sales:number(row.first_sales),rebills:number(row.rebills),coin_spend:number(row.coin_spend),payout:number(row.payout),revenue:number(row.revenue),profit:number(row.profit)}))));
  }
