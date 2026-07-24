@@ -1,5 +1,6 @@
 import {describe,expect,it,vi} from 'vitest';
-import {loadPortfolioFromCache,reportingRange} from './supabase-reporting';
+import {loadPortfolioFromCache,publishPortfolioRangeRecords,reportingRange} from './supabase-reporting';
+import{buildPortfolioRangeSnapshotRecordFromAggregates}from'./portfolio-range-snapshots';
 import{readFileSync}from'node:fs';import{join}from'node:path';
 
 describe('Supabase reporting periods',()=>{
@@ -13,11 +14,25 @@ describe('Supabase reporting periods',()=>{
 });
 
 describe('portfolio cache adapter',()=>{
-  it('loads an exact pre-aggregated range snapshot with one Supabase row read',async()=>{
-    const from=vi.fn(()=>({select:vi.fn(()=>({eq:vi.fn(()=>({maybeSingle:vi.fn().mockResolvedValue({data:{value:{version:1,from:'2026-06-23',to:'2026-07-22',rows:[{a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'2774',un:'LP',cl:100,cv:10,fs:2,rb:3,cs:4,p:30,r:80,pr:50}]}},error:null})}))}))}));
+  it('loads only the immutable snapshot selected by the active range marker',async()=>{
+    const keys:string[]=[],from=vi.fn(()=>({select:vi.fn(()=>({eq:vi.fn((_column:string,key:string)=>({maybeSingle:vi.fn().mockImplementation(async()=>{keys.push(key);if(key==='portfolio_range_generation:2026-06-23:2026-07-22')return{data:{value:{version:2,from:'2026-06-23',to:'2026-07-22',generation:'gen-1'}},error:null};if(key==='portfolio_range:2026-06-23:2026-07-22:gen-1')return{data:{value:{version:2,from:'2026-06-23',to:'2026-07-22',generation:'gen-1',rows:[{a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'2774',un:'LP',s:'',ss:'',cl:100,cv:10,fs:2,rb:3,cs:4,p:30,r:80,pr:50}]}},error:null};return{data:null,error:null}})}))}))}));
     const result=await loadPortfolioFromCache('30d',{from,rpc:vi.fn()} as never,new Date('2026-07-22T12:00:00Z'));
-    expect(from).toHaveBeenCalledTimes(1);
+    expect(keys).toEqual(['portfolio_range_generation:2026-06-23:2026-07-22','portfolio_range:2026-06-23:2026-07-22:gen-1']);
     expect(result.totals).toMatchObject({clicks:100,sois:10,firstSales:2,rebills:3,coinSpend:4,revenue:80,payout:30,profit:50});
+  });
+  it('does not switch active markers when immutable snapshot writes fail',async()=>{
+    const upsert=vi.fn().mockResolvedValueOnce({error:{message:'snapshot failed'}}),client={from:vi.fn(()=>({upsert}))};
+    const record=buildPortfolioRangeSnapshotRecordFromAggregates('2026-06-23','2026-07-22',[]);
+    await expect(publishPortfolioRangeRecords(client as never,[record],'gen-fail')).rejects.toThrow('snapshot failed');
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+  it('re-reads the active marker before pruning old generated rows',async()=>{
+    const published='1800000000000-00000000-0000-4000-8000-000000000000',old='portfolio_range:2026-06-23:2026-07-22:1700000000000-00000000-0000-4000-8000-000000000000',upsert=vi.fn().mockResolvedValue({error:null}),maybeSingle=vi.fn().mockResolvedValue({data:{value:{generation:published}},error:null}),deleted=vi.fn().mockResolvedValue({error:null});
+    const from=vi.fn(()=>({upsert,select:vi.fn((columns:string)=>columns==='key'?{like:vi.fn(()=>({order:vi.fn(()=>({range:vi.fn().mockResolvedValue({data:[{key:old}],error:null})}))}))}:{eq:vi.fn(()=>({maybeSingle}))}),delete:vi.fn(()=>({in:deleted}))}));
+    const record=buildPortfolioRangeSnapshotRecordFromAggregates('2026-06-23','2026-07-22',[]);
+    await publishPortfolioRangeRecords({from}as never,[record],published);
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    expect(deleted).toHaveBeenCalledWith('key',[old]);
   });
   it('loads compact daily snapshots in small batches so cold JSON reads stay below the database statement timeout',()=>{const code=readFileSync(join(process.cwd(),'src/lib/supabase-reporting.ts'),'utf8');expect(code).toContain("start<keys.length;start+=5");expect(code).toContain("keys.slice(start,start+5)");expect(code).not.toContain("keys.slice(start,start+50)")});
   it('loads aggregated facts through the Postgres RPC and preserves existing KPI aggregation',async()=>{

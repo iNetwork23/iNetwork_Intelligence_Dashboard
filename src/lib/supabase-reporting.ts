@@ -1,7 +1,8 @@
 import {aggregatePortfolio,type Portfolio,type ReportRow} from './portfolio';
 import type{SupabaseClient}from'@supabase/supabase-js';
 import type{PortfolioSnapshotRow}from'./affiliate-source-cache';
-import{buildPortfolioRangeSnapshotRecordFromAggregates}from'./portfolio-range-snapshots';
+import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
+import{newSnapshotGeneration}from'./snapshot-generation';
 
 export type ReportingPeriod='today'|'7d'|'30d'|'90d'|'12m'|'all'|'custom';
 export type ReportingRange={from:string|null;to:string;label:string};
@@ -46,7 +47,46 @@ function reportRows(rows:MetricRpcRow[]){
 }
 function aggregateMetricRows(rows:MetricRpcRow[]){const grouped=new Map<string,MetricRpcRow>();for(const row of rows){const key=[row.affiliate_id,row.offer_id,row.campaign_id,row.offer_url_id].join('\u0000'),current=grouped.get(key)||{...row,clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0};for(const metric of['clicks','sois','first_sales','rebills','coin_spend','payout','revenue','profit']as const)current[metric]=number(current[metric])+number(row[metric]);grouped.set(key,current)}return Array.from(grouped.values())}
 const decodePortfolioRow=(row:PortfolioSnapshotRow):MetricRpcRow=>({affiliate_id:row.a,affiliate_name:row.an,offer_id:row.o,offer_name:row.on,campaign_id:row.c,campaign_name:row.cn,offer_url_id:row.u,offer_url_name:row.un,clicks:row.cl,sois:row.cv,first_sales:row.fs,rebills:row.rb,coin_spend:row.cs,payout:row.p,revenue:row.r,profit:row.pr});
-async function loadMetricRows(client:CacheClient,range:ReportingRange,preferRangeSnapshot=true){if(!client.from){const{data,error}=await client.rpc('portfolio_metric_rows',{p_from:range.from,p_to:range.to});if(error)throw new Error(`Supabase portfolio_metric_rows: ${error.message}`);return(data||[])as MetricRpcRow[]}const db=client as unknown as SupabaseClient;if(preferRangeSnapshot&&range.from){const{data,error}=await db.from('sync_state').select('value').eq('key',`portfolio_range:${range.from}:${range.to}`).maybeSingle();if(error)throw new Error(`Supabase portfolio range snapshot: ${error.message}`);const value=data?.value as{version?:number;from?:string;to?:string;rows?:PortfolioSnapshotRow[]}|undefined;if(value?.version===1&&value.from===range.from&&value.to===range.to&&Array.isArray(value.rows))return value.rows.map(decodePortfolioRow)}const days:string[]=[];if(range.from)for(let day=range.from;day<=range.to;day=shift(day,1))days.push(day);if(range.from){const{data:markerData,error:markerError}=await db.from('sync_state').select('value').gte('key',`portfolio_day_generation:${range.from}`).lte('key',`portfolio_day_generation:${range.to}`).order('key');if(markerError)throw new Error(`Supabase portfolio markers: ${markerError.message}`);const markers=new Map((markerData||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return[value.date||'',value.generation||'']}));if(days.length<=45&&days.every(day=>markers.get(day))){const keys=days.map(day=>`portfolio_day:${day}:${markers.get(day)}`),snapshotRows:MetricRpcRow[]=[];let found=0;for(let start=0;start<keys.length;start+=5){const{data,error}=await db.from('sync_state').select('value').in('key',keys.slice(start,start+5));if(error)throw new Error(`Supabase portfolio snapshots: ${error.message}`);for(const item of data||[]){const value=item.value as{rows?:PortfolioSnapshotRow[]};if(Array.isArray(value.rows)){found++;snapshotRows.push(...value.rows.map(decodePortfolioRow))}}}if(found===days.length)return aggregateMetricRows(snapshotRows)}}const select='affiliate_id,affiliate_name,offer_id,offer_name,campaign_id,campaign_name,offer_url_id,offer_url_name,clicks,sois,first_sales,rebills,coin_spend,payout,revenue,profit',rows:MetricRpcRow[]=[];if(days.length>45){const loadDay=async(day:string)=>{const result:MetricRpcRow[]=[];for(let start=0;;start+=1000){const{data,error}=await db.from('daily_metrics').select(select).eq('metric_date',day).order('id').range(start,start+999);if(error)throw new Error(`Supabase daily portfolio ${day}: ${error.message}`);const batch=(data||[])as MetricRpcRow[];result.push(...batch);if(batch.length<1000)break}return result};for(let start=0;start<days.length;start+=12)for(const batch of await Promise.all(days.slice(start,start+12).map(loadDay)))rows.push(...batch);return aggregateMetricRows(rows)}for(let start=0;;start+=1000){let query=db.from('daily_metrics').select(select).lte('metric_date',range.to);if(range.from)query=query.gte('metric_date',range.from);const{data,error}=await query.order('metric_date').order('id').range(start,start+999);if(error)throw new Error(`Supabase daily_metrics portfolio: ${error.message}`);const batch=(data||[])as MetricRpcRow[];rows.push(...batch);if(batch.length<1000)break}return aggregateMetricRows(rows)}
+async function loadMetricRows(client:CacheClient,range:ReportingRange,preferRangeSnapshot=true){if(!client.from){const{data,error}=await client.rpc('portfolio_metric_rows',{p_from:range.from,p_to:range.to});if(error)throw new Error(`Supabase portfolio_metric_rows: ${error.message}`);return(data||[])as MetricRpcRow[]}const db=client as unknown as SupabaseClient;if(preferRangeSnapshot&&range.from){
+ const markerKey=`portfolio_range_generation:${range.from}:${range.to}`;
+ const{data:markerData,error:markerError}=await db.from('sync_state').select('value').eq('key',markerKey).maybeSingle();
+ if(markerError)throw new Error(`Supabase portfolio range marker: ${markerError.message}`);
+ const marker=markerData?.value as{version?:number;from?:string;to?:string;generation?:string}|undefined;
+ if(marker?.version===2&&marker.from===range.from&&marker.to===range.to&&typeof marker.generation==='string'&&marker.generation){
+  const{data,error}=await db.from('sync_state').select('value').eq('key',`portfolio_range:${range.from}:${range.to}:${marker.generation}`).maybeSingle();
+  if(error)throw new Error(`Supabase portfolio range snapshot: ${error.message}`);
+  if(isValidPortfolioRangeSnapshot(data?.value,range.from,range.to,marker.generation))return data.value.rows.map(decodePortfolioRow);
+ }else if(!markerData){
+  const{data,error}=await db.from('sync_state').select('value').eq('key',`portfolio_range:${range.from}:${range.to}`).maybeSingle();
+  if(error)throw new Error(`Supabase legacy portfolio range snapshot: ${error.message}`);
+  if(isValidPortfolioRangeSnapshot(data?.value,range.from,range.to))return data.value.rows.map(decodePortfolioRow);
+ }
+}const days:string[]=[];if(range.from)for(let day=range.from;day<=range.to;day=shift(day,1))days.push(day);if(range.from){const{data:markerData,error:markerError}=await db.from('sync_state').select('value').gte('key',`portfolio_day_generation:${range.from}`).lte('key',`portfolio_day_generation:${range.to}`).order('key');if(markerError)throw new Error(`Supabase portfolio markers: ${markerError.message}`);const markers=new Map((markerData||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return[value.date||'',value.generation||'']}));if(days.length<=45&&days.every(day=>markers.get(day))){const keys=days.map(day=>`portfolio_day:${day}:${markers.get(day)}`),snapshotRows:MetricRpcRow[]=[];let found=0;for(let start=0;start<keys.length;start+=5){const{data,error}=await db.from('sync_state').select('value').in('key',keys.slice(start,start+5));if(error)throw new Error(`Supabase portfolio snapshots: ${error.message}`);for(const item of data||[]){const value=item.value as{rows?:PortfolioSnapshotRow[]};if(Array.isArray(value.rows)){found++;snapshotRows.push(...value.rows.map(decodePortfolioRow))}}}if(found===days.length)return aggregateMetricRows(snapshotRows)}}const select='affiliate_id,affiliate_name,offer_id,offer_name,campaign_id,campaign_name,offer_url_id,offer_url_name,clicks,sois,first_sales,rebills,coin_spend,payout,revenue,profit',rows:MetricRpcRow[]=[];if(days.length>45){const loadDay=async(day:string)=>{const result:MetricRpcRow[]=[];for(let start=0;;start+=1000){const{data,error}=await db.from('daily_metrics').select(select).eq('metric_date',day).order('id').range(start,start+999);if(error)throw new Error(`Supabase daily portfolio ${day}: ${error.message}`);const batch=(data||[])as MetricRpcRow[];result.push(...batch);if(batch.length<1000)break}return result};for(let start=0;start<days.length;start+=12)for(const batch of await Promise.all(days.slice(start,start+12).map(loadDay)))rows.push(...batch);return aggregateMetricRows(rows)}for(let start=0;;start+=1000){let query=db.from('daily_metrics').select(select).lte('metric_date',range.to);if(range.from)query=query.gte('metric_date',range.from);const{data,error}=await query.order('metric_date').order('id').range(start,start+999);if(error)throw new Error(`Supabase daily_metrics portfolio: ${error.message}`);const batch=(data||[])as MetricRpcRow[];rows.push(...batch);if(batch.length<1000)break}return aggregateMetricRows(rows)}
+
+export async function publishPortfolioRangeRecords(client:CacheClient,records:PortfolioRangeSnapshotRecord[],generation=newSnapshotGeneration()){
+ if(!client.from)throw new Error('Supabase range publication requires a table client');
+ const db=client as unknown as SupabaseClient,publication=buildPortfolioRangePublication(records,generation);
+ const{error:snapshotError}=await db.from('sync_state').upsert(publication.snapshots,{onConflict:'key'});
+ if(snapshotError)throw new Error(`Supabase portfolio range snapshots: ${snapshotError.message}`);
+ const{error:markerError}=await db.from('sync_state').upsert(publication.markers,{onConflict:'key'});
+ if(markerError)throw new Error(`Supabase portfolio range markers: ${markerError.message}`);
+ const cutoff=Date.now()-24*60*60_000;
+ for(const record of records){
+  const prefix=`portfolio_range:${record.value.from}:${record.value.to}:`,keys:string[]=[];
+  for(let start=0;;start+=1000){const{data,error}=await db.from('sync_state').select('key').like('key',`${prefix}%`).order('key').range(start,start+999);if(error)throw new Error(`Supabase portfolio range generation list: ${error.message}`);const batch=(data||[]).map(row=>row.key as string);keys.push(...batch);if(batch.length<1000)break}
+  const candidates=stalePortfolioRangeSnapshotKeys(keys,prefix,'',cutoff),markerKey=`portfolio_range_generation:${record.value.from}:${record.value.to}`;
+  for(let start=0;start<candidates.length;start+=200){
+   const{data,error:markerError}=await db.from('sync_state').select('value').eq('key',markerKey).maybeSingle();
+   if(markerError)throw new Error(`Supabase portfolio range marker recheck: ${markerError.message}`);
+   const active=(data?.value as{generation?:string}|undefined)?.generation;
+   if(!active)continue;
+   const safe=stalePortfolioRangeSnapshotKeys(candidates.slice(start,start+200),prefix,active,cutoff);
+   if(!safe.length)continue;
+   const{error}=await db.from('sync_state').delete().in('key',safe);if(error)throw new Error(`Supabase stale portfolio range delete: ${error.message}`);
+  }
+ }
+ return publication;
+}
 
 export async function refreshLongPortfolioRangeSnapshots(client:CacheClient,now=new Date()){
  if(!client.from)throw new Error('Supabase range rollups require a table client');
@@ -55,8 +95,7 @@ export async function refreshLongPortfolioRangeSnapshots(client:CacheClient,now=
   const range=reportingRange(period,now),rows=await loadMetricRows(client,range,false);
   records.push(buildPortfolioRangeSnapshotRecordFromAggregates(range.from!,range.to,rows.map(row=>({...row,clicks:number(row.clicks),sois:number(row.sois),first_sales:number(row.first_sales),rebills:number(row.rebills),coin_spend:number(row.coin_spend),payout:number(row.payout),revenue:number(row.revenue),profit:number(row.profit)}))));
  }
- const{error}=await(client as unknown as SupabaseClient).from('sync_state').upsert(records,{onConflict:'key'});
- if(error)throw new Error(`Supabase long portfolio snapshots: ${error.message}`);
+ await publishPortfolioRangeRecords(client,records);
  return records.map(record=>({key:record.key,rows:record.value.rows.length}));
 }
 

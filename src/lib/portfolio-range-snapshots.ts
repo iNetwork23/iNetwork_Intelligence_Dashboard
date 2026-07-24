@@ -1,14 +1,36 @@
 import type{DailyMetricRow}from'./history-cache';
 import{encodePortfolioSnapshotRow,type PortfolioSnapshotRow}from'./affiliate-source-cache';
+import{snapshotGenerationCreatedAt}from'./snapshot-generation';
 
 const DAY=86_400_000;
 const shift=(day:string,count:number)=>new Date(Date.parse(`${day}T12:00:00Z`)+count*DAY).toISOString().slice(0,10);
 const dayCount=(from:string,to:string)=>Math.floor((Date.parse(`${to}T12:00:00Z`)-Date.parse(`${from}T12:00:00Z`))/DAY)+1;
 const metrics=['clicks','sois','first_sales','rebills','coin_spend','payout','revenue','profit']as const;
 
-export type PortfolioRangeSnapshot={version:1;from:string;to:string;rows:PortfolioSnapshotRow[]};
+export type PortfolioRangeSnapshot={version:1|2;from:string;to:string;rows:PortfolioSnapshotRow[];generation?:string};
 export type PortfolioRangeSnapshotRecord={key:string;value:PortfolioRangeSnapshot};
+export type PortfolioRangeMarkerRecord={key:string;value:{version:2;from:string;to:string;generation:string}};
 export type PortfolioAggregateRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number};
+
+export function buildPortfolioRangePublication(records:PortfolioRangeSnapshotRecord[],generation:string){
+ return{
+  snapshots:records.map(record=>({key:`portfolio_range:${record.value.from}:${record.value.to}:${generation}`,value:{...record.value,version:2 as const,generation}})),
+  markers:records.map(record=>({key:`portfolio_range_generation:${record.value.from}:${record.value.to}`,value:{version:2 as const,from:record.value.from,to:record.value.to,generation}})),
+ };
+}
+
+export function stalePortfolioRangeSnapshotKeys(keys:string[],prefix:string,activeGeneration:string,cutoff:number){
+ return keys.filter(key=>{const generation=key.slice(prefix.length),created=snapshotGenerationCreatedAt(generation);return generation!==activeGeneration&&created!==null&&created<cutoff});
+}
+
+export function isValidPortfolioRangeSnapshot(value:unknown,from:string,to:string,expectedGeneration?:string):value is PortfolioRangeSnapshot{
+ if(!value||typeof value!=='object')return false;
+ const snapshot=value as Partial<PortfolioRangeSnapshot>;
+ if((snapshot.version!==1&&snapshot.version!==2)||snapshot.from!==from||snapshot.to!==to||!Array.isArray(snapshot.rows))return false;
+ if(expectedGeneration&&(snapshot.version!==2||snapshot.generation!==expectedGeneration))return false;
+ const strings=['a','an','o','on','c','cn','u','un','s','ss']as const,numbers=['cl','cv','fs','rb','cs','p','r','pr']as const;
+ return snapshot.rows.every(row=>Boolean(row&&typeof row==='object'&&strings.every(field=>typeof row[field]==='string')&&numbers.every(field=>typeof row[field]==='number'&&Number.isFinite(row[field]))&&(row.m===undefined||row.m==='api'||row.m==='tracked')&&(row.a1===undefined||typeof row.a1==='string')&&(row.a2===undefined||typeof row.a2==='string')));
+}
 
 export function buildPortfolioRangeSnapshotRecordFromAggregates(from:string,to:string,rows:PortfolioAggregateRow[]):PortfolioRangeSnapshotRecord{
  return{key:`portfolio_range:${from}:${to}`,value:{version:1,from,to,rows:rows.map(row=>({a:row.affiliate_id,an:row.affiliate_name,o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:'',ss:'',cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit}))}};

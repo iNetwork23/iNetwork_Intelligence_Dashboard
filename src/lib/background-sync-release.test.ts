@@ -19,6 +19,8 @@ describe('automatic Supabase reporting refresh',()=>{
   const rollups=read('src/app/api/sync/rollups/route.ts');
   expect(rollups).toContain('CRON_SECRET');
   expect(rollups).toContain('refreshLongPortfolioRangeSnapshots');
+  expect(rollups).toContain('acquireHistorySyncLock');
+  expect(rollups).toContain('finally{await release()}');
   expect(rollups).toContain('maxDuration=240');
   const cachedSmartlinks=read('src/lib/cached-smartlinks.ts');
   expect(cachedSmartlinks).toContain('Promise.all(snapshotBatches.map');

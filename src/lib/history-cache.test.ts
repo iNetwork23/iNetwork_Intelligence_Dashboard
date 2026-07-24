@@ -16,6 +16,12 @@ describe('history cache sync windows',()=>{
     expect(next.phase).toBe('rolling');
     expect(selectSyncWindow(next,now)).toEqual({mode:'rolling',from:'2026-06-23',to:'2026-07-22'});
   });
+  it('uses the Berlin calendar day around UTC midnight',()=>{
+    const berlinAfterMidnight=new Date('2026-07-24T22:30:00Z');
+    const state=initialSyncState(berlinAfterMidnight);
+    expect(state.next_end).toBe('2026-07-25');
+    expect(selectSyncWindow({...state,phase:'rolling'},berlinAfterMidnight)).toEqual({mode:'rolling',from:'2026-06-26',to:'2026-07-25'});
+  });
 });
 
 describe('Everflow conversion mapping',()=>{

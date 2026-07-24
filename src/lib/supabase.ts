@@ -4,7 +4,7 @@ import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import {canonicalMetricRows,staleMetricIds,type ConversionCacheRow,type DailyMetricRow,type SyncState,type SyncStore} from './history-cache';
 import{encodePortfolioSnapshotRow,encodeSourceSnapshotRow}from'./affiliate-source-cache';
 import{newSnapshotGeneration,snapshotGenerationCreatedAt}from'./snapshot-generation';
-import{buildPortfolioRangeSnapshotRecords}from'./portfolio-range-snapshots';
+import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecords}from'./portfolio-range-snapshots';
 
 let client:SupabaseClient|null=null;
 export function getSupabaseAdmin(){
@@ -35,18 +35,22 @@ function campaignAffiliateRows(rows:DailyMetricRow[]){const grouped=new Map<stri
 async function upsertSourceSnapshots(from:string,to:string,rows:DailyMetricRow[]){
   const byDay=new Map<string,Map<string,DailyMetricRow[]>>();
   for(const row of rows){let affiliates=byDay.get(row.metric_date);if(!affiliates){affiliates=new Map();byDay.set(row.metric_date,affiliates)}const group=affiliates.get(row.affiliate_id)||[];group.push(row);affiliates.set(row.affiliate_id,group)}
-  const supabase=getSupabaseAdmin();
+  const supabase=getSupabaseAdmin(),markers:{key:string;value:unknown}[]=[],publishedDays:string[]=[];
   for(let day=from;day<=to;day=nextDay(day)){
     await pruneDaySnapshots(day);
     const generation=newSnapshotGeneration(),affiliates=byDay.get(day)||new Map<string,DailyMetricRow[]>(),dayRows=Array.from(affiliates.values()).flat(),snapshots:{key:string;value:unknown}[]=Array.from(affiliates,([affiliateId,metrics])=>({key:`source_day:${day}:${generation}:${affiliateId}`,value:{version:2,date:day,affiliate_id:affiliateId,affiliate_name:metrics[0].affiliate_name,rows:metrics.map(encodeSourceSnapshotRow)}}));
     snapshots.push({key:`campaign_affiliate_day:${day}:${generation}`,value:{version:2,date:day,rows:campaignAffiliateRows(dayRows)}});
     snapshots.push({key:`portfolio_day:${day}:${generation}`,value:{version:2,date:day,rows:canonicalMetricRows(dayRows).map(encodePortfolioSnapshotRow)}});
     if(snapshots.length){const {error}=await supabase.from('sync_state').upsert(snapshots,{onConflict:'key'});throwIfError(error,'source snapshot upsert')}
-    const marker={version:2,date:day,generation},{error}=await supabase.from('sync_state').upsert([{key:`source_day_generation:${day}`,value:marker},{key:`portfolio_day_generation:${day}`,value:marker},{key:`campaign_affiliate_day_generation:${day}`,value:marker}],{onConflict:'key'});throwIfError(error,'snapshot generation switch');
-    await pruneDaySnapshots(day);
+    const marker={version:2,date:day,generation};
+    markers.push({key:`source_day_generation:${day}`,value:marker},{key:`portfolio_day_generation:${day}`,value:marker},{key:`campaign_affiliate_day_generation:${day}`,value:marker});
+    publishedDays.push(day);
   }
-  const rangeSnapshots=buildPortfolioRangeSnapshotRecords(from,to,rows);
-  if(rangeSnapshots.length){const{error}=await supabase.from('sync_state').upsert(rangeSnapshots,{onConflict:'key'});throwIfError(error,'portfolio range snapshot upsert')}
+  const rangePublication=buildPortfolioRangePublication(buildPortfolioRangeSnapshotRecords(from,to,rows),newSnapshotGeneration());
+  if(rangePublication.snapshots.length){const{error}=await supabase.from('sync_state').upsert(rangePublication.snapshots,{onConflict:'key'});throwIfError(error,'portfolio range snapshot upsert')}
+  markers.push(...rangePublication.markers);
+  if(markers.length){const{error}=await supabase.from('sync_state').upsert(markers,{onConflict:'key'});throwIfError(error,'snapshot generation switch')}
+  for(const day of publishedDays)await pruneDaySnapshots(day);
 }
 
 async function acquireSyncStateLock(key:string,ttlMs:number,label:string){const supabase=getSupabaseAdmin(),owner=randomUUID(),expiresAt=new Date(Date.now()+ttlMs).toISOString();for(let attempt=0;attempt<3;attempt++){const inserted=await supabase.from('sync_state').insert({key,value:{owner,expires_at:expiresAt}});if(!inserted.error)return async()=>{const released=await supabase.from('sync_state').delete().eq('key',key).contains('value',{owner});throwIfError(released.error,`${label} release`)};if(inserted.error.code!=='23505')throw new Error(`Supabase ${label}: ${inserted.error.message}`);const current=await supabase.from('sync_state').select('value').eq('key',key).maybeSingle();throwIfError(current.error,`${label} read`);const value=current.data?.value as{owner?:string;expires_at?:string}|undefined;if(value?.owner&&value.expires_at&&Date.parse(value.expires_at)<Date.now()){const removed=await supabase.from('sync_state').delete().eq('key',key).contains('value',{owner:value.owner});throwIfError(removed.error,`expired ${label} delete`);continue}throw new Error(`Ein anderer ${label} läuft bereits`)}throw new Error(`${label} konnte nicht übernommen werden`)}

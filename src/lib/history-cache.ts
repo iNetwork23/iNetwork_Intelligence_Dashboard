@@ -28,6 +28,7 @@ export type DailyMetricRow={
 
 const DAY=86_400_000;
 const isoDay=(value:Date)=>value.toISOString().slice(0,10);
+const berlinDay=(value:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
 const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
 const shift=(value:string,days:number)=>isoDay(new Date(fromDay(value).getTime()+days*DAY));
 
@@ -42,13 +43,13 @@ export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(da
 }
 
 export function initialSyncState(now=new Date()):SyncState{
-  const end=isoDay(now);
+  const end=berlinDay(now);
   return{phase:'backfill',backfill_start:shift(end,-364),next_end:end,last_success_at:null};
 }
 
 export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
   if(state.phase==='rolling'){
-    const to=isoDay(now);
+    const to=berlinDay(now);
     return{mode:'rolling',from:shift(to,-29),to};
   }
   const to=state.next_end;
@@ -117,7 +118,7 @@ export async function runHistorySync(input:{
   }
   const window=selectSyncWindow(state,now);
   const persist=(from:string,to:string)=>refreshHistoryRange({...input,from,to});
-  const today=isoDay(now);
+  const today=berlinDay(now);
   if(window.mode==='backfill'&&window.to<today)await persist(today,today);
   const{conversions,metrics}=await persist(window.from,window.to);
   const next=advanceSyncState(state,window,now);

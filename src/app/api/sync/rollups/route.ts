@@ -1,5 +1,5 @@
 import{NextRequest,NextResponse}from'next/server';
-import{getSupabaseAdmin}from'@/lib/supabase';
+import{acquireHistorySyncLock,getSupabaseAdmin}from'@/lib/supabase';
 import{refreshLongPortfolioRangeSnapshots}from'@/lib/supabase-reporting';
 
 export const runtime='nodejs';
@@ -10,6 +10,10 @@ const authorized=(request:NextRequest)=>Boolean(process.env.CRON_SECRET&&request
 
 export async function GET(request:NextRequest){
  if(!authorized(request))return NextResponse.json({error:'Nicht autorisiert'},{status:401});
- try{return NextResponse.json({snapshots:await refreshLongPortfolioRangeSnapshots(getSupabaseAdmin())})}
+ try{
+  const release=await acquireHistorySyncLock();
+  try{return NextResponse.json({snapshots:await refreshLongPortfolioRangeSnapshots(getSupabaseAdmin())})}
+  finally{await release()}
+ }
  catch(error){console.error('Supabase range rollup failed',error);return NextResponse.json({error:'Range-Snapshots konnten nicht aktualisiert werden'},{status:500})}
 }
