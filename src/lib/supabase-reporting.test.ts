@@ -13,6 +13,12 @@ describe('Supabase reporting periods',()=>{
 });
 
 describe('portfolio cache adapter',()=>{
+  it('loads an exact pre-aggregated range snapshot with one Supabase row read',async()=>{
+    const from=vi.fn(()=>({select:vi.fn(()=>({eq:vi.fn(()=>({maybeSingle:vi.fn().mockResolvedValue({data:{value:{version:1,from:'2026-06-23',to:'2026-07-22',rows:[{a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'2774',un:'LP',cl:100,cv:10,fs:2,rb:3,cs:4,p:30,r:80,pr:50}]}},error:null})}))}))}));
+    const result=await loadPortfolioFromCache('30d',{from,rpc:vi.fn()} as never,new Date('2026-07-22T12:00:00Z'));
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(result.totals).toMatchObject({clicks:100,sois:10,firstSales:2,rebills:3,coinSpend:4,revenue:80,payout:30,profit:50});
+  });
   it('loads compact daily snapshots in small batches so cold JSON reads stay below the database statement timeout',()=>{const code=readFileSync(join(process.cwd(),'src/lib/supabase-reporting.ts'),'utf8');expect(code).toContain("start<keys.length;start+=5");expect(code).toContain("keys.slice(start,start+5)");expect(code).not.toContain("keys.slice(start,start+50)")});
   it('loads aggregated facts through the Postgres RPC and preserves existing KPI aggregation',async()=>{
     const rpc=vi.fn().mockResolvedValue({data:[{affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Offer',campaign_id:'2',campaign_name:'Campaign',offer_url_id:'2774',offer_url_name:'LP',clicks:100,sois:10,first_sales:2,rebills:3,coin_spend:4,payout:30,revenue:80,profit:50}],error:null});

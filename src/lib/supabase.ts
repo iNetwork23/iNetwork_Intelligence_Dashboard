@@ -4,6 +4,7 @@ import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import {canonicalMetricRows,staleMetricIds,type ConversionCacheRow,type DailyMetricRow,type SyncState,type SyncStore} from './history-cache';
 import{encodePortfolioSnapshotRow,encodeSourceSnapshotRow}from'./affiliate-source-cache';
 import{newSnapshotGeneration,snapshotGenerationCreatedAt}from'./snapshot-generation';
+import{buildPortfolioRangeSnapshotRecords}from'./portfolio-range-snapshots';
 
 let client:SupabaseClient|null=null;
 export function getSupabaseAdmin(){
@@ -44,6 +45,8 @@ async function upsertSourceSnapshots(from:string,to:string,rows:DailyMetricRow[]
     const marker={version:2,date:day,generation},{error}=await supabase.from('sync_state').upsert([{key:`source_day_generation:${day}`,value:marker},{key:`portfolio_day_generation:${day}`,value:marker},{key:`campaign_affiliate_day_generation:${day}`,value:marker}],{onConflict:'key'});throwIfError(error,'snapshot generation switch');
     await pruneDaySnapshots(day);
   }
+  const rangeSnapshots=buildPortfolioRangeSnapshotRecords(from,to,rows);
+  if(rangeSnapshots.length){const{error}=await supabase.from('sync_state').upsert(rangeSnapshots,{onConflict:'key'});throwIfError(error,'portfolio range snapshot upsert')}
 }
 
 async function acquireSyncStateLock(key:string,ttlMs:number,label:string){const supabase=getSupabaseAdmin(),owner=randomUUID(),expiresAt=new Date(Date.now()+ttlMs).toISOString();for(let attempt=0;attempt<3;attempt++){const inserted=await supabase.from('sync_state').insert({key,value:{owner,expires_at:expiresAt}});if(!inserted.error)return async()=>{const released=await supabase.from('sync_state').delete().eq('key',key).contains('value',{owner});throwIfError(released.error,`${label} release`)};if(inserted.error.code!=='23505')throw new Error(`Supabase ${label}: ${inserted.error.message}`);const current=await supabase.from('sync_state').select('value').eq('key',key).maybeSingle();throwIfError(current.error,`${label} read`);const value=current.data?.value as{owner?:string;expires_at?:string}|undefined;if(value?.owner&&value.expires_at&&Date.parse(value.expires_at)<Date.now()){const removed=await supabase.from('sync_state').delete().eq('key',key).contains('value',{owner:value.owner});throwIfError(removed.error,`expired ${label} delete`);continue}throw new Error(`Ein anderer ${label} läuft bereits`)}throw new Error(`${label} konnte nicht übernommen werden`)}
