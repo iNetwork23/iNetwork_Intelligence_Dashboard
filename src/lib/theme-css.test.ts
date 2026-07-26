@@ -28,6 +28,7 @@ describe('user-selectable dashboard themes',()=>{
   const source=css();
   expect(source).toContain('.themeSwitcher{position:fixed');
   expect(source).toContain('.themeSwitcher button[aria-pressed=true]');
-  expect(source).toContain('@media(max-width:600px){.themeSwitcher');
+  expect(source).toContain('@media(max-width:600px){body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}.themeSwitcher');
+  expect(source).toContain('bottom:calc(10px + env(safe-area-inset-bottom))');
  });
 });
