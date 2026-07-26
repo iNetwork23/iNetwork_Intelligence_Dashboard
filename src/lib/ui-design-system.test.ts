@@ -17,7 +17,7 @@ describe('calm semantic BI design system', () => {
       '--border:#29303a',
       '--text-primary:#f4f6f8',
       '--text-secondary:#a3abb7',
-      '--text-muted:#727b88',
+      '--text-muted:#828b98',
       '--accent:#5b8def',
       '--positive:#3fbf8f',
       '--warning:#d8a84e',
