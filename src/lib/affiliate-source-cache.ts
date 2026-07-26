@@ -11,7 +11,7 @@ export const decodeSourceSnapshotRow=(row:SourceSnapshotRow,affiliateId:string,a
 const n=(value:number|string)=>Number(value||0);
 const sourceText=(value:unknown)=>{const text=String(value??'').trim();return!text||text.toUpperCase()==='N/A'?'':text};
 
-export function mapAffiliateSourceRows(rows:DailySourceRow[]):ReportRow[]{
+export function mapAffiliateSourceRows(rows:DailySourceRow[],metricDate?:string):ReportRow[]{
   const grouped=new Map<string,DailySourceRow&{traffic_mode:'api'|'tracked';source_value:string;sub_value:string}>();
   for(const row of rows){
     const traffic_mode=row.raw?.traffic_mode||(isApiOffer(row.offer_name)?'api':'tracked'),source_value=sourceText(traffic_mode==='api'?row.raw?.adv1:row.source_id)||'Nicht übermittelt',sub_value=sourceText(traffic_mode==='api'?row.raw?.adv2:row.sub_source);
@@ -21,6 +21,7 @@ export function mapAffiliateSourceRows(rows:DailySourceRow[]):ReportRow[]{
     grouped.set(key,current);
   }
   return Array.from(grouped.values()).map(row=>({columns:[
+    ...(metricDate?[{column_type:'date',id:metricDate,label:metricDate}]:[]),
     {column_type:'affiliate',id:row.affiliate_id,label:row.affiliate_name},{column_type:'offer',id:row.offer_id,label:row.offer_name},
     {column_type:'campaign',id:row.campaign_id,label:row.campaign_name},{column_type:'offer_url',id:row.offer_url_id,label:row.offer_url_name},
     {column_type:'traffic_mode',id:row.traffic_mode,label:row.traffic_mode},{column_type:'source_id',id:row.source_value,label:row.source_value},

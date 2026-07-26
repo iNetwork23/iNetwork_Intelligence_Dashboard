@@ -3,7 +3,7 @@ export type CampaignShape={network_campaign_id:number;campaign_name:string;campa
 export type SmartMetrics={clicks:number;sois:number;cvr:number;firstSales:number;firstSaleRate:number;rebills:number;coinSpend:number;revenue:number;payout:number;profit:number;profitEpc:number};
 export type SmartlinkSourceBreakdown={mode:'api'|'tracked';source:string;subSource:string;clicks:number;sois:number;cvr:number|null;firstSales:number;rebills:number;coinSpend:number;payout:number;revenue:number;profit:number};
 export type SmartSlot={id:string;name:string;offerId:string;weight:number;status:string;metrics24:SmartMetrics;metrics72:SmartMetrics;metrics14:SmartMetrics;hoursTo50Sois:number|null;sourceBreakdown?:SmartlinkSourceBreakdown[]};
-export type LegacySlot={id:string;name:string;offerId:string;metrics72?:SmartMetrics;metrics14:SmartMetrics};
+export type LegacySlot={id:string;name:string;offerId:string;metrics72?:SmartMetrics;metrics14:SmartMetrics;sourceBreakdown?:SmartlinkSourceBreakdown[]};
 export type SlotRecommendation={slotId:string;action:'stop'|'rotate'|'scale'|'protect'|'hold';severity:'critical'|'warning'|'positive'|'neutral';reasonCode:string;title:string;detail:string};
 const blank=():SmartMetrics=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0});
 const round=(n:number,d=2)=>Number(n.toFixed(d));

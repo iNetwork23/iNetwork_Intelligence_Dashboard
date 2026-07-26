@@ -20,6 +20,10 @@ describe('Supabase API source mapping',()=>{
     expect(report.columns.find(column=>column.column_type==='source_id')?.id).toBe('source-a');
     expect(report.columns.find(column=>column.column_type==='sub1')?.id).toBe('sub-b');
   });
+  it('preserves the snapshot day when mapping daily source rows',()=>{
+    const[report]=mapAffiliateSourceRows([base],'2026-07-23');
+    expect(report.columns.find(column=>column.column_type==='date')).toMatchObject({id:'2026-07-23',label:'2026-07-23'});
+  });
   it('round-trips compact source snapshots without duplicating canonical cache fields',()=>{
     const metric={...base,clicks:Number(base.clicks),sois:Number(base.sois),first_sales:Number(base.first_sales),rebills:Number(base.rebills),coin_spend:Number(base.coin_spend),payout:Number(base.payout),revenue:Number(base.revenue),profit:Number(base.profit),id:'metric-id',metric_date:'2026-07-23',raw:{...base.raw,canonical_id:'legacy-id'}},encoded=encodeSourceSnapshotRow(metric),decoded=decodeSourceSnapshotRow(encoded,base.affiliate_id,base.affiliate_name);
     expect(decoded).toMatchObject(base);expect(encoded).not.toHaveProperty('id');expect(encoded).not.toHaveProperty('canonical_id');expect(JSON.stringify(encoded).length).toBeLessThan(JSON.stringify(metric).length);
