@@ -3,6 +3,7 @@
 import {useMemo,useState,type ReactNode} from 'react';
 import {sortSmartlinkSlots,type SmartlinkSort} from '../../lib/smartlink-presentation';
 import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown} from '../../lib/smartlink';
+import CopyValue from '../affiliates/CopyValue';
 
 const euro=(n:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n);
 const num=(n:number)=>new Intl.NumberFormat('de-DE').format(n);
@@ -47,7 +48,7 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,o
     <caption className="srOnly">Lead-Herkunft für LP #{landingpageId}</caption>
     <thead><tr><th>Herkunft</th><th>Klicks</th><th>SOIs · Anteil</th><th>CVR</th><th>First-Sales</th><th>Rebills</th><th>Coin-Spend-Events</th><th>Umsatz</th><th>SOI-Vergütung</th><th>Profit</th></tr></thead>
     <tbody>{sorted.map((row,index)=><tr key={`${row.mode}-${row.source}-${row.subSource}-${index}`}>
-     <td data-label="Herkunft"><b>{row.mode==='api'?'ADV1':'Source ID'}: {row.source||'Nicht übermittelt'}</b><small>{row.mode==='api'?'ADV2':'Subsource ID'}: {row.subSource||'Nicht übermittelt'}</small></td>
+     <td data-label="Herkunft"><CopyValue label={row.mode==='api'?'ADV1':'Source'} value={row.source||'Nicht übermittelt'}/><small><CopyValue label={row.mode==='api'?'ADV2':'Sub1'} value={row.subSource||'Nicht übermittelt'}/></small></td>
      <td data-label="Klicks">{row.mode==='api'?'n/a – clickless':num(row.clicks)}</td>
      <td data-label="SOIs · Anteil"><b>{num(row.sois)} SOIs · {share(row.sois,totalSois)}</b></td>
      <td data-label="CVR">{row.cvr===null?'n/a – clickless':pct(row.cvr)}</td>

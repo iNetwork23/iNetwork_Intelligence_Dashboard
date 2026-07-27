@@ -24,10 +24,14 @@ describe('user-selectable dashboard themes',()=>{
   expect(source).not.toContain('border:1px solid rgba(255,255,255,.08)');
  });
 
- it('styles a persistent visible selector with a clear pressed state',()=>{
+ it('styles a persistent icon selector with theme-aware sun and moon states',()=>{
   const source=css();
   expect(source).toContain('.themeSwitcher{position:fixed');
-  expect(source).toContain('.themeSwitcher button[aria-pressed=true]');
+  expect(source).toContain('.themeSwitcher button{');
+  expect(source).toContain('.themeIconSun');
+  expect(source).toContain('html[data-theme="light"] .themeIconSun');
+  expect(source).toContain('html[data-theme="light"] .themeIconMoon');
+  expect(source).not.toContain('.themeSwitcher button[aria-pressed=true]');
   expect(source).toContain('@media(max-width:600px){body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}.themeSwitcher');
   expect(source).toContain('bottom:calc(10px + env(safe-area-inset-bottom))');
  });

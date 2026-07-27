@@ -10,5 +10,7 @@ export default function ThemeToggle(){
   setTheme(next);
   try{persistTheme(next,document.documentElement,window.localStorage)}catch{document.documentElement.dataset.theme=next;document.documentElement.style.colorScheme=next}
  };
- return <div className="themeSwitcher" role="group" aria-label="Farbschema wählen"><span>Darstellung</span><button type="button" data-theme-option="light" aria-pressed={theme==='light'} onClick={()=>choose('light')}>Hell</button><button type="button" data-theme-option="dark" aria-pressed={theme==='dark'} onClick={()=>choose('dark')}>Dunkel</button></div>;
+ const label=theme==='dark'?'Helles Design aktivieren':theme==='light'?'Dunkles Design aktivieren':'Farbschema wechseln';
+ const toggle=()=>{const current=theme||(document.documentElement.dataset.theme==='light'?'light':'dark');choose(current==='dark'?'light':'dark')};
+ return <div className="themeSwitcher"><button type="button" data-theme-toggle="icon" aria-label={label} title={label} onClick={toggle}><svg className="themeIcon themeIconSun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg><svg className="themeIcon themeIconMoon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg></button></div>;
 }

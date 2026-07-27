@@ -1,0 +1,6 @@
+import{readFileSync}from'node:fs';import{join}from'node:path';import{describe,expect,it}from'vitest';const css=()=>readFileSync(join(process.cwd(),'src/app/globals.css'),'utf8');
+describe('source controls responsive CSS',()=>{
+ it('keeps copy actions compact, focused and feedback layout-stable',()=>{const source=css();for(const rule of['.copyValue{display:inline-flex','.copyButton{display:inline-grid','.copyButton:focus-visible{outline:2px solid var(--accent)','.copyFeedback{position:absolute','.copyFeedback.copied{'])expect(source).toContain(rule)});
+ it('lays out local source period controls without page overflow',()=>{const source=css();for(const rule of['.sourcePeriodControls{','.sourcePeriodPresets{display:flex','.sourcePeriodPresets button{min-height:36px','.sourceCustomPeriod{display:grid','.sourcePeriodPending{'])expect(source).toContain(rule)});
+ it('provides mobile touch targets and stacked custom dates',()=>{const source=css();expect(source).toContain('@media(max-width:700px){.breakdownControls{align-items:stretch');expect(source).toContain('.sourcePeriodPresets button,.sourceCustomPeriod button{min-height:44px');expect(source).toContain('.sourceCustomPeriod{grid-template-columns:1fr}');expect(source).toContain('.copyButton{width:44px;height:44px}')});
+});

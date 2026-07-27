@@ -6,15 +6,15 @@ import {describe,expect,it} from 'vitest';
 import ThemeToggle from '../app/components/ThemeToggle';
 
 describe('ThemeToggle',()=>{
- it('renders explicit accessible light and dark choices',()=>{
+ it('renders one accessible icon button for the available target theme',()=>{
   const html=renderToStaticMarkup(<ThemeToggle/>);
-  expect(html).toContain('role="group"');
-  expect(html).toContain('aria-label="Farbschema wählen"');
-  expect(html).toContain('data-theme-option="light"');
-  expect(html).toContain('data-theme-option="dark"');
-  expect(html).toContain('>Hell</button>');
-  expect(html).toContain('>Dunkel</button>');
-  expect(html.match(/aria-pressed="false"/g)).toHaveLength(2);
+  expect(html).toContain('aria-label="Farbschema wechseln"');
+  expect(html).toContain('data-theme-toggle="icon"');
+  expect(html).toContain('themeIconSun');
+  expect(html).toContain('themeIconMoon');
+  expect(html.match(/<button/g)).toHaveLength(1);
+  expect(html).not.toContain('>Hell</button>');
+  expect(html).not.toContain('>Dunkel</button>');
  });
 
  it('is mounted globally and initializes before the body paints',()=>{
