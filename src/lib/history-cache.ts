@@ -31,6 +31,7 @@ const isoDay=(value:Date)=>value.toISOString().slice(0,10);
 const berlinDay=(value:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
 const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
 const shift=(value:string,days:number)=>isoDay(new Date(fromDay(value).getTime()+days*DAY));
+export function resolveManualSourceRange(params:Pick<URLSearchParams,'get'>,now=new Date()){const from=params.get('from')||'',to=params.get('to')||'',valid=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&new Date(`${value}T12:00:00Z`).toISOString().slice(0,10)===value;if(!valid(from)||!valid(to)||from>to)throw new Error('Ungültiger Source-Zeitraum');const days=Math.floor((fromDay(to).getTime()-fromDay(from).getTime())/DAY)+1;if(days>31)throw new Error('Source-Refresh darf höchstens 31 Tage umfassen');const today=berlinDay(now);if(to>today)throw new Error('Source-Refresh darf nicht in der Zukunft liegen');if(from<shift(today,-364))throw new Error('Source-Refresh liegt außerhalb der 365-Tage-Aufbewahrung');return{from,to}}
 
 export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(day:string)=>Promise<T[]>,rowCap=10_000){
   const rows:T[]=[];
@@ -117,10 +118,11 @@ export async function runHistorySync(input:{
     return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true};
   }
   const window=selectSyncWindow(state,now);
-  const persist=(from:string,to:string)=>refreshHistoryRange({...input,from,to});
   const today=berlinDay(now);
-  if(window.mode==='backfill'&&window.to<today)await persist(today,today);
-  const{conversions,metrics}=await persist(window.from,window.to);
+  if(window.mode==='backfill')await refreshHistoryRange({store:input.store,from:shift(today,-29),to:today,includeConversions:false,loadConversions:input.loadConversions,loadReports:input.loadReports});
+  const retentionFrom=shift(today,-364),segments:Array<{from:string;to:string;includeConversions:boolean}>=[];
+  if(window.mode==='backfill'&&window.from<retentionFrom){const expiredTo=window.to<retentionFrom?window.to:shift(retentionFrom,-1);segments.push({from:window.from,to:expiredTo,includeConversions:false});if(window.to>=retentionFrom)segments.push({from:retentionFrom,to:window.to,includeConversions:true})}else segments.push({from:window.from,to:window.to,includeConversions:true});
+  const conversions:ConversionCacheRow[]=[],metrics:DailyMetricRow[]=[];for(const segment of segments){const result=await refreshHistoryRange({store:input.store,...segment,loadConversions:input.loadConversions,loadReports:input.loadReports});conversions.push(...result.conversions);metrics.push(...result.metrics)};
   const next=advanceSyncState(state,window,now);
   await input.store.setState(next);
   return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling'};

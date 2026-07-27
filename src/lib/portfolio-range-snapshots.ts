@@ -23,6 +23,8 @@ export function stalePortfolioRangeSnapshotKeys(keys:string[],prefix:string,acti
  return keys.filter(key=>{const generation=key.slice(prefix.length),created=snapshotGenerationCreatedAt(generation);return generation!==activeGeneration&&created!==null&&created<cutoff});
 }
 
+export function isPortfolioRangeSnapshotFresh(rangeGeneration:string,dayGenerations:string[]){const rangeCreated=snapshotGenerationCreatedAt(rangeGeneration);if(rangeCreated===null)return true;return dayGenerations.every(generation=>{const created=snapshotGenerationCreatedAt(generation);return created===null||created<=rangeCreated})}
+
 export function isValidPortfolioRangeSnapshot(value:unknown,from:string,to:string,expectedGeneration?:string):value is PortfolioRangeSnapshot{
  if(!value||typeof value!=='object')return false;
  const snapshot=value as Partial<PortfolioRangeSnapshot>;

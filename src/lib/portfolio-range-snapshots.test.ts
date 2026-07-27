@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,buildPortfolioRangeSnapshotRecords,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys}from'./portfolio-range-snapshots';
+import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,buildPortfolioRangeSnapshotRecords,isPortfolioRangeSnapshotFresh,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys}from'./portfolio-range-snapshots';
 import type{DailyMetricRow}from'./history-cache';
 
 const row=(date:string,clicks:number):DailyMetricRow=>({id:`metric:${date}`,metric_date:date,affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Offer',campaign_id:'0',campaign_name:'Direct',offer_url_id:'2774',offer_url_name:'LP',source_id:'source',sub_source:'sub',clicks,sois:1,first_sales:1,rebills:0,coin_spend:0,payout:2,revenue:5,profit:3,raw:{}});
@@ -36,4 +36,5 @@ describe('portfolio range snapshots',()=>{
   const prefix='portfolio_range:2026-04-26:2026-07-24:',old=`${prefix}1700000000000-00000000-0000-4000-8000-000000000000`,active=`${prefix}1800000000000-00000000-0000-4000-8000-000000000000`;
   expect(stalePortfolioRangeSnapshotKeys([old,active,`${prefix}legacy`],prefix,active.slice(prefix.length),1750000000000)).toEqual([old]);
  });
+ it('rejects a range generation when any participating day was refreshed later',()=>{const range='1785000000000-00000000-0000-4000-8000-000000000000',older='1784990000000-00000000-0000-4000-8000-000000000000',newer='1785010000000-00000000-0000-4000-8000-000000000000';expect(isPortfolioRangeSnapshotFresh(range,[older,range])).toBe(true);expect(isPortfolioRangeSnapshotFresh(range,[older,newer])).toBe(false);expect(isPortfolioRangeSnapshotFresh('legacy-generation',[newer])).toBe(true)});
 });

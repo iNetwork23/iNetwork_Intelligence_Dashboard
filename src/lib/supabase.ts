@@ -4,7 +4,7 @@ import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import {canonicalMetricRows,staleMetricIds,type ConversionCacheRow,type DailyMetricRow,type SyncState,type SyncStore} from './history-cache';
 import{encodePortfolioSnapshotRow,encodeSourceSnapshotRow}from'./affiliate-source-cache';
 import{newSnapshotGeneration,snapshotGenerationCreatedAt}from'./snapshot-generation';
-import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecords}from'./portfolio-range-snapshots';
+import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecords,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
 
 let client:SupabaseClient|null=null;
 export function getSupabaseAdmin(){
@@ -31,6 +31,7 @@ async function zeroMetrics(ids:string[]){for(let start=0;start<ids.length;start+
 
 async function markerGeneration(key:string){const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',key).maybeSingle();throwIfError(error,'snapshot marker read');return(data?.value as{generation?:string}|undefined)?.generation||null}
 async function pruneDaySnapshots(day:string){const supabase=getSupabaseAdmin(),namespaces=[{prefix:`source_day:${day}:`,marker:`source_day_generation:${day}`},{prefix:`campaign_affiliate_day:${day}:`,marker:`campaign_affiliate_day_generation:${day}`},{prefix:`portfolio_day:${day}:`,marker:`portfolio_day_generation:${day}`}],cutoff=Date.now()-24*60*60_000;for(const{prefix,marker}of namespaces){const keys:string[]=[];for(let start=0;;start+=1000){const{data,error}=await supabase.from('sync_state').select('key').like('key',`${prefix}%`).order('key').range(start,start+999);throwIfError(error,'snapshot generation list');const batch=(data||[]).map(row=>row.key as string);keys.push(...batch);if(batch.length<1000)break}const active=await markerGeneration(marker),stale=keys.filter(key=>{const generation=key.slice(prefix.length).split(':')[0],created=snapshotGenerationCreatedAt(generation);return generation!==active&&created!==null&&created<cutoff});for(let start=0;start<stale.length;start+=200){const latest=await markerGeneration(marker),safe=stale.slice(start,start+200).filter(key=>key.slice(prefix.length).split(':')[0]!==latest);if(!safe.length)continue;const result=await supabase.from('sync_state').delete().in('key',safe);throwIfError(result.error,'stale snapshot generation delete')}}}
+async function prunePortfolioRangeSnapshots(records:PortfolioRangeSnapshotRecord[]){const supabase=getSupabaseAdmin(),cutoff=Date.now()-24*60*60_000;for(const record of records){const{from,to}=record.value,prefix=`portfolio_range:${from}:${to}:`,marker=`portfolio_range_generation:${from}:${to}`,keys:string[]=[];for(let start=0;;start+=1000){const{data,error}=await supabase.from('sync_state').select('key').like('key',`${prefix}%`).order('key').range(start,start+999);throwIfError(error,'portfolio range generation list');const batch=(data||[]).map(row=>row.key as string);keys.push(...batch);if(batch.length<1000)break}const active=await markerGeneration(marker),stale=stalePortfolioRangeSnapshotKeys(keys,prefix,active||'',cutoff);for(let start=0;start<stale.length;start+=200){const latest=await markerGeneration(marker);if(!latest)continue;const safe=stalePortfolioRangeSnapshotKeys(stale.slice(start,start+200),prefix,latest,cutoff);if(!safe.length)continue;const{error}=await supabase.from('sync_state').delete().in('key',safe);throwIfError(error,'stale portfolio range delete')}}}
 function campaignAffiliateRows(rows:DailyMetricRow[]){const grouped=new Map<string,{affiliate_id:string;affiliate_name:string;campaign_id:string;campaign_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number}>();for(const row of rows){if(row.campaign_id==='0')continue;const key=`${row.affiliate_id}\u0000${row.campaign_id}`,current=grouped.get(key)||{affiliate_id:row.affiliate_id,affiliate_name:row.affiliate_name,campaign_id:row.campaign_id,campaign_name:row.campaign_name,clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0};for(const metric of['clicks','sois','first_sales','rebills','coin_spend','payout','revenue','profit']as const)current[metric]+=row[metric];grouped.set(key,current)}return Array.from(grouped.values())}
 async function upsertSourceSnapshots(from:string,to:string,rows:DailyMetricRow[]){
   const byDay=new Map<string,Map<string,DailyMetricRow[]>>();
@@ -46,10 +47,11 @@ async function upsertSourceSnapshots(from:string,to:string,rows:DailyMetricRow[]
     markers.push({key:`source_day_generation:${day}`,value:marker},{key:`portfolio_day_generation:${day}`,value:marker},{key:`campaign_affiliate_day_generation:${day}`,value:marker});
     publishedDays.push(day);
   }
-  const rangePublication=buildPortfolioRangePublication(buildPortfolioRangeSnapshotRecords(from,to,rows),newSnapshotGeneration());
+  const rangeRecords=buildPortfolioRangeSnapshotRecords(from,to,rows),rangePublication=buildPortfolioRangePublication(rangeRecords,newSnapshotGeneration());
   if(rangePublication.snapshots.length){const{error}=await supabase.from('sync_state').upsert(rangePublication.snapshots,{onConflict:'key'});throwIfError(error,'portfolio range snapshot upsert')}
   markers.push(...rangePublication.markers);
   if(markers.length){const{error}=await supabase.from('sync_state').upsert(markers,{onConflict:'key'});throwIfError(error,'snapshot generation switch')}
+  await prunePortfolioRangeSnapshots(rangeRecords);
   for(const day of publishedDays)await pruneDaySnapshots(day);
 }
 

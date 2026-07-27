@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {createEverflowHistorySource} from '@/lib/everflow-history';
-import {refreshHistoryRange,runHistorySync} from '@/lib/history-cache';
+import {refreshHistoryRange,resolveManualSourceRange,runHistorySync} from '@/lib/history-cache';
 import {acquireHistorySyncLock,createSupabaseSyncStore} from '@/lib/supabase';
 import {syncCampaignSnapshots} from '@/lib/campaign-snapshots';
 import {reportingRange} from '@/lib/supabase-reporting';
@@ -26,6 +26,7 @@ export async function POST(request:NextRequest){
     const release=await acquireHistorySyncLock();try{
     const refresh=request.nextUrl.searchParams.get('refresh');
     if(refresh==='campaigns')return NextResponse.json({mode:'campaign-metadata',campaigns:await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',60)});
+    if(refresh==='source-range'){const range=resolveManualSourceRange(request.nextUrl.searchParams),source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),refreshed=await refreshHistoryRange({store:createSupabaseSyncStore(),...range,includeConversions:false,loadConversions:source.loadConversions,loadReports:source.loadReports});return NextResponse.json({mode:'manual-source-range',...range,upsertedConversions:refreshed.conversions.length,upsertedMetrics:refreshed.metrics.length})}
 
     if(refresh!=='30d')return NextResponse.json({error:'Unbekannter Refresh-Modus'},{status:400});
     const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),range=reportingRange('30d'),store=createSupabaseSyncStore();

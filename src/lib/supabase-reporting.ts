@@ -1,8 +1,8 @@
 import {aggregatePortfolio,type Portfolio,type ReportRow} from './portfolio';
 import type{SupabaseClient}from'@supabase/supabase-js';
 import type{PortfolioSnapshotRow}from'./affiliate-source-cache';
-import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
-import{newSnapshotGeneration}from'./snapshot-generation';
+import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,isPortfolioRangeSnapshotFresh,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
+import{newSnapshotGeneration,snapshotGenerationCreatedAt}from'./snapshot-generation';
 
 export type ReportingPeriod='today'|'7d'|'30d'|'90d'|'12m'|'all'|'custom';
 export const backgroundPortfolioPeriods=['7d','30d','90d','all']as const;
@@ -54,9 +54,11 @@ async function loadMetricRows(client:CacheClient,range:ReportingRange,preferRang
  if(markerError)throw new Error(`Supabase portfolio range marker: ${markerError.message}`);
  const marker=markerData?.value as{version?:number;from?:string;to?:string;generation?:string}|undefined;
  if(marker?.version===2&&marker.from===range.from&&marker.to===range.to&&typeof marker.generation==='string'&&marker.generation){
-  const{data,error}=await db.from('sync_state').select('value').eq('key',`portfolio_range:${range.from}:${range.to}:${marker.generation}`).maybeSingle();
-  if(error)throw new Error(`Supabase portfolio range snapshot: ${error.message}`);
-  if(isValidPortfolioRangeSnapshot(data?.value,range.from,range.to,marker.generation))return data.value.rows.map(decodePortfolioRow);
+  let rangeFresh=true;if(snapshotGenerationCreatedAt(marker.generation)!==null){const{data:dayMarkerData,error:dayMarkerError}=await db.from('sync_state').select('value').gte('key',`portfolio_day_generation:${range.from}`).lte('key',`portfolio_day_generation:${range.to}`).order('key');
+   if(dayMarkerError)throw new Error(`Supabase portfolio day freshness: ${dayMarkerError.message}`);rangeFresh=isPortfolioRangeSnapshotFresh(marker.generation,(dayMarkerData||[]).map(item=>String((item.value as{generation?:string}).generation||'')))}
+  if(rangeFresh){const{data,error}=await db.from('sync_state').select('value').eq('key',`portfolio_range:${range.from}:${range.to}:${marker.generation}`).maybeSingle();
+   if(error)throw new Error(`Supabase portfolio range snapshot: ${error.message}`);
+   if(isValidPortfolioRangeSnapshot(data?.value,range.from,range.to,marker.generation))return data.value.rows.map(decodePortfolioRow)}
  }else if(!markerData){
   const{data,error}=await db.from('sync_state').select('value').eq('key',`portfolio_range:${range.from}:${range.to}`).maybeSingle();
   if(error)throw new Error(`Supabase legacy portfolio range snapshot: ${error.message}`);

@@ -5,6 +5,7 @@ import type {ConversionRow} from './everflow';
 import {berlinDateRange} from './dashboard';
 import {getSupabaseAdmin} from './supabase';
 import{decodeSourceSnapshotRow,mapAffiliateSourceRows,type SourceSnapshotRow}from'./affiliate-source-cache';
+import{resolveSnapshotFreshness,type SnapshotFreshness}from'./snapshot-generation';
 
 export{mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
 type SourceRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;source_id:string;sub_source:string;clicks:number|string;sois:number|string;payout:number|string;revenue:number|string;profit:number|string};
@@ -32,6 +33,8 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
   }
   throw new Error(`Supabase source snapshots incomplete for ${range.from}–${range.to}; refusing canonical fallback`);
 }
+
+export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const prefix='source_day_generation:',{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`${prefix}${range.from}`).lte('key',`${prefix}${range.to}`).order('key');if(error)throw new Error(`Supabase source freshness: ${error.message}`);return resolveSnapshotFreshness(range.from,range.to,(data||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return{date:value.date||'',generation:value.generation||''}}))}
 
 export async function loadAffiliateConversionsFromCache(affiliateId:string,lookbackDays=90,now=new Date()):Promise<ConversionRow[]>{
   const from=new Date(now.getTime()-(lookbackDays-1)*86_400_000).toISOString();

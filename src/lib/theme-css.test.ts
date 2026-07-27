@@ -26,13 +26,14 @@ describe('user-selectable dashboard themes',()=>{
 
  it('styles a persistent icon selector with theme-aware sun and moon states',()=>{
   const source=css();
-  expect(source).toContain('.themeSwitcher{position:fixed');
+  expect(source).toContain('.themeSwitcher{position:fixed;right:18px;top:18px');
+  expect(source).toContain('.topbar{padding-right:64px}');
   expect(source).toContain('.themeSwitcher button{');
   expect(source).toContain('.themeIconSun');
   expect(source).toContain('html[data-theme="light"] .themeIconSun');
   expect(source).toContain('html[data-theme="light"] .themeIconMoon');
   expect(source).not.toContain('.themeSwitcher button[aria-pressed=true]');
-  expect(source).toContain('@media(max-width:600px){body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}.themeSwitcher');
-  expect(source).toContain('bottom:calc(10px + env(safe-area-inset-bottom))');
+  expect(source).toContain('@media(max-width:600px){.themeSwitcher');
+  expect(source).not.toContain('body{padding-bottom:calc(74px + env(safe-area-inset-bottom))');
  });
 });

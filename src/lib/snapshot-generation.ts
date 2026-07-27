@@ -3,3 +3,6 @@ import{randomUUID}from'node:crypto';
 const TIMESTAMPED_GENERATION=/^(\d{13})-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const newSnapshotGeneration=()=>`${Date.now()}-${randomUUID()}`;
 export function snapshotGenerationCreatedAt(generation:string){const match=TIMESTAMPED_GENERATION.exec(generation);return match?Number(match[1]):null}
+export type SnapshotFreshness={complete:boolean;availableDays:number;expectedDays:number;maxDate:string|null;generatedAt:string|null};
+const nextDay=(day:string)=>new Date(Date.parse(`${day}T12:00:00Z`)+86_400_000).toISOString().slice(0,10);
+export function resolveSnapshotFreshness(from:string,to:string,markers:Array<{date:string;generation:string}>):SnapshotFreshness{const byDate=new Map(markers.map(marker=>[marker.date,marker.generation])),expected:string[]=[];for(let day=from;day<=to;day=nextDay(day))expected.push(day);const available=expected.filter(day=>byDate.has(day)),times=available.map(day=>snapshotGenerationCreatedAt(byDate.get(day)||'')).filter((value):value is number=>value!==null),newest=times.length?Math.max(...times):null;return{complete:available.length===expected.length,availableDays:available.length,expectedDays:expected.length,maxDate:available.at(-1)||null,generatedAt:newest===null?null:new Date(newest).toISOString()}}

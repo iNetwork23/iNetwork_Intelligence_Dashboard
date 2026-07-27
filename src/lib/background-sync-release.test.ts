@@ -15,6 +15,12 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(route).toContain('CRON_SECRET');
   expect(route).toContain('runHistorySync');
   expect(route).toContain('createSupabaseSyncStore');
+  expect(route).toContain("refresh==='source-range'");
+  expect(route).toContain('resolveManualSourceRange(request.nextUrl.searchParams)');
+  expect(route).toContain('includeConversions:false');
+  const supabase=read('src/lib/supabase.ts');
+  expect(supabase).toContain('prunePortfolioRangeSnapshots');
+  expect(supabase).toContain('await prunePortfolioRangeSnapshots(rangeRecords)');
   expect(route).toContain("runtime='nodejs'");
   const rollups=read('src/app/api/sync/rollups/route.ts');
   expect(rollups).toContain('CRON_SECRET');

@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {advanceSyncState,canonicalMetricRows,conversionToCacheRow,initialSyncState,metricRows,refreshHistoryRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
+import {advanceSyncState,canonicalMetricRows,conversionToCacheRow,initialSyncState,metricRows,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
 
 describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
@@ -82,14 +82,16 @@ describe('daily metric mapping',()=>{
 });
 
 describe('sync orchestration',()=>{
-  it('refreshes today before continuing an older backfill window',async()=>{
+  it('accepts only bounded non-future manual Source ranges',()=>{const now=new Date('2026-07-27T08:30:00Z');expect(resolveManualSourceRange(new URLSearchParams('from=2026-04-29&to=2026-05-28'),now)).toEqual({from:'2026-04-29',to:'2026-05-28'});expect(()=>resolveManualSourceRange(new URLSearchParams('from=2026-04-29&to=2026-05-30'),now)).toThrow('höchstens 31');expect(()=>resolveManualSourceRange(new URLSearchParams('from=2026-07-28&to=2026-07-28'),now)).toThrow('Zukunft');expect(()=>resolveManualSourceRange(new URLSearchParams('from=broken&to=2026-07-27'),now)).toThrow('Ungültiger')});
+  it('refreshes the complete rolling 30-day report window before continuing an older backfill window',async()=>{
     const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-12-17',last_success_at:'2026-07-23T06:00:00.000Z'};
     const loaded:string[]=[],written:string[]=[];
     const store:SyncStore={getState:async()=>state,upsertConversions:async rows=>{written.push(`conversions:${rows.length}`)},upsertMetrics:async rows=>{written.push(`metrics:${rows.length}`)},setState:async()=>{written.push('state')}};
     await runHistorySync({store,now:new Date('2026-07-23T11:00:00Z'),loadConversions:async(from,to)=>{loaded.push(`conversions:${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`reports:${from}:${to}`);return{base:[],events:[]}}});
-    expect(loaded).toEqual(['conversions:2026-07-23:2026-07-23','reports:2026-07-23:2026-07-23','conversions:2025-12-11:2025-12-17','reports:2025-12-11:2025-12-17']);
+    expect(loaded).toEqual(['reports:2026-06-24:2026-07-23','conversions:2025-12-11:2025-12-17','reports:2025-12-11:2025-12-17']);
     expect(written).toEqual(['conversions:0','metrics:0','conversions:0','metrics:0','state']);
   });
+  it('finishes an expired final backfill day report-only and switches to rolling',async()=>{const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-07-23',last_success_at:'2026-07-25T05:17:32.256Z'},loaded:string[]=[];let saved:typeof state|ReturnType<typeof advanceSyncState>|null=null;const store:SyncStore={getState:async()=>state,upsertConversions:async()=>{},upsertMetrics:async()=>{},setState:async next=>{saved=next}};const result=await runHistorySync({store,now:new Date('2026-07-27T08:30:00Z'),loadConversions:async()=>{throw new Error('Invalid conversion filters')},loadReports:async(from,to)=>{loaded.push(`${from}:${to}`);return{base:[],events:[]}}});expect(loaded).toEqual(['2026-06-28:2026-07-27','2025-07-23:2025-07-23']);expect(saved).toMatchObject({phase:'rolling'});expect(result).toMatchObject({mode:'backfill',from:'2025-07-23',to:'2025-07-23',upsertedConversions:0})});
   it('persists conversions, daily metrics and progress only after both writes succeed',async()=>{
     const calls:string[]=[];
     let savedState:ReturnType<typeof initialSyncState>|null=null;
@@ -102,7 +104,7 @@ describe('sync orchestration',()=>{
     const conversion:EverflowConversion={conversion_id:'cv',transaction_id:'lead',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI'};
     const columns=[{column_type:'date',id:'1784692800',label:'1784692800'}];
     const result=await runHistorySync({store,now:new Date('2026-07-22T12:00:00Z'),loadConversions:async()=>[conversion,conversion],loadReports:async()=>({base:[{columns,reporting:{cv:1}}],events:[]})});
-    expect(calls).toEqual(['conversions:1','metrics:1','state']);
+    expect(calls).toEqual(['conversions:0','metrics:1','conversions:1','metrics:1','state']);
     expect(savedState).toMatchObject({phase:'backfill',next_end:'2026-07-15'});
     expect(result).toMatchObject({mode:'backfill',from:'2026-07-16',to:'2026-07-22',upsertedConversions:1,upsertedMetrics:1});
   });
