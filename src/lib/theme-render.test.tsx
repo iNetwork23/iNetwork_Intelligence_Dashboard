@@ -17,11 +17,16 @@ describe('ThemeToggle',()=>{
   expect(html).not.toContain('>Dunkel</button>');
  });
 
- it('is mounted globally and initializes before the body paints',()=>{
+ it('initializes before paint and mounts the icon inside every dashboard header',()=>{
   const layout=readFileSync(join(process.cwd(),'src/app/layout.tsx'),'utf8');
   expect(layout).toContain('suppressHydrationWarning');
   expect(layout).toContain('themeBootScript()');
   expect(layout).toContain('dangerouslySetInnerHTML');
-  expect(layout).toContain('<ThemeToggle/>');
+  expect(layout).not.toContain('<ThemeToggle/>');
+  for(const route of['page.tsx','affiliates/page.tsx','automation/page.tsx','smartlinks/page.tsx','cohorts/page.tsx']){
+   const source=readFileSync(join(process.cwd(),'src/app',route),'utf8');
+   expect(source).toContain('<ThemeToggle/>');
+   expect(source.indexOf('<ThemeToggle/>')).toBeGreaterThan(source.indexOf('className="topActions"'));
+  }
  });
 });

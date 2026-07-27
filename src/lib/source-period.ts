@@ -1,7 +1,7 @@
 import{resolveAffiliatePeriod}from'./affiliate-period';
-export type SourcePeriod='today'|'7d'|'30d'|'90d'|'custom';
+export type SourcePeriod='today'|'7d'|'30d'|'90d'|'12m'|'custom';
 export type SourcePeriodQuery={sourcePeriod?:string;sourceFrom?:string;sourceTo?:string};
-export const SOURCE_PERIODS:[SourcePeriod,string][]=[['today','Heute'],['7d','7 Tage'],['30d','30 Tage'],['90d','90 Tage'],['custom','Individuell']];
+export const SOURCE_PERIODS:[SourcePeriod,string][]=[['today','Heute'],['7d','7 Tage'],['30d','30 Tage'],['90d','90 Tage'],['12m','12 Monate'],['custom','Individuell']];
 const allowed=new Set<SourcePeriod>(SOURCE_PERIODS.map(([id])=>id));
 export function resolveSourcePeriod(query:SourcePeriodQuery,now=new Date()){const requested=allowed.has(query.sourcePeriod as SourcePeriod)?query.sourcePeriod as SourcePeriod:'30d',resolved=resolveAffiliatePeriod({period:requested,from:query.sourceFrom,to:query.sourceTo},now);return{...resolved,period:resolved.period as SourcePeriod}}
 export type ResolvedSourcePeriod=ReturnType<typeof resolveSourcePeriod>;
