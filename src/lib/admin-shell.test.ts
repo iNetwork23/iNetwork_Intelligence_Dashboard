@@ -34,6 +34,15 @@ describe('responsive admin shell',()=>{
   expect(sidebar).toContain('aria-label="Navigation schließen"');
  });
 
+ it('groups language, appearance and logout as one legible sidebar action panel',()=>{
+  const sidebar=read('components/AdminSidebar.tsx'),theme=read('components/ThemeToggle.tsx'),css=read('globals.css');
+  for(const marker of['sidebarPreferences','sidebarPreference','Sprache','Darstellung','<LanguageToggle compact/>','<ThemeToggle showLabel/>'])expect(sidebar).toContain(marker);
+  expect(theme).toContain('showLabel=false');
+  expect(theme).toContain('themeToggleLabel');
+  for(const marker of['.sidebarPreferences{display:grid;grid-template-columns:1fr 1fr','.sidebarPreference>span','.sidebarActions>form','.sidebarLogout{display:flex'])expect(css).toContain(marker);
+  expect(css).toContain('min-height:44px');
+ });
+
  it('defines desktop collapse and mobile drawer behavior without horizontal page overflow',()=>{
   const css=read('globals.css');
   for(const marker of['.adminShell','.adminSidebar','.adminContent','.sidebarBackdrop','--sidebar-width','@media(max-width:760px)'])expect(css).toContain(marker);

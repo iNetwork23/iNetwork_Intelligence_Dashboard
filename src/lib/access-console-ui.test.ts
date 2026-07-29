@@ -25,7 +25,13 @@ describe("professional access console contract", () => {
     expect(s).toContain("Nach Rolle filtern");
     expect(s).toContain("Nach Status filtern");
     expect(s).toContain("Nach MFA filtern");
-    expect(s).toContain("Benutzer einladen");
+    expect(s).toContain("Benutzer anlegen");
+    expect(s).toContain('name="username"');
+    expect(s).toContain('name="email"');
+    expect(s).toContain('name="password"');
+    expect(s).toContain('name="passwordConfirm"');
+    expect(s).toContain('autoComplete="new-password"');
+    expect(s).toContain('action: "create_user"');
   });
   it("loads names and MFA state from the protected admin API", () => {
     const route = readFileSync(
@@ -35,6 +41,24 @@ describe("professional access console contract", () => {
     expect(route).toContain("hasMfa");
     expect(route).toContain("mfaEnabled");
     expect(route).toContain("user_metadata");
+    expect(route).toContain("username:");
+  });
+  it("creates a confirmed Supabase user without leaking the password", () => {
+    const route = readFileSync(
+      new URL("../app/api/admin/access/route.ts", import.meta.url),
+      "utf8",
+    );
+    expect(route).toContain("auth.admin.createUser");
+    expect(route).toContain("email_confirm: true");
+    expect(route).toContain("app_metadata: metadata");
+    expect(route).toContain("user_metadata:");
+    expect(route).toContain("usernameIndexKey");
+    expect(route).toContain("deleteUser");
+    expect(route).not.toContain("inviteUserByEmail");
+    const auditStart = route.indexOf("action: 'user.create'"),
+      auditEnd = route.indexOf("return json", auditStart);
+    expect(auditStart).toBeGreaterThan(-1);
+    expect(route.slice(auditStart, auditEnd)).not.toContain("password");
   });
   it("guards stale writes, keeps failed form input and reactivates every inactive account", () => {
     const s = source();

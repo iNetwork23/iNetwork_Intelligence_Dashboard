@@ -83,6 +83,19 @@ describe("professional access-console presentation model", () => {
       }),
     ).toHaveLength(1);
   });
+  it("finds users by their login username", () => {
+    const enriched = users.map((user, index) => ({
+      ...user,
+      username: index === 0 ? "anna.partner" : undefined,
+    }));
+    expect(
+      filterAccessUsers(enriched, {
+        query: "anna.partner",
+        role: "all",
+        status: "all",
+      }),
+    ).toHaveLength(1);
+  });
   it("groups technical permissions into understandable operational areas", () => {
     expect(permissionGroup("finance.view")).toBe("Finanzen");
     expect(permissionGroup("users.manage")).toBe("Benutzerverwaltung");
@@ -101,5 +114,11 @@ describe("professional access-console presentation model", () => {
         "max@firma.de",
       ),
     ).toBe("ergin hat alle Sitzungen von max@firma.de beendet.");
+    expect(
+      auditDescription(
+        { action: "user.create", actorId: "ergin", targetId: "u-3" },
+        "neu@firma.de",
+      ),
+    ).toBe("ergin hat das Benutzerkonto neu@firma.de angelegt.");
   });
 });

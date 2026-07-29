@@ -25,11 +25,14 @@ describe('wired server authorization boundaries',()=>{
   const login=read('api/auth/login/route.ts');
   expect(login).toContain('getSupabasePasswordAuth');expect(login).toContain('recordRateLimitFailure');expect(login).toContain('resetRateLimit');expect(login).toContain('canonicalOrigin');
  });
- it('accepts either an email address or the legacy username in the login form',()=>{
+ it('accepts either an email address or a provisioned username in the login form',()=>{
   const login=read('login/page.tsx');
   expect(login).toContain('E-Mail oder Benutzername');
   expect(login).toContain('type="text"');
   expect(login).toContain('autoComplete="username"');
+  const route=read('api/auth/login/route.ts');
+  expect(route).toContain('resolveLoginEmail');
+  expect(route).toContain('resolvedEmail');
  });
  it('has a scoped, finance-safe, audited export API',()=>{
   expect(existsSync(new URL('../app/api/exports/route.ts',import.meta.url))).toBe(true);
@@ -61,7 +64,7 @@ describe('wired server authorization boundaries',()=>{
  });
  it('gives access forms labels and exposes capability-based security/admin navigation',()=>{
   const console=read('admin/access/AccessConsole.tsx'),shell=read('components/DashboardShell.tsx');
-  for(const name of ['invite-email','invite-role','custom-role-name','custom-role-base'])expect(console).toContain(name);
+  for(const name of ['create-username','create-email','create-password','create-password-confirm','create-role','custom-role-name','custom-role-base'])expect(console).toContain(name);
   expect(shell).toContain("can(user.access,'users.manage')");expect(shell).toContain("can(user.access,'roles.manage')");expect(shell).toContain("can(user.access,'audit.view')");
  });
  it('provides a global impersonation exit and discoverable MFA security settings',()=>{

@@ -17,6 +17,12 @@ describe('ThemeToggle',()=>{
   expect(html).not.toContain('>Dunkel</button>');
  });
 
+ it('can add a visible target label in the sidebar without adding a second button',()=>{
+  const html=renderToStaticMarkup(<ThemeToggle showLabel/>);
+  expect(html).toContain('themeToggleLabel');
+  expect(html.match(/<button/g)).toHaveLength(1);
+ });
+
  it('initializes before paint and mounts one global icon inside the authenticated shell',()=>{
   const layout=readFileSync(join(process.cwd(),'src/app/layout.tsx'),'utf8');
   const sidebar=readFileSync(join(process.cwd(),'src/app/components/AdminSidebar.tsx'),'utf8');
@@ -24,7 +30,7 @@ describe('ThemeToggle',()=>{
   expect(layout).toContain('themeBootScript()');
   expect(layout).toContain('dangerouslySetInnerHTML');
   expect(layout).not.toContain('<ThemeToggle/>');
-  expect(sidebar).toContain('<ThemeToggle/>');
+  expect(sidebar).toContain('<ThemeToggle showLabel/>');
   for(const route of['page.tsx','affiliates/page.tsx','automation/page.tsx','smartlinks/page.tsx','cohorts/page.tsx']){
    const source=readFileSync(join(process.cwd(),'src/app',route),'utf8');
    expect(source).toContain('<DashboardPageHeader');

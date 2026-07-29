@@ -7,6 +7,7 @@ import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, ass
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
 import { assertRoleIsUnassigned, buildRoleOptions, type CustomRoleDefinition } from '@/lib/admin-access-policy';
+import { parseProvisionedUser, usernameIndexKey, type UsernameIndexRecord } from '@/lib/user-provisioning';
 export const dynamic = 'force-dynamic';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: securityHeaders });
 type CustomRole = CustomRoleDefinition;
@@ -84,6 +85,7 @@ export async function GET() {
         all.map(async (u) => ({
           id: u.id,
           email: u.email,
+          username: String(u.user_metadata?.username || '').trim() || undefined,
           name: String(u.user_metadata?.full_name || u.user_metadata?.name || '').trim() || undefined,
           status: parseAccessMetadata(u.app_metadata).status,
           access: parseAccessMetadata(u.app_metadata),
@@ -176,12 +178,14 @@ export async function POST(request: Request) {
       });
       return json({ ok: true });
     }
-    if (action === 'invite') {
+    if (action === 'create_user') {
       if (!can(actor.access, 'users.manage')) return json({ error: 'Keine Berechtigung' }, 403);
-      const email = String(input.email || '')
-        .trim()
-        .toLowerCase();
-      if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Ungültige Anfrage' }, 400);
+      let account;
+      try {
+        account = parseProvisionedUser(input);
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : 'Ungültige Anfrage' }, 400);
+      }
       const metadata = await resolveAccess(input.access, 1),
         requested = parseAccessMetadata(metadata);
       assertMayManageUser({
@@ -191,18 +195,60 @@ export async function POST(request: Request) {
         target: parseAccessMetadata({ role: 'read_only' }),
         requested,
       });
-      const invited = await getSupabaseAdmin().auth.admin.inviteUserByEmail(email, { redirectTo: `${origin}/auth/callback` });
-      if (invited.error || !invited.data.user) throw new Error('invite');
-      const updated = await getSupabaseAdmin().auth.admin.updateUserById(invited.data.user.id, { app_metadata: metadata });
-      if (updated.error) throw new Error('metadata');
-      await audit({
-        actorId: actor.actorId,
-        action: 'user.invite',
-        targetId: invited.data.user.id,
-        after: metadata,
-        ...evidence,
-      });
-      return json({ ok: true, userId: invited.data.user.id }, 201);
+      const store = securityStore(),
+        indexKey = usernameIndexKey(account.username),
+        owner = crypto.randomUUID(),
+        reserved = await store.setIfAbsent(indexKey, {
+          owner,
+          state: 'creating',
+          username: account.username,
+          email: account.email,
+        });
+      if (!reserved) return json({ error: 'Benutzername oder E-Mail ist bereits vergeben.' }, 409);
+      const supabase = getSupabaseAdmin();
+      let createdUserId = '';
+      try {
+        const created = await supabase.auth.admin.createUser({
+          email: account.email,
+          password: account.password,
+          email_confirm: true,
+          user_metadata: {
+            username: account.username,
+          },
+          app_metadata: metadata,
+        });
+        if (created.error || !created.data.user) {
+          if (/already|registered|exists/i.test(created.error?.message || '')) {
+            await store.deleteIfOwner(indexKey, owner);
+            return json({ error: 'Benutzername oder E-Mail ist bereits vergeben.' }, 409);
+          }
+          throw new Error('create user');
+        }
+        createdUserId = created.data.user.id;
+        const index: UsernameIndexRecord = {
+          userId: createdUserId,
+          email: account.email,
+          username: account.username,
+        };
+        await store.set(indexKey, index);
+        await audit({
+          actorId: actor.actorId,
+          action: 'user.create',
+          targetId: createdUserId,
+          after: { identity: { username: account.username, email: account.email }, access: metadata },
+          ...evidence,
+        });
+        return json({ ok: true, userId: createdUserId }, 201);
+      } catch (error) {
+        if (createdUserId) {
+          const removed = await supabase.auth.admin.deleteUser(createdUserId);
+          if (removed.error) console.error('Provisioning rollback failed', removed.error.message);
+          await store.delete(indexKey);
+        } else {
+          await store.deleteIfOwner(indexKey, owner);
+        }
+        throw error;
+      }
     }
     if (['reset_password', 'reset_mfa', 'revoke_sessions', 'update_user', 'block', 'reactivate', 'deactivate'].includes(action)) {
       if (!can(actor.access, 'users.manage') && !(action === 'revoke_sessions' && targetId === actor.id)) return json({ error: 'Keine Berechtigung' }, 403);
