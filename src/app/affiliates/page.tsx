@@ -22,7 +22,7 @@ import { mergeAffiliateWorkspaces } from "@/lib/affiliate-smartlinks";
 import { resolveAffiliatePeriod } from "@/lib/affiliate-period";
 import { resolveSourcePeriod } from "@/lib/source-period";
 import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
-import { analyzeRebillConcentration, buildRebillCustomerIndex, rebillCustomerIdsFromIndex, type RebillConcentration, type RebillEvent } from "@/lib/rebill-concentration";
+import { analyzeRebillConcentration, buildRebillCustomerIndex, firstSaleCustomerIdsFromIndex, rebillCustomerIdsFromIndex, type RebillConcentration, type RebillEvent } from "@/lib/rebill-concentration";
 import AffiliateSmartlinks from "./AffiliateSmartlinks";
 import AffiliatePeriodControls from "./AffiliatePeriodControls";
 import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
@@ -444,6 +444,7 @@ export default async function AffiliateOptimizerPage({
       firstSales,
       totalRebills,
       customerIds: rebillCustomerIdsFromIndex(rebillIndex, scope),
+      firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(rebillIndex, scope),
     }),
     smartlinkRebillAnalyses: Record<number, RebillConcentration> =
       Object.fromEntries(
@@ -578,6 +579,16 @@ export default async function AffiliateOptimizerPage({
             insights={smartlinkInsights}
             rangeLabel={period.label}
             rebillAnalyses={smartlinkRebillAnalyses}
+            canManageSources={
+              user.access.role !== "partner" &&
+              can(user.access, "landingpages.manage") &&
+              can(user.access, "api.manage")
+            }
+            canManageCampaigns={
+              user.access.role !== "partner" &&
+              can(user.access, "campaigns.edit") &&
+              can(user.access, "api.manage")
+            }
           />
         </>
       ) : selected && activeOffer ? (
