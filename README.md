@@ -23,7 +23,8 @@ Der Service-Role-Key darf niemals mit `NEXT_PUBLIC_` beginnen oder im Browser-Co
 - `conversions`: deduplizierte SOIs, First-Sales und Rebills einschließlich vollständigem Everflow-Rohdatensatz; `lead_id` entspricht der Everflow-`transaction_id`.
 - `daily_metrics`: Tagesaggregate einschließlich aller Klicks. Diese dritte Tabelle ist nötig, weil nicht konvertierte Klicks im Conversion-Report fehlen.
 - `sync_state`: wiederaufnehmbarer Backfill-/Rolling-Fortschritt.
-- `ltv_cohorts`: View für Registrierungsmonat × kumulierten Umsatz nach 30/60/90/180/365 Tagen.
+- `ltv_cohorts`: bestehende Live-View für Registrierungsmonat × kumulierten Umsatz nach 30/60/90/180/365 Tagen.
+- `private.ltv_cohorts_materialized`: scope-sicherer Produktionscache für die Kohortenoberfläche; `pg_cron` aktualisiert ihn stündlich um Minute 25, ohne einen HTTP-Request offenzuhalten.
 
 ## Sync-Status prüfen
 
@@ -58,4 +59,24 @@ Der Account Monitor liest seine Reports aus der Postgres-Funktion `portfolio_met
 npm test
 npm run lint
 npm run build
+npm audit --omit=dev
+npx tsc --noEmit
 ```
+
+## RBAC, MFA und sichere Betriebsgrenzen
+
+Die Anwendung erzwingt RBAC serverseitig auf Seiten, API-Routen, Exporten und Reporting-Services. Partner-Sichten werden vor Aggregation auf Affiliate-, Offer-, Campaign-, Source- und Sub-Source-Scopes eingeschränkt; ein leerer Partner-Scope liefert keine Daten. Finanzkennzahlen benötigen zusätzlich `finance.view`. Rollenänderungen, Session-Widerrufe, Impersonation und Audit-Ereignisse werden über die Access-Konsole verwaltet.
+
+MFA verwendet verschlüsselte TOTP-Secrets (`MFA_ENCRYPTION_KEY`). `APP_ORIGIN` muss auf den kanonischen öffentlichen Ursprung zeigen. Der authentifizierte Export liegt unter `/api/exports`; `CRON_SECRET` autorisiert ausschließlich den maschinellen stündlichen Sync, während manuelle Sync-Aufrufe `api.manage` benötigen.
+
+Die normalisierten RBAC-Migrationen und atomaren SQL-Primitiven sind im Repository enthalten und müssen vor einem Deployment auf der Ziel-Datenbank angewendet und technisch verifiziert werden. Die aktive Runtime verwendet zusätzlich den persistenten Security-Store mit atomarem `INSERT`/Unique-Key für Rate-Limit-Slots, Widerrufsmarkern gegen Session-Reanimation und fail-closed Owner-Locks für sicherheitskritische Mutationen. Der erste Zugang erfolgt kontrolliert über den abschaltbaren Legacy-Super-Admin; nach Einrichtung eines individuellen Super-Admin-Kontos wird `ALLOW_LEGACY_ADMIN=false` gesetzt. Eine lokale Migrationsdatei allein belegt keine produktive Anwendung.
+
+### Incident-Recovery für die Access-Verwaltung
+
+Admin-Mutationen verwenden bewusst einen fail-closed Lock ohne automatische Übernahme. Bleibt dieser nach einem nachgewiesenen Prozessabbruch bestehen, muss zuerst ausgeschlossen werden, dass noch eine Admin-Mutation läuft. Anschließend kann ein Operator mit produktiven Supabase-Zugangsdaten den owner-bedingten Recovery-Befehl ausführen:
+
+```bash
+CONFIRM_ADMIN_ACCESS_UNLOCK='UNLOCK admin-access-mutation' npm run admin:unlock-access
+```
+
+Der Befehl verweigert die Ausführung ohne exakte Bestätigung und löscht nur den zuvor gelesenen Owner. Ursache, Zeitpunkt und Operator sind im Incident-Protokoll zu dokumentieren.

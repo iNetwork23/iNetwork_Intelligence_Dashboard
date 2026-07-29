@@ -61,9 +61,10 @@ describe('calm semantic BI design system', () => {
     expect(source).toMatch(/@media\(max-width:1024px\)[\s\S]*?\.topActions\{[^}]*overflow-x:auto/);
   });
 
-  it('marks the current primary route consistently in every protected view', () => {
-    const files = ['app/page.tsx', 'app/affiliates/page.tsx', 'app/smartlinks/page.tsx', 'app/automation/page.tsx'];
-    for (const file of files) expect(read(file)).toContain('aria-current="page"');
+  it('marks the current primary route consistently in the shared sidebar', () => {
+    const sidebar=read('app/components/AdminSidebar.tsx');
+    expect(sidebar).toContain('aria-current={active(item.href)?"page":undefined}');
+    expect(sidebar).toContain('className={active(item.href)?"active":""}');
   });
 
   it('puts the actionable direct-traffic block before supporting lead-latency evidence', () => {

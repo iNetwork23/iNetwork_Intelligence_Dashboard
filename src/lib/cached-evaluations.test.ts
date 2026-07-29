@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{decodeSourceSnapshotRow,encodeSourceSnapshotRow,mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
+import{availableSourceSnapshotDays,decodeSourceSnapshotRow,encodeSourceSnapshotRow,mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
 
 const base:DailySourceRow={affiliate_id:'154',affiliate_name:'API Partner',offer_id:'20',offer_name:'XLOVES API',campaign_id:'0',campaign_name:'Direct',offer_url_id:'0',offer_url_name:'API',source_id:'N/A',sub_source:'N/A',clicks:0,sois:4,first_sales:1,rebills:2,coin_spend:3,payout:12,revenue:30,profit:18,raw:{traffic_mode:'api',adv1:'N/A',adv2:'placement-1'}};
 
@@ -23,6 +23,17 @@ describe('Supabase API source mapping',()=>{
   it('preserves the snapshot day when mapping daily source rows',()=>{
     const[report]=mapAffiliateSourceRows([base],'2026-07-23');
     expect(report.columns.find(column=>column.column_type==='date')).toMatchObject({id:'2026-07-23',label:'2026-07-23'});
+  });
+  it('loads all available days when the current Berlin snapshot is still pending',()=>{
+    expect(availableSourceSnapshotDays({from:'2025-07-29',to:'2026-07-28'},[
+      {date:'2025-07-28',generation:'outside'},
+      {date:'2025-07-29',generation:'g1'},
+      {date:'2026-07-27',generation:'g364'},
+      {date:'2026-07-28',generation:''},
+    ])).toEqual([
+      {date:'2025-07-29',generation:'g1'},
+      {date:'2026-07-27',generation:'g364'},
+    ]);
   });
   it('round-trips compact source snapshots without duplicating canonical cache fields',()=>{
     const metric={...base,clicks:Number(base.clicks),sois:Number(base.sois),first_sales:Number(base.first_sales),rebills:Number(base.rebills),coin_spend:Number(base.coin_spend),payout:Number(base.payout),revenue:Number(base.revenue),profit:Number(base.profit),id:'metric-id',metric_date:'2026-07-23',raw:{...base.raw,canonical_id:'legacy-id'}},encoded=encodeSourceSnapshotRow(metric),decoded=decodeSourceSnapshotRow(encoded,base.affiliate_id,base.affiliate_name);

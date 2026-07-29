@@ -33,12 +33,13 @@ const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
 const shift=(value:string,days:number)=>isoDay(new Date(fromDay(value).getTime()+days*DAY));
 export function resolveManualSourceRange(params:Pick<URLSearchParams,'get'>,now=new Date()){const from=params.get('from')||'',to=params.get('to')||'',valid=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&new Date(`${value}T12:00:00Z`).toISOString().slice(0,10)===value;if(!valid(from)||!valid(to)||from>to)throw new Error('Ungültiger Source-Zeitraum');const days=Math.floor((fromDay(to).getTime()-fromDay(from).getTime())/DAY)+1;if(days>31)throw new Error('Source-Refresh darf höchstens 31 Tage umfassen');const today=berlinDay(now);if(to>today)throw new Error('Source-Refresh darf nicht in der Zukunft liegen');if(from<shift(today,-364))throw new Error('Source-Refresh liegt außerhalb der 365-Tage-Aufbewahrung');return{from,to}}
 
-export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(day:string)=>Promise<T[]>,rowCap=10_000){
-  const rows:T[]=[];
-  for(let day=from;day<=to;day=shift(day,1)){
-    const batch=await loadDay(day);
-    if(batch.length>=rowCap)throw new Error(`Everflow daily entity report reached the ${rowCap.toLocaleString('en-US')}-row cap for ${day}`);
-    rows.push(...batch);
+export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(day:string)=>Promise<T[]>,rowCap=10_000,concurrency=1){
+  const days:string[]=[],rows:T[]=[];
+  for(let day=from;day<=to;day=shift(day,1))days.push(day);
+  const width=Math.max(1,Math.min(10,Math.floor(concurrency)||1));
+  for(let start=0;start<days.length;start+=width){
+    const slice=days.slice(start,start+width),batches=await Promise.all(slice.map(day=>loadDay(day)));
+    for(let index=0;index<batches.length;index++){const batch=batches[index],day=slice[index];if(batch.length>=rowCap)throw new Error(`Everflow daily entity report reached the ${rowCap.toLocaleString('en-US')}-row cap for ${day}`);rows.push(...batch)}
   }
   return rows;
 }
@@ -51,7 +52,7 @@ export function initialSyncState(now=new Date()):SyncState{
 export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
   if(state.phase==='rolling'){
     const to=berlinDay(now);
-    return{mode:'rolling',from:shift(to,-29),to};
+    return{mode:'rolling',from:shift(to,-1),to};
   }
   const to=state.next_end;
   const candidate=shift(to,-6);

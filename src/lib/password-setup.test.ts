@@ -1,0 +1,3 @@
+import {describe,expect,it} from 'vitest';
+import {validatePasswordSetup} from './password-setup';
+describe('password setup',()=>{it('accepts only bounded access tokens and strong matching passwords',()=>{expect(validatePasswordSetup({access_token:'t'.repeat(40),password:'Long-passphrase-123!',confirm:'Long-passphrase-123!'}).password).toBe('Long-passphrase-123!');expect(()=>validatePasswordSetup({access_token:'short',password:'Long-passphrase-123!',confirm:'Long-passphrase-123!'})).toThrow();expect(()=>validatePasswordSetup({access_token:'t'.repeat(40),password:'password',confirm:'password'})).toThrow();});});

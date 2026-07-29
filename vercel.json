@@ -1,6 +1,7 @@
 {
   "crons": [
     {"path":"/api/sync","schedule":"17 * * * *"},
+    {"path":"/api/sync/reconcile","schedule":"37 3 * * *"},
     {"path":"/api/sync/rollups","schedule":"47 * * * *"}
   ]
 }

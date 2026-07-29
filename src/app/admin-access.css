@@ -1,0 +1,896 @@
+/* Professional access console. Loaded after globals.css to keep this surface isolated. */
+.accessPage {
+  width: min(1360px, 100%);
+  padding-bottom: 64px;
+}
+.accessPage > .topbar {
+  margin-bottom: 18px;
+}
+.accessPage .accessConsole {
+  display: grid;
+  gap: 0;
+  font-feature-settings: "cv01", "ss03";
+}
+.accessPage .accessConsole button,
+.accessPage .accessConsole input,
+.accessPage .accessConsole select,
+.accessPage .accessDialog button,
+.accessPage .accessDialog input,
+.accessPage .accessDialog select {
+  font: inherit;
+}
+.accessPage .accessConsole button,
+.accessPage .accessDialog button {
+  cursor: pointer;
+}
+.accessPage .accessToolbar {
+  position: sticky;
+  top: 45px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 24px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-1) 96%, transparent);
+  backdrop-filter: blur(14px);
+}
+.accessPage .accessTabs {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+}
+.accessPage .accessTabs button {
+  flex: none;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.accessPage .accessTabs button:hover {
+  background: var(--fill-emphasis);
+  color: var(--text-primary);
+}
+.accessPage .accessTabs button.active {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.accessPage .accessPrimary {
+  border: 1px solid var(--accent) !important;
+  border-radius: 6px !important;
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  font-weight: 700;
+}
+.accessPage .accessToolbar > .accessPrimary {
+  flex: none;
+  min-height: 38px;
+  padding: 8px 13px;
+}
+.accessPage .accessToast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 120;
+  max-width: min(420px, calc(100vw - 32px));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+.accessPage .accessToast.visible {
+  padding: 12px 15px;
+  border: 1px solid var(--border);
+  opacity: 1;
+  transform: none;
+}
+.accessPage .accessView {
+  display: grid;
+  gap: 18px;
+}
+.accessPage .sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 18px;
+}
+.accessPage .sectionKicker {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.accessPage .sectionHeading h2,
+.accessPage .detailIntro h3,
+.accessPage .dialogHeading h2 {
+  margin: 5px 0 3px;
+  color: var(--text-primary);
+  font-size: 24px;
+  letter-spacing: -0.45px;
+}
+.accessPage .sectionHeading p,
+.accessPage .detailIntro p,
+.accessPage .dialogHeading p,
+.accessPage .panelHeading p,
+.accessPage .detailSectionHeading p,
+.accessPage .securityActions p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.accessPage .accessStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+.accessPage .accessStats article {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-1);
+}
+.accessPage .accessStats span,
+.accessPage .accessStats strong {
+  display: block;
+}
+.accessPage .accessStats span {
+  min-height: 30px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.accessPage .accessStats strong {
+  margin-top: 10px;
+  font-size: 25px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.accessPage .accessPanel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+.accessPage .panelHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 13px;
+}
+.accessPage .panelHeading h3,
+.accessPage .accessPanel h3,
+.accessPage .securityActions h4,
+.accessPage .detailSection h4,
+.accessPage .permissionGroup h4 {
+  margin: 0 0 5px;
+}
+.accessPage .countBadge {
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11px;
+}
+.accessPage .attentionList {
+  display: grid;
+  border-top: 1px solid var(--line-faint);
+}
+.accessPage .attentionList button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line-faint);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+.accessPage .attentionList button:hover {
+  background: var(--fill-hover);
+}
+.accessPage .attentionList button > span:nth-child(2) b,
+.accessPage .attentionList button > span:nth-child(2) small {
+  display: block;
+}
+.accessPage .attentionList button small {
+  margin-top: 3px;
+  color: var(--text-secondary);
+}
+.accessPage .attentionList button > span:last-child {
+  color: var(--accent);
+  font-size: 11px;
+}
+.accessPage .attentionDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.accessPage .attentionList .warning .attentionDot {
+  background: var(--warning);
+}
+.accessPage .attentionList .danger .attentionDot {
+  background: var(--negative);
+}
+.accessPage .accessFilters {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(150px, 0.7fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-1);
+}
+.accessPage .accessFilters label,
+.accessPage .accessInline label,
+.accessPage .fieldLabel,
+.accessPage .scopeGrid label,
+.accessPage .inviteForm label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.accessPage .accessFilters input,
+.accessPage .accessFilters select,
+.accessPage .accessInline input,
+.accessPage .accessInline select,
+.accessPage .fieldLabel select,
+.accessPage .scopeGrid input,
+.accessPage .inviteForm input,
+.accessPage .inviteForm select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.accessPage .accessUsers,
+.accessPage .customRoles {
+  display: grid;
+  gap: 8px;
+}
+.accessPage .userCard,
+.accessPage .roleCard {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-1);
+}
+.accessPage .userCard > summary,
+.accessPage .roleCard > summary {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 12px 48px 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.accessPage .userCard > summary {
+  grid-template-columns: 38px minmax(220px, 1fr) auto minmax(120px, 0.35fr) auto;
+}
+.accessPage .roleCard > summary {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+.accessPage .userCard > summary::-webkit-details-marker,
+.accessPage .roleCard > summary::-webkit-details-marker {
+  display: none;
+}
+.accessPage .userCard > summary:hover,
+.accessPage .roleCard > summary:hover {
+  background: var(--fill-hover);
+}
+.accessPage .userCard[open] > summary,
+.accessPage .roleCard[open] > summary {
+  border-bottom: 1px solid var(--border);
+  background: var(--fill-selected);
+}
+.accessPage .summaryChevron {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  color: var(--text-secondary);
+  font-size: 24px;
+  line-height: 1;
+  transform: translateY(-50%);
+  transition: transform 150ms ease;
+}
+.accessPage .userCard[open] .summaryChevron,
+.accessPage .roleCard[open] .summaryChevron {
+  transform: translateY(-50%) rotate(90deg);
+}
+.accessPage .avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.accessPage .userIdentity {
+  min-width: 0;
+}
+.accessPage .userIdentity b,
+.accessPage .userIdentity small,
+.accessPage .roleCard summary b,
+.accessPage .roleCard summary small {
+  display: block;
+}
+.accessPage .userIdentity b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.accessPage .userIdentity small,
+.accessPage .roleCard summary small {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.accessPage .statusBadge {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+.accessPage .statusBadge.active {
+  border-color: color-mix(in srgb, var(--positive) 55%, var(--border));
+  color: var(--positive);
+}
+.accessPage .statusBadge.blocked,
+.accessPage .statusBadge.deactivated {
+  border-color: color-mix(in srgb, var(--negative) 55%, var(--border));
+  color: var(--negative);
+}
+.accessPage .mfaBadge {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.accessPage .mfaBadge.enabled {
+  border-color: color-mix(in srgb, var(--positive) 55%, var(--border));
+  color: var(--positive);
+}
+.accessPage .mfaBadge.disabled {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  color: var(--warning);
+}
+.accessPage .userCard > summary > strong {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+.accessPage .userDetail {
+  padding: 18px;
+}
+.accessPage .detailIntro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--line-faint);
+}
+.accessPage .scopeChips {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 48%;
+}
+.accessPage .scopeChips span {
+  display: flex;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 10px;
+}
+.accessPage .scopeChips small {
+  color: var(--text-secondary);
+}
+.accessPage .emptyHint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.accessPage .detailSection {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line-faint);
+}
+.accessPage .fieldLabel {
+  max-width: 360px;
+}
+.accessPage .detailSectionHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+.accessPage .permissionGroups {
+  display: grid;
+  gap: 12px;
+}
+.accessPage .permissionGroup {
+  padding: 13px;
+  border: 1px solid var(--line-faint);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.accessPage .permissionGroup h4 {
+  font-size: 12px;
+}
+.accessPage .permissionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.accessPage .permissionGrid fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-1);
+}
+.accessPage .permissionGrid legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 9px;
+  padding: 0;
+}
+.accessPage .permissionGrid legend b,
+.accessPage .permissionGrid legend code {
+  display: block;
+}
+.accessPage .permissionGrid legend b {
+  font-size: 11px;
+}
+.accessPage .permissionGrid legend code {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.accessPage .permissionState {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+}
+.accessPage .permissionState label {
+  min-width: 0;
+}
+.accessPage .permissionState input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.accessPage .permissionState span {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-align: center;
+  cursor: pointer;
+}
+.accessPage .permissionState input:checked + span {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+  color: var(--text-primary);
+}
+.accessPage .permissionState label:last-child input:checked + span {
+  border-color: var(--negative);
+  background: color-mix(in srgb, var(--negative) 9%, var(--surface-2));
+  color: var(--negative);
+}
+.accessPage .permissionState input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.accessPage .scopeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.accessPage .formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 16px;
+}
+.accessPage .formFooter p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.accessPage .formFooter button {
+  min-height: 40px;
+  padding: 9px 14px;
+}
+.accessPage .securityActions {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.6fr) 1.4fr;
+  gap: 24px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--negative) 25%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--negative) 3%, var(--surface-2));
+}
+.accessPage .criticalActions {
+  display: flex;
+  align-content: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.accessPage .criticalActions button,
+.accessPage .accessInline button,
+.accessPage .roleCard form button,
+.accessPage .dialogActions button,
+.accessPage .accessError button {
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.accessPage button.danger {
+  border-color: color-mix(
+    in srgb,
+    var(--negative) 60%,
+    var(--border)
+  ) !important;
+  color: var(--negative) !important;
+}
+.accessPage .accessInline {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(200px, 0.7fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+.accessPage .createRolePanel {
+  display: grid;
+  gap: 12px;
+}
+.accessPage .roleCard > form {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+.accessPage .roleCard .permissionGroups {
+  margin-top: 4px;
+}
+.accessPage .emptyState {
+  padding: 40px 20px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.accessPage .emptyState strong {
+  display: block;
+  color: var(--text-primary);
+}
+.accessPage .emptyState p {
+  margin: 7px 0 0;
+  font-size: 11px;
+}
+.accessPage .auditFilters {
+  grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.5fr);
+}
+.accessPage .auditLog {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-1);
+}
+.accessPage .auditLog > article {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 13px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-faint);
+}
+.accessPage .auditLog > article:last-child {
+  border-bottom: 0;
+}
+.accessPage .auditIcon {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.accessPage .auditIcon.danger {
+  background: var(--negative);
+}
+.accessPage .auditLog article b,
+.accessPage .auditLog article small {
+  display: block;
+}
+.accessPage .auditLog article b {
+  font-size: 12px;
+}
+.accessPage .auditLog article small {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.accessPage .auditLog details {
+  margin-top: 8px;
+}
+.accessPage .auditLog details > summary {
+  width: max-content;
+  color: var(--accent);
+  font-size: 10px;
+  cursor: pointer;
+}
+.accessPage .auditLog dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.accessPage .auditLog dl div {
+  min-width: 0;
+}
+.accessPage .auditLog dt {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.accessPage .auditLog dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  font:
+    10px JetBrains Mono,
+    monospace;
+}
+.accessPage .accessDialog {
+  width: min(520px, calc(100vw - 28px));
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.45);
+}
+.accessPage .accessDialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+}
+.accessPage .dialogClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.accessPage .dialogClose button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 20px;
+}
+.accessPage .inviteForm {
+  display: grid;
+  gap: 13px;
+  margin-top: 20px;
+}
+.accessPage .inviteSummary {
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.accessPage .dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 5px;
+}
+.accessPage .accessLoading {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.accessPage .accessLoading > span {
+  height: 92px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  animation: skeletonSweep 1.1s ease-in-out infinite;
+}
+.accessPage .accessLoading > p {
+  grid-column: 1/-1;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.accessPage .accessError {
+  grid-column: 1/-1;
+  padding: 24px;
+  border: 1px solid var(--negative);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+.accessPage .accessError p {
+  color: var(--text-secondary);
+}
+@media (max-width: 1050px) {
+  .accessPage .accessStats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .accessPage .permissionGrid {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .securityActions {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .criticalActions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 760px) {
+  .accessPage .accessConsole button,
+  .accessPage .accessConsole input,
+  .accessPage .accessConsole select {
+    min-height: 44px;
+  }
+  .accessPage .accessToolbar {
+    position: static;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .accessPage .accessTabs {
+    width: 100%;
+  }
+  .accessPage .accessTabs button {
+    flex: 1 0 auto;
+  }
+  .accessPage .accessToolbar > .accessPrimary {
+    width: 100%;
+  }
+  .accessPage .accessStats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .accessPage .accessFilters,
+  .accessPage .auditFilters,
+  .accessPage .scopeGrid {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .userCard > summary {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+  .accessPage .userCard > summary > strong {
+    grid-column: 2;
+    text-align: left;
+  }
+  .accessPage .statusBadge {
+    grid-column: 3;
+    grid-row: 1/3;
+  }
+  .accessPage .detailIntro {
+    flex-direction: column;
+  }
+  .accessPage .scopeChips {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+  .accessPage .permissionState {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .permissionState span {
+    justify-items: start;
+    padding-left: 9px;
+    text-align: left;
+  }
+  .accessPage .formFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .accessPage .criticalActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .accessPage .accessInline {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .roleCard > summary {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .auditLog dl {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 420px) {
+  .accessPage .accessStats {
+    grid-template-columns: 1fr;
+  }
+  .accessPage .userCard > summary {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding-right: 42px;
+  }
+  .accessPage .statusBadge {
+    grid-column: 2;
+    grid-row: auto;
+    width: max-content;
+  }
+  .accessPage .userCard > summary > strong {
+    grid-column: 2;
+  }
+  .accessPage .accessDialog {
+    padding: 20px 16px;
+  }
+  .accessPage .dialogActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .accessPage .dialogActions button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .accessPage .summaryChevron,
+  .accessPage .accessToast {
+    transition: none;
+  }
+  .accessPage .accessLoading > span {
+    animation: none;
+  }
+}

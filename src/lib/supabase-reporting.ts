@@ -3,6 +3,7 @@ import type{SupabaseClient}from'@supabase/supabase-js';
 import type{PortfolioSnapshotRow}from'./affiliate-source-cache';
 import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,isPortfolioRangeSnapshotFresh,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
 import{newSnapshotGeneration,snapshotGenerationCreatedAt}from'./snapshot-generation';
+import{assertScopesSupported,filterPartnerRows,type AccessMetadata}from'./rbac';
 
 export type ReportingPeriod='today'|'7d'|'30d'|'90d'|'12m'|'all'|'custom';
 export const backgroundPortfolioPeriods=['7d','30d','90d','all']as const;
@@ -102,8 +103,11 @@ export async function refreshLongPortfolioRangeSnapshots(client:CacheClient,now=
  return records.map(record=>({key:record.key,rows:record.value.rows.length}));
 }
 
-export async function loadPortfolioFromCache(period:ReportingPeriod,client:CacheClient,now=new Date(),custom?:{from?:string;to?:string}):Promise<Portfolio>{
+export async function loadPortfolioFromCache(period:ReportingPeriod,client:CacheClient,now=new Date(),custom?:{from?:string;to?:string},access?:AccessMetadata):Promise<Portfolio>{
   const range=reportingRange(period,now,custom);
-  const reports=reportRows(await loadMetricRows(client,range));
+  const loaded=await loadMetricRows(client,range);
+  if(access)assertScopesSupported(access,['affiliate','offer','campaign']);
+  const scoped=access?filterPartnerRows(loaded as unknown as Array<Record<string,unknown>>,access) as unknown as MetricRpcRow[]:loaded;
+  const reports=reportRows(scoped);
   return aggregatePortfolio(reports.base,reports.events,{from:range.from||'Gesamt',to:range.to,label:range.label});
 }

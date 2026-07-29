@@ -5,11 +5,13 @@ import type{DailyMetricRow}from'./history-cache';
 export type DailySourceRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;source_id:string;sub_source:string;clicks:number|string;sois:number|string;first_sales:number|string;rebills:number|string;coin_spend:number|string;payout:number|string;revenue:number|string;profit:number|string;raw?:{traffic_mode?:'api'|'tracked';adv1?:string;adv2?:string}|null};
 export type SourceSnapshotRow={o:string;on:string;c:string;cn:string;u:string;un:string;s:string;ss:string;m?:'api'|'tracked';a1?:string;a2?:string;cl:number;cv:number;fs:number;rb:number;cs:number;p:number;r:number;pr:number};
 export type PortfolioSnapshotRow=SourceSnapshotRow&{a:string;an:string};
+export type SourceSnapshotGeneration={date:string;generation:string};
 export const encodeSourceSnapshotRow=(row:DailyMetricRow):SourceSnapshotRow=>({o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:row.source_id,ss:row.sub_source,m:row.raw.traffic_mode as'api'|'tracked'|undefined,a1:String(row.raw.adv1||''),a2:String(row.raw.adv2||''),cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit});
 export const encodePortfolioSnapshotRow=(row:DailyMetricRow):PortfolioSnapshotRow=>({a:row.affiliate_id,an:row.affiliate_name,...encodeSourceSnapshotRow(row)});
 export const decodeSourceSnapshotRow=(row:SourceSnapshotRow,affiliateId:string,affiliateName:string):DailySourceRow=>({affiliate_id:affiliateId,affiliate_name:affiliateName,offer_id:row.o,offer_name:row.on,campaign_id:row.c,campaign_name:row.cn,offer_url_id:row.u,offer_url_name:row.un,source_id:row.s,sub_source:row.ss,clicks:row.cl,sois:row.cv,first_sales:row.fs,rebills:row.rb,coin_spend:row.cs,payout:row.p,revenue:row.r,profit:row.pr,raw:{traffic_mode:row.m,adv1:row.a1,adv2:row.a2}});
 const n=(value:number|string)=>Number(value||0);
 const sourceText=(value:unknown)=>{const text=String(value??'').trim();return!text||text.toUpperCase()==='N/A'?'':text};
+export function availableSourceSnapshotDays(range:{from:string;to:string},markers:SourceSnapshotGeneration[]){return markers.filter(marker=>marker.date>=range.from&&marker.date<=range.to&&Boolean(marker.generation)).sort((a,b)=>a.date.localeCompare(b.date))}
 
 export function mapAffiliateSourceRows(rows:DailySourceRow[],metricDate?:string):ReportRow[]{
   const grouped=new Map<string,DailySourceRow&{traffic_mode:'api'|'tracked';source_value:string;sub_value:string}>();

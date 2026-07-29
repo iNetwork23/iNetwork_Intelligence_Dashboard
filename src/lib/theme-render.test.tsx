@@ -17,16 +17,18 @@ describe('ThemeToggle',()=>{
   expect(html).not.toContain('>Dunkel</button>');
  });
 
- it('initializes before paint and mounts the icon inside every dashboard header',()=>{
+ it('initializes before paint and mounts one global icon inside the authenticated shell',()=>{
   const layout=readFileSync(join(process.cwd(),'src/app/layout.tsx'),'utf8');
+  const sidebar=readFileSync(join(process.cwd(),'src/app/components/AdminSidebar.tsx'),'utf8');
   expect(layout).toContain('suppressHydrationWarning');
   expect(layout).toContain('themeBootScript()');
   expect(layout).toContain('dangerouslySetInnerHTML');
   expect(layout).not.toContain('<ThemeToggle/>');
+  expect(sidebar).toContain('<ThemeToggle/>');
   for(const route of['page.tsx','affiliates/page.tsx','automation/page.tsx','smartlinks/page.tsx','cohorts/page.tsx']){
    const source=readFileSync(join(process.cwd(),'src/app',route),'utf8');
-   expect(source).toContain('<ThemeToggle/>');
-   expect(source.indexOf('<ThemeToggle/>')).toBeGreaterThan(source.indexOf('className="topActions"'));
+   expect(source).toContain('<DashboardPageHeader');
+   expect(source).not.toContain('<ThemeToggle/>');
   }
  });
 });

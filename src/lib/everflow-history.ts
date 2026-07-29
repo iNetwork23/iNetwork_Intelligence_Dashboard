@@ -36,7 +36,7 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
       const [base,events]=await Promise.all([false,true].map(includeEvents=>loadDailyReportSlices(from,to,async day=>{
         const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,reportBody(day,day,includeEvents),apiKey,fetcher);
         return result.table||[];
-      })));
+      },10_000,3)));
       return{base,events};
     },
   };

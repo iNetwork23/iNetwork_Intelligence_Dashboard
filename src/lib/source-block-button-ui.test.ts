@@ -1,0 +1,7 @@
+import{readFileSync}from'node:fs';import{join}from'node:path';import{describe,expect,it}from'vitest';
+const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
+describe('compact source block control',()=>{
+ it('renders the modal through document.body so contained source rows cannot distort it',()=>{const source=read('src/app/affiliates/SourceBlockButton.tsx');expect(source).toContain("import { createPortal } from \"react-dom\"");expect(source).toContain('createPortal(modal, document.body)');expect(source).toContain('className="sourceBlockDialog"');});
+ it('uses the power icon with a short visible Ausschalten label for main and sub sources',()=>{const source=read('src/app/affiliates/SourceBlockButton.tsx');expect(source).toContain('className={`sourceBlockIconButton');expect(source).toContain('aria-label={triggerLabel}');expect(source).toContain('<PowerIcon />');expect(source).toContain('{active ? "Ausgeschaltet" : "Ausschalten"}');});
+ it('defines a compact viewport-safe dialog and a clearly outlined action button',()=>{const css=read('src/app/globals.css');expect(css).toContain('.sourceBlockIconButton{');expect(css).toContain('min-height:36px');expect(css).toContain('border:2px solid color-mix(in srgb,var(--negative) 68%,var(--border))');expect(css).toContain('box-shadow:0 1px 0 color-mix(in srgb,var(--negative) 18%,transparent)');expect(css).not.toContain('var(--danger)');expect(css).toContain('width:min(440px,calc(100vw - 32px))');expect(css).toContain('.sourceBlockModal{position:fixed;inset:0');});
+});

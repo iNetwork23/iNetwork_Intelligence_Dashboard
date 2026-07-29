@@ -1,0 +1,7 @@
+import{readFileSync}from'node:fs';import{join}from'node:path';import{describe,expect,it}from'vitest';
+const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
+describe('source block mutation boundary',()=>{
+ it('requires compound admin-grade permissions and rejects partner access',()=>{const route=read('src/app/api/source-blocks/route.ts');expect(route).toContain("access.role!=='partner'");expect(route).toContain("can(access,'landingpages.manage')");expect(route).toContain("can(access,'api.manage')")});
+ it('validates CSRF and verifies the requested tuple against server-side dashboard data',()=>{const route=read('src/app/api/source-blocks/route.ts');expect(route).toContain('checkCsrf(request,origin)');expect(route).toContain('assertVisibleSource');expect(route).toContain('row.offerId===String(block.offerId)');expect(route).toContain("'Cache-Control':'private, no-store'")});
+ it('never accepts browser-controlled Everflow variable names or payout fields',()=>{const route=read('src/app/api/source-blocks/route.ts');expect(route).not.toContain('input.variables');expect(route).not.toContain('input.payout_amount');const model=read('src/lib/source-blocks.ts');expect(model).toContain("input.trafficMode==='api'?'adv1':'source_id'");expect(model).toContain("input.trafficMode==='api'?'adv2':'sub1'")});
+});

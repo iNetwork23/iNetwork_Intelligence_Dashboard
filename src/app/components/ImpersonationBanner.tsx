@@ -1,0 +1,5 @@
+import Link from 'next/link';
+import {currentUser} from '@/lib/session';
+import {can} from '@/lib/rbac';
+
+export default async function ImpersonationBanner(){const user=await currentUser();if(!user)return null;const mayAdmin=can(user.access,'users.manage')||can(user.access,'roles.manage')||can(user.access,'audit.view');return <aside className={user.impersonating?'globalSessionBar impersonating':'globalSessionBar'} aria-label="Sitzung und Sicherheit"><span>{user.impersonating?<>Impersonation aktiv: <b>{user.email}</b> · Akteur {user.actorId}</>:<>Angemeldet als <b>{user.email}</b></>}</span><nav>{!user.impersonating&&user.id!=='legacy-admin'&&<Link href="/settings/security">Sicherheit &amp; MFA</Link>}{mayAdmin&&<Link href="/admin/access">Benutzer &amp; Rechte</Link>}{user.impersonating&&<form action="/api/auth/impersonation/exit" method="post"><button>Impersonation verlassen</button></form>}</nav></aside>}

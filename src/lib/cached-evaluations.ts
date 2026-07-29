@@ -4,7 +4,7 @@ import type {ReportRow} from './portfolio';
 import type {ConversionRow} from './everflow';
 import {berlinDateRange} from './dashboard';
 import {getSupabaseAdmin} from './supabase';
-import{decodeSourceSnapshotRow,mapAffiliateSourceRows,type SourceSnapshotRow}from'./affiliate-source-cache';
+import{availableSourceSnapshotDays,decodeSourceSnapshotRow,mapAffiliateSourceRows,type SourceSnapshotRow}from'./affiliate-source-cache';
 import{resolveSnapshotFreshness,type SnapshotFreshness}from'./snapshot-generation';
 
 export{mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
@@ -22,16 +22,12 @@ export async function loadAffiliateSourceRowsFromCache(period:Period,affiliateId
 }
 
 export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;to:string},affiliateId:string):Promise<ReportRow[]>{
-  const days:string[]=[];for(let day=range.from;day<=range.to;day=new Date(Date.parse(`${day}T12:00:00Z`)+86_400_000).toISOString().slice(0,10))days.push(day);
   const markerPrefix='source_day_generation:',markerQuery=await getSupabaseAdmin().from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');
   if(markerQuery.error)throw new Error(`Supabase source generations: ${markerQuery.error.message}`);
-  const markers=new Map((markerQuery.data||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return[value.date||'',value.generation||'']}));
-  if(days.every(day=>markers.get(day))){
-    const keys=days.map(day=>`source_day:${day}:${markers.get(day)}:${affiliateId}`),snapshotRows:ReportRow[]=[];
-    for(let start=0;start<keys.length;start+=50){const {data,error}=await getSupabaseAdmin().from('sync_state').select('value').in('key',keys.slice(start,start+50));if(error)throw new Error(`Supabase source snapshots: ${error.message}`);for(const item of data||[]){const value=item.value as{date?:string;affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]};if(Array.isArray(value.rows)){const decoded=value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));snapshotRows.push(...mapAffiliateSourceRows(decoded,value.date))}}}
-    return snapshotRows;
-  }
-  throw new Error(`Supabase source snapshots incomplete for ${range.from}–${range.to}; refusing canonical fallback`);
+  const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return{date:value.date||'',generation:value.generation||''}})),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`),snapshotRows:ReportRow[]=[],snapshotBatches=Array.from({length:Math.ceil(keys.length/50)},(_,index)=>keys.slice(index*50,index*50+50));
+  const results=await Promise.all(snapshotBatches.map(batch=>getSupabaseAdmin().from('sync_state').select('value').in('key',batch)));
+  for(const result of results){if(result.error)throw new Error(`Supabase source snapshots: ${result.error.message}`);for(const item of result.data||[]){const value=item.value as{date?:string;affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]};if(Array.isArray(value.rows)){const decoded=value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));snapshotRows.push(...mapAffiliateSourceRows(decoded,value.date))}}}
+  return snapshotRows;
 }
 
 export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const prefix='source_day_generation:',{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`${prefix}${range.from}`).lte('key',`${prefix}${range.to}`).order('key');if(error)throw new Error(`Supabase source freshness: ${error.message}`);return resolveSnapshotFreshness(range.from,range.to,(data||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return{date:value.date||'',generation:value.generation||''}}))}

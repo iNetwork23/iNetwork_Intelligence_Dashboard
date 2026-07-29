@@ -1,0 +1,42 @@
+import {readFileSync} from 'node:fs';import {describe,expect,it} from 'vitest';
+const sql=readFileSync(new URL('../../supabase/migrations/20260727065000_secure_ltv_dimensions.sql',import.meta.url),'utf8');
+const performanceSql=readFileSync(new URL('../../supabase/migrations/20260727072000_ltv_cohort_performance.sql',import.meta.url),'utf8');
+const materializedSql=readFileSync(new URL('../../supabase/migrations/20260727073000_materialize_ltv_cohorts.sql',import.meta.url),'utf8');
+const scheduledRefreshSql=readFileSync(new URL('../../supabase/migrations/20260727074000_schedule_ltv_refresh.sql',import.meta.url),'utf8');
+const hardenedRefreshSql=readFileSync(new URL('../../supabase/migrations/20260727075000_harden_ltv_refresh_job.sql',import.meta.url),'utf8');
+describe('reporting migration security dimensions',()=>{
+ it('drops the existing LTV view before recreating it with a changed column shape',()=>{const drop=sql.search(/drop view if exists public\.ltv_cohorts/i),create=sql.search(/create(?: or replace)? view public\.ltv_cohorts/i);expect(drop).toBeGreaterThanOrEqual(0);expect(create).toBeGreaterThan(drop)});
+ it('joins LTV events to the same affiliate and exposes affiliate, offer and campaign dimensions',()=>{expect(sql).toMatch(/c\.lead_id\s*=\s*r\.lead_id[\s\S]*c\.affiliate_id\s*=\s*r\.affiliate_id/);expect(sql).toMatch(/select registration_month, affiliate_id, offer_id, campaign_id, source_id, sub_source/);expect(sql).toMatch(/group by registration_month, affiliate_id, offer_id, campaign_id, source_id, sub_source/)});
+ it('adds partial composite indexes for both sides of the affiliate-safe LTV join',()=>{expect(performanceSql).toMatch(/\(affiliate_id,\s*lead_id,\s*converted_at\)[\s\S]*where type = 'soi'/i);expect(performanceSql).toMatch(/\(affiliate_id,\s*lead_id,\s*converted_at\)[\s\S]*where type in \('first_sale',\s*'rebill'\)/i);expect(performanceSql).toMatch(/analyze public\.conversions/i)});
+});
+
+describe('materialized LTV cache migration',()=>{
+ it('keeps the live public view intact and builds a populated private materialized view under a local 15 minute timeout',()=>{expect(materializedSql).not.toMatch(/drop\s+(?:materialized\s+)?view\s+(?:if\s+exists\s+)?public\.ltv_cohorts/i);expect(materializedSql).not.toMatch(/create\s+(?:or\s+replace\s+)?view\s+public\.ltv_cohorts/i);expect(materializedSql).toMatch(/set\s+local\s+statement_timeout\s*=\s*'15min'/i);expect(materializedSql).toMatch(/create\s+materialized\s+view\s+private\.ltv_cohorts_materialized[\s\S]*with\s+data/i)});
+ it('uses deterministic registration attribution and affiliate-safe revenue capped at 365 days',()=>{expect(materializedSql).toMatch(/distinct\s+on\s*\(coalesce\(affiliate_id,\s*''\),\s*lead_id\)[\s\S]*order\s+by\s+coalesce\(affiliate_id,\s*''\),\s*lead_id,\s*converted_at,\s*id/i);expect(materializedSql).toMatch(/c\.lead_id\s*=\s*r\.lead_id[\s\S]*coalesce\(c\.affiliate_id,\s*''\)\s*=\s*r\.affiliate_id/);expect(materializedSql).toMatch(/c\.converted_at\s*<=\s*r\.registered_at\s*\+\s*interval\s*'365 days'/i)});
+ it('denies direct client access and exposes only service-role invoker read RPCs returning one ordered json aggregate',()=>{expect(materializedSql).toMatch(/revoke\s+all\s+on\s+private\.ltv_cohorts_materialized\s+from\s+public,\s*anon,\s*authenticated/i);expect(materializedSql).toMatch(/grant\s+usage\s+on\s+schema\s+private\s+to\s+service_role/i);expect(materializedSql).toMatch(/grant\s+select\s+on\s+private\.ltv_cohorts_materialized\s+to\s+service_role/i);for(const name of ['ltv_cohorts_internal_v1','ltv_cohorts_scoped_v1']){expect(materializedSql).toMatch(new RegExp(`function\\s+public\\.${name}\\b[\\s\\S]*?security\\s+invoker`,'i'));expect(materializedSql).toMatch(new RegExp(`revoke\\s+all\\s+on\\s+function\\s+public\\.${name}[\\s\\S]*?from\\s+public,\\s*anon,\\s*authenticated`,'i'))}expect(materializedSql.match(/jsonb_agg\s*\([\s\S]*?order\s+by/gi)).toHaveLength(2);expect(materializedSql).not.toMatch(/\boffset\b/i);expect(materializedSql).not.toMatch(/\b(?:unrestricted|is_internal|bypass_scope)\s+boolean\b/i)});
+ it('requires all scope arrays, fails closed when all are empty, ANDs dimensions, and applies source request filters',()=>{const scoped=materializedSql.slice(materializedSql.search(/function\s+public\.ltv_cohorts_scoped_v1/i));for(const arg of ['p_affiliate_ids','p_offer_ids','p_campaign_ids','p_source_ids','p_sub_sources'])expect(scoped).toMatch(new RegExp(`${arg}\\s+text\\[\\]`,'i'));expect(scoped).not.toMatch(/p_(?:affiliate_ids|offer_ids|campaign_ids|source_ids|sub_sources)\s+text\[\]\s+default/i);expect(scoped).toMatch(/cardinality\(p_affiliate_ids\)[\s\S]*\bor\b[\s\S]*cardinality\(p_sub_sources\)[\s\S]*\band\b/i);for(const pair of [['p_affiliate_ids','affiliate_id'],['p_offer_ids','offer_id'],['p_campaign_ids','campaign_id'],['p_source_ids','source_id'],['p_sub_sources','sub_source']])expect(scoped).toMatch(new RegExp(`cardinality\\(${pair[0]}\\)[\\s\\S]*?=\\s*0\\s+or\\s+m\\.${pair[1]}\\s*=\\s*any\\(${pair[0]}\\)`,'i'));expect(scoped).toMatch(/p_source\s+is\s+null\s+or\s+m\.source_id\s*=\s*p_source/i);expect(scoped).toMatch(/p_sub_source\s+is\s+null\s+or\s+m\.sub_source\s*=\s*p_sub_source/i)});
+ it('uses a fixed service-only concurrent refresh function with bounded settings and advisory exclusion',()=>{expect(materializedSql).toMatch(/function\s+public\.refresh_ltv_cohorts_v1\s*\(\s*\)/i);expect(materializedSql).toMatch(/security\s+definer[\s\S]*set\s+search_path\s*=\s*''[\s\S]*set\s+statement_timeout\s*=\s*'240s'[\s\S]*set\s+lock_timeout\s*=\s*'5s'/i);expect(materializedSql).toMatch(/pg_try_advisory_xact_lock/i);expect(materializedSql).toMatch(/refresh\s+materialized\s+view\s+concurrently\s+private\.ltv_cohorts_materialized/i);expect(materializedSql).toMatch(/alter\s+function\s+public\.refresh_ltv_cohorts_v1\s*\(\s*\)\s+owner\s+to\s+postgres/i);expect(materializedSql).toMatch(/grant\s+execute\s+on\s+function\s+public\.refresh_ltv_cohorts_v1\s*\(\s*\)\s+to\s+service_role/i)});
+});
+
+describe('scheduled LTV refresh migration',()=>{
+ it('moves the long refresh out of HTTP into one named hourly pg_cron job',()=>{expect(scheduledRefreshSql).toMatch(/create\s+extension\s+if\s+not\s+exists\s+pg_cron/i);expect(scheduledRefreshSql).toMatch(/cron\.schedule\s*\(\s*'wlx-ltv-cohorts-hourly'\s*,\s*'25 \* \* \* \*'/i);expect(scheduledRefreshSql).toMatch(/select public\.refresh_ltv_cohorts_v1\(\)/i)});
+ it('records ready and failed refresh state in the database function itself',()=>{expect(scheduledRefreshSql).toMatch(/insert\s+into\s+public\.sync_state[\s\S]*'ltv_cohorts_materialized'/i);expect(scheduledRefreshSql).toMatch(/exception\s+when\s+others[\s\S]*status[\s\S]*failed/i)});
+ it('keeps the refresh service-only with bounded timeouts and advisory exclusion',()=>{expect(scheduledRefreshSql).toMatch(/security\s+definer[\s\S]*set\s+statement_timeout\s*=\s*'240s'[\s\S]*set\s+lock_timeout\s*=\s*'5s'/i);expect(scheduledRefreshSql).toMatch(/pg_try_advisory_xact_lock/i);expect(scheduledRefreshSql).toMatch(/revoke\s+all\s+on\s+function\s+public\.refresh_ltv_cohorts_v1\(\)\s+from\s+public,\s*anon,\s*authenticated/i);expect(scheduledRefreshSql).toMatch(/grant\s+execute\s+on\s+function\s+public\.refresh_ltv_cohorts_v1\(\)\s+to\s+service_role/i)});
+});
+
+describe('hardened scheduled cohort refresh migration',()=>{
+ it('gives the database-owned refresh a bounded 15 minute window and persists failures',()=>{
+  expect(hardenedRefreshSql).toMatch(/statement_timeout\s*=\s*'900s'/i);
+  expect(hardenedRefreshSql).toMatch(/exception\s+when\s+query_canceled/i);
+  expect(hardenedRefreshSql).toMatch(/'status',\s*'failed'/i);
+  expect(hardenedRefreshSql).not.toMatch(/\braise\s*;/i);
+ });
+ it('queues one immediate bootstrap refresh without changing the hourly cadence',()=>{
+  expect(hardenedRefreshSql).toContain("'wlx-ltv-cohorts-hourly'");
+  expect(hardenedRefreshSql).toContain("'25 * * * *'");
+  expect(hardenedRefreshSql).toContain("'wlx-ltv-cohorts-bootstrap'");
+  expect(hardenedRefreshSql).toContain("'* * * * *'");
+  expect(hardenedRefreshSql).toMatch(/cron\.schedule\s*\([\s\S]*?set\s+statement_timeout\s*=\s*'15min';[\s\S]*?select\s+public\.refresh_ltv_cohorts_v1\(\)/i);
+  expect(hardenedRefreshSql).toMatch(/cron\.unschedule\s*\(\s*'wlx-ltv-cohorts-bootstrap'/i);
+ });
+});

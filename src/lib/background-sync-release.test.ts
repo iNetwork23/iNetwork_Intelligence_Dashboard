@@ -9,6 +9,7 @@ describe('automatic Supabase reporting refresh',()=>{
   const config=JSON.parse(read('vercel.json'))as{crons?:Array<{path:string;schedule:string}>};
   expect(config.crons).toEqual([
    {path:'/api/sync',schedule:'17 * * * *'},
+   {path:'/api/sync/reconcile',schedule:'37 3 * * *'},
    {path:'/api/sync/rollups',schedule:'47 * * * *'},
   ]);
   const route=read('src/app/api/sync/route.ts');
@@ -28,6 +29,12 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(rollups).toContain('acquireHistorySyncLock');
   expect(rollups).toContain('finally{await release()}');
   expect(rollups).toContain('maxDuration=240');
+  const reconcile=read('src/app/api/sync/reconcile/route.ts');
+  expect(reconcile).toContain('CRON_SECRET');
+  expect(reconcile).toContain("reportingRange('30d')");
+  expect(reconcile).toContain('includeConversions:false');
+  expect(reconcile).toContain('acquireHistorySyncLock');
+  expect(reconcile).toContain('finally{await release()}');
   const cachedSmartlinks=read('src/lib/cached-smartlinks.ts');
   expect(cachedSmartlinks).toContain('Promise.all(snapshotBatches.map');
  });

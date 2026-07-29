@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {advanceSyncState,canonicalMetricRows,conversionToCacheRow,initialSyncState,metricRows,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
+import {advanceSyncState,canonicalMetricRows,conversionToCacheRow,initialSyncState,loadDailyReportSlices,metricRows,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
 
 describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
@@ -8,20 +8,21 @@ describe('history cache sync windows',()=>{
     expect(state).toEqual({phase:'backfill',backfill_start:'2025-07-23',next_end:'2026-07-22',last_success_at:null});
     expect(selectSyncWindow(state,now)).toEqual({mode:'backfill',from:'2026-07-16',to:'2026-07-22'});
   });
-  it('moves backwards and switches to the rolling 30-day window after the final chunk',()=>{
+  it('moves backwards and switches to a two-day hot window after the final chunk',()=>{
     const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-07-25',last_success_at:null};
     const window=selectSyncWindow(state,now);
     expect(window).toEqual({mode:'backfill',from:'2025-07-23',to:'2025-07-25'});
     const next=advanceSyncState(state,window,now);
     expect(next.phase).toBe('rolling');
-    expect(selectSyncWindow(next,now)).toEqual({mode:'rolling',from:'2026-06-23',to:'2026-07-22'});
+    expect(selectSyncWindow(next,now)).toEqual({mode:'rolling',from:'2026-07-21',to:'2026-07-22'});
   });
   it('uses the Berlin calendar day around UTC midnight',()=>{
     const berlinAfterMidnight=new Date('2026-07-24T22:30:00Z');
     const state=initialSyncState(berlinAfterMidnight);
     expect(state.next_end).toBe('2026-07-25');
-    expect(selectSyncWindow({...state,phase:'rolling'},berlinAfterMidnight)).toEqual({mode:'rolling',from:'2026-06-26',to:'2026-07-25'});
+    expect(selectSyncWindow({...state,phase:'rolling'},berlinAfterMidnight)).toEqual({mode:'rolling',from:'2026-07-24',to:'2026-07-25'});
   });
+  it('loads daily report slices with bounded concurrency while preserving date order',async()=>{let active=0,peak=0;const rows=await loadDailyReportSlices('2026-07-20','2026-07-24',async day=>{active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,day.endsWith('20')?8:1));active--;return[day]},10_000,2);expect(peak).toBe(2);expect(rows).toEqual(['2026-07-20','2026-07-21','2026-07-22','2026-07-23','2026-07-24'])});
 });
 
 describe('Everflow conversion mapping',()=>{
