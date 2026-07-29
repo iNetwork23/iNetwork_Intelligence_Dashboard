@@ -20,6 +20,12 @@ describe('encrypted server-side TOTP MFA',()=>{
   await expect(beginMfaEnrollment(store,'u',key,now+30)).rejects.toThrow(/aktiv/i);
   expect(await verifyMfaChallenge(store,'u',totpCode(first.secret,now+30),key,now+30)).toBe(true);
  });
+ it('accepts the same TOTP counter only once under concurrent challenges',async()=>{
+  const store=new MemorySecurityStore(),now=1_800_000_000,enrollment=await beginMfaEnrollment(store,'u',key,now);
+  expect(await confirmMfaEnrollment(store,'u',totpCode(enrollment.secret,now),key,now)).toBe(true);
+  const code=totpCode(enrollment.secret,now+30),results=await Promise.all([verifyMfaChallenge(store,'u',code,key,now+30),verifyMfaChallenge(store,'u',code,key,now+30)]);
+  expect(results.sort()).toEqual([false,true]);
+ });
  it('lets an administrative reset helper delete a factor without a TOTP code',async()=>{
   const store=new MemorySecurityStore(),now=1_800_000_000;const enrollment=await beginMfaEnrollment(store,'u',key,now);
   expect(await confirmMfaEnrollment(store,'u',totpCode(enrollment.secret,now),key,now)).toBe(true);
