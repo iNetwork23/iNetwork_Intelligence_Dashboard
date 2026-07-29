@@ -2,14 +2,15 @@ import {readFileSync,existsSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 const read=(path:string)=>readFileSync(new URL(`../app/${path}`,import.meta.url),'utf8');
 describe('wired server authorization boundaries',()=>{
- it('does not require MFA during dashboard login or session validation',()=>{
+ it('requires the configured TOTP factor before creating a full dashboard session',()=>{
   const login=read('api/auth/login/route.ts'),session=readFileSync(new URL('./session.ts',import.meta.url),'utf8');
   const page=read('login/page.tsx');
-  expect(page).not.toContain('mfa_code');
-  expect(page).not.toContain('MFA-Code');
-  expect(login).not.toContain('verifyMfaChallenge');
-  expect(login).not.toContain('mfaSetupOnly');
-  expect(session).not.toContain('await hasMfa');
+  expect(page).toContain('mfa_code');
+  expect(page).toContain('MFA-Code');
+  expect(login).toContain('hasMfa');
+  expect(login).toContain('verifyMfaChallenge');
+  expect(login).toContain('mfaSetupOnly');
+  expect(session).toContain('if(session.mfaSetupOnly)return null');
  });
  it.each([
   ['api/automation/route.ts','campaigns.edit'],
@@ -42,8 +43,8 @@ describe('wired server authorization boundaries',()=>{
  it('wires hierarchy guards, custom-role assignment, and isolated resets into user management',()=>{
   const admin=read('api/admin/access/route.ts');expect(admin).toContain('assertMayManageUser');expect(admin).toContain('custom_role');expect(admin).toContain('customRoleId');expect(admin).toContain('getSupabasePasswordAuth');
  });
- it('keeps the authenticated MFA management lifecycle separate from login',()=>{
-  const login=read('api/auth/login/route.ts');expect(login).not.toContain('verifyMfaChallenge');expect(read('api/auth/mfa/route.ts')).toContain('beginMfaEnrollment');
+ it('keeps MFA enrollment management separate while enforcing the login challenge',()=>{
+  const login=read('api/auth/login/route.ts');expect(login).toContain('verifyMfaChallenge');expect(login).toContain("form.get('mfa_code')");expect(read('api/auth/mfa/route.ts')).toContain('beginMfaEnrollment');
  });
  it('revokes app and Supabase sessions after password setup',()=>{
   const source=read('api/auth/password-setup/route.ts');expect(source).toContain('revokeUserSessions');expect(source).toContain("signOut(input.accessToken,'global')");

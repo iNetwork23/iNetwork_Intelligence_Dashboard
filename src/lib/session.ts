@@ -10,6 +10,7 @@ async function resolveCurrentUser():Promise<CurrentUser|null>{
  const token=(await cookies()).get(COOKIE_NAME)?.value;let session;
  try{session=await validateOpaqueSession(securityStore(),token)}catch{return null}
  if(!session)return null;
+ if(session.mfaSetupOnly)return null;
  if(session.userId==='legacy-admin'){// ALLOW_LEGACY_ADMIN defaults to false and must be explicitly enabled.
   if(process.env.ALLOW_LEGACY_ADMIN!=='true'){await revokeSession(securityStore(),token);return null}const access=parseAccessMetadata({role:'super_admin',status:'active',version:1});return{id:session.userId,email:process.env.DASHBOARD_USERNAME||'legacy-admin',access,actorId:session.actorId||session.userId,impersonating:Boolean(session.actorId)};}
  const {data,error}=await getSupabaseAdmin().auth.admin.getUserById(session.userId);
