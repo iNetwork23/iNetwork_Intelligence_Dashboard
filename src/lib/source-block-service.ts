@@ -2,6 +2,7 @@ import type { SecurityStore } from './security';
 import { withSecurityLock } from './security';
 import {
   normalizeSourceBlockInput,
+  SourceBlockActivationCompensatedError,
   sourceBlockStoreKey,
   type NormalizedSourceBlock,
   type SourceBlockInput,
@@ -101,6 +102,15 @@ async function activateSourceBlockUnlocked(
     };
   await store.set(key, pending);
   const external = await writer.activate(block, id).catch(async (activationError: unknown) => {
+    if (activationError instanceof SourceBlockActivationCompensatedError) {
+      try {
+        await restoreRecord(store, key, previous);
+      } catch (restoreError) {
+        const message = restoreError instanceof Error ? restoreError.message : 'Lokaler Zustand konnte nach Everflow-Rollback nicht wiederhergestellt werden';
+        return throwUncertain(store, key, pending, message);
+      }
+      throw activationError;
+    }
     const message = activationError instanceof Error ? activationError.message : 'Everflow-Aktivierung konnte nicht verifiziert werden';
     return throwUncertain(store, key, pending, message);
   });

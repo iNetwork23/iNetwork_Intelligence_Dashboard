@@ -1,7 +1,7 @@
 import {describe,expect,it,vi} from 'vitest';
 import {MemorySecurityStore} from './security';
 import {activateSourceBlock,activateSourceBlocksAtomically,deactivateSourceBlock,listSourceBlocks} from './source-block-service';
-import {sourceBlockStoreKey} from './source-blocks';
+import {SourceBlockActivationCompensatedError,sourceBlockStoreKey} from './source-blocks';
 const input={affiliateId:'30',affiliateName:'DatingLeads by Lewis',offerId:'25',offerName:'WhatsMeet - API',trafficMode:'api' as const,level:'sub_source' as const,mainValue:null,subValue:'P-3591625022'};
 
 describe('source block persistence',()=>{
@@ -29,6 +29,11 @@ describe('source block persistence',()=>{
   const store=new MemorySecurityStore();
   await expect(activateSourceBlock(store,input,{actorId:'admin',activate:async()=>{throw new Error('activation verification failed')},deactivate:vi.fn()})).rejects.toMatchObject({name:'SourceBlockStateUncertainError'});
   expect((await listSourceBlocks(store))[0]).toMatchObject({status:'error',everflowSettingId:null});
+ });
+ it('restores the prior durable state after an externally verified activation rollback',async()=>{
+  const store=new MemorySecurityStore();
+  await expect(activateSourceBlock(store,input,{actorId:'admin',activate:async()=>{throw new SourceBlockActivationCompensatedError('Everflow-Regel entfernt')},deactivate:vi.fn()})).rejects.toThrow('Everflow-Regel entfernt');
+  expect(await listSourceBlocks(store)).toEqual([]);
  });
  it('restores the original state when activation audit fails',async()=>{
   const store=new MemorySecurityStore(),rollback=vi.fn(async()=>({deleted:true}));
