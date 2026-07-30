@@ -16,7 +16,7 @@ type Writer = {
   actorId: string;
   authorize?: (record?: SourceBlockRecord) => Promise<void>;
   activate: (block: NormalizedSourceBlock, dashboardId: string) => Promise<{ settingId: number; created: boolean }>;
-  deactivate: (settingId: number) => Promise<{ deleted: boolean }>;
+  deactivate: (settingId: number, block: NormalizedSourceBlock) => Promise<{ deleted: boolean }>;
 };
 type Commit<T, P = unknown> = (value: T, previous?: P) => Promise<unknown>;
 type DeactivationCommit = (value: SourceBlockRecord, previous: SourceBlockRecord) => Promise<unknown>;
@@ -123,7 +123,7 @@ async function activateSourceBlockUnlocked(
   };
   const compensate = async (context: string) => {
     if (external.created) {
-      const removed = await writer.deactivate(external.settingId);
+      const removed = await writer.deactivate(external.settingId, block);
       if (!removed.deleted) throw new Error(`Everflow-Regel wurde beim ${context} nicht gelöscht`);
     }
     await restoreRecord(store, key, previous);
@@ -180,7 +180,7 @@ async function deactivateSourceBlockUnlocked(
   };
   await store.set(key, pending);
   try {
-    const removed = await writer.deactivate(fresh.everflowSettingId);
+    const removed = await writer.deactivate(fresh.everflowSettingId, fresh);
     if (!removed.deleted) throw new Error('Everflow-Setting konnte nicht verifiziert gelöscht werden');
   } catch (deactivationError) {
     const message = deactivationError instanceof Error ? deactivationError.message : 'Everflow-Deaktivierung konnte nicht verifiziert werden';
@@ -270,7 +270,7 @@ export async function activateSourceBlocksAtomically(
         const key = sourceBlockStoreKey(outcome.record);
         try {
           if (outcome.externalCreated && outcome.record.everflowSettingId) {
-            const removed = await writer.deactivate(outcome.record.everflowSettingId);
+            const removed = await writer.deactivate(outcome.record.everflowSettingId, outcome.record);
             if (!removed.deleted) throw new Error('Everflow-Regel wurde beim produktweiten Rollback nicht gelöscht');
           }
           await restoreRecord(store, key, outcome.previous);

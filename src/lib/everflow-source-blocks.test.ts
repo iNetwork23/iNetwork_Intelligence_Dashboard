@@ -66,6 +66,22 @@ describe('Everflow source block writer',()=>{
   expect(JSON.parse(String(create[1]?.body)).ruleset.countries).toHaveLength(3);
  });
 
+ it('inherits targeting from an all-affiliate base-SOI rule whose summary has null affiliate IDs',async()=>{
+  let tableReads=0;
+  const globalSummary={network_custom_payout_revenue_setting_id:457,network_affiliate_ids:null,network_offer_id:25,network_offer_payout_revenue_id:0,is_apply_all_affiliates:true,custom_setting_status:'active',is_custom_payout_enabled:true,payout_type:'cpa',payout_amount:4,payout_percentage:0,is_postback_disabled:false};
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable')){tableReads++;return response({custom_payout_revenue_settings:tableReads===1?[globalSummary]:[globalSummary,{network_custom_payout_revenue_setting_id:801,network_affiliate_ids:[30],network_offer_id:25}],paging:{total_count:tableReads===1?1:2}});}
+   if(path.includes('/457?relationship=all'))return response({...globalSummary,relationship:{ruleset:dachRuleset,variables:{entries:[]}}});
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:801});
+   if(path.includes('/801?relationship=all')){const payload=JSON.parse(String(fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')?.[1]?.body));return response({...payload,network_custom_payout_revenue_setting_id:801,relationship:{ruleset:payload.ruleset,variables:{entries:block.variables}}});}
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).resolves.toMatchObject({settingId:801,created:true});
+  const create=fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')!;
+  expect(JSON.parse(String(create[1]?.body)).ruleset.countries).toHaveLength(3);
+ });
+
  it('ignores paid Sale/Rebill targeting when deriving a base-SOI source block',async()=>{
   let tableReads=0;
   const saleRule={network_custom_payout_revenue_setting_id:456,network_affiliate_ids:[30],network_offer_id:25,network_offer_payout_revenue_id:267,custom_setting_status:'active',is_custom_payout_enabled:true,payout_type:'cpa',payout_amount:4,payout_percentage:0,is_postback_disabled:false};
@@ -241,13 +257,28 @@ describe('Everflow source block writer',()=>{
   expect(deleted).toBe(true);
  });
 
- it('deletes only the managed setting and verifies it is gone',async()=>{
+ it('refuses to delete a stored setting ID when live Everflow scope is shared',async()=>{
+  const shared={...buildEverflowBlockPayload(block,'legacy'),network_custom_payout_revenue_setting_id:777,is_apply_all_affiliates:true,network_affiliate_ids:[30,31],relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}};
   const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
    const path=String(url);
-   if(path.includes('/777')&&init?.method==='DELETE')return response({result:true});
-   if(path.includes('/777'))return response({Error:'Not found'},404);
+   if(path.includes('/777?relationship=all')&&init?.method!=='DELETE')return response(shared);
+   if(init?.method==='DELETE')throw new Error('must not delete shared rule');
    throw new Error(`unexpected ${path}`);
   });
-  await expect(deactivateEverflowSourceBlock(777,'secret',fetcher)).resolves.toEqual({deleted:true});
+  await expect(deactivateEverflowSourceBlock(777,block,'secret',fetcher)).rejects.toThrow('Scope');
+  expect(fetcher.mock.calls.some(call=>call[1]?.method==='DELETE')).toBe(false);
+ });
+
+ it('deletes only the managed setting and verifies it is gone',async()=>{
+  let deleted=false;
+  const exact={...buildEverflowBlockPayload(block,'dashboard-id'),network_custom_payout_revenue_setting_id:778,relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}};
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('/778')&&init?.method==='DELETE'){deleted=true;return response({result:true});}
+   if(path.includes('/778')&&deleted)return response({Error:'Not found'},404);
+   if(path.includes('/778'))return response(exact);
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(deactivateEverflowSourceBlock(778,block,'secret',fetcher)).resolves.toEqual({deleted:true});
  });
 });

@@ -16,14 +16,14 @@ describe('source block persistence',()=>{
   const store=new MemorySecurityStore(),deactivate=vi.fn(async()=>({deleted:true}));
   const active=await activateSourceBlock(store,input,{actorId:'admin',activate:async()=>({settingId:777,created:true}),deactivate});
   const result=await deactivateSourceBlock(store,active.id,{actorId:'admin-2',activate:vi.fn(),deactivate});
-  expect(deactivate).toHaveBeenCalledWith(777);
+  expect(deactivate).toHaveBeenCalledWith(777,expect.objectContaining({affiliateId:30,offerId:25,level:'sub_source',subValue:'P-3591625022'}));
   expect(result).toMatchObject({status:'inactive',updatedBy:'admin-2',everflowSettingId:null});
  });
  it('rolls back Everflow when durable activation state cannot be committed',async()=>{
   class FailingStore extends MemorySecurityStore{writes=0;override async set(k:string,v:unknown){this.writes++;if(this.writes===2)throw new Error('store down');return super.set(k,v)}}
   const store=new FailingStore(),rollback=vi.fn(async()=>({deleted:true}));
   await expect(activateSourceBlock(store,input,{actorId:'admin',activate:async()=>({settingId:777,created:true}),deactivate:rollback})).rejects.toThrow('store down');
-  expect(rollback).toHaveBeenCalledWith(777);
+  expect(rollback).toHaveBeenCalledWith(777,expect.objectContaining({affiliateId:30,offerId:25,level:'sub_source',subValue:'P-3591625022'}));
  });
  it('records an uncertain incident when Everflow activation itself cannot be verified',async()=>{
   const store=new MemorySecurityStore();
@@ -38,7 +38,7 @@ describe('source block persistence',()=>{
  it('restores the original state when activation audit fails',async()=>{
   const store=new MemorySecurityStore(),rollback=vi.fn(async()=>({deleted:true}));
   await expect(activateSourceBlock(store,input,{actorId:'admin',activate:async()=>({settingId:777,created:true}),deactivate:rollback},async()=>{throw new Error('audit down')})).rejects.toThrow('wiederhergestellt');
-  expect(rollback).toHaveBeenCalledWith(777);
+  expect(rollback).toHaveBeenCalledWith(777,expect.objectContaining({affiliateId:30,offerId:25,level:'sub_source',subValue:'P-3591625022'}));
   expect(await listSourceBlocks(store)).toEqual([]);
  });
  it('passes the exact in-lock previous record to activation audit',async()=>{
