@@ -114,6 +114,7 @@ describe('sync orchestration',()=>{
     expect(calls).toEqual(['conversions:0','metrics:1','conversions:1','metrics:1','state']);
     expect(savedState).toMatchObject({phase:'backfill',next_end:'2026-07-15'});
     expect(result).toMatchObject({mode:'backfill',from:'2026-07-16',to:'2026-07-22',upsertedConversions:1,upsertedMetrics:1});
+    expect(result.conversionRows).toHaveLength(1);
   });
   it('replaces a refreshed metric range so old collapsed source rows cannot double-count',async()=>{
     const calls:string[]=[];

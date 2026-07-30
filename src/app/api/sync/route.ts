@@ -6,6 +6,7 @@ import {acquireHistorySyncLock,createSupabaseSyncStore} from '@/lib/supabase';
 import {syncCampaignSnapshots} from '@/lib/campaign-snapshots';
 import {reportingRange} from '@/lib/supabase-reporting';
 import {requirePermission} from '@/lib/session';
+import {publishRebillDaySnapshots} from '@/lib/rebill-event-snapshot-store';
 
 
 export const runtime='nodejs';
@@ -20,7 +21,7 @@ export async function GET(request:NextRequest){
   const auth=await authorize(request);if(!auth.ok)return NextResponse.json({error:auth.status===401?'Nicht autorisiert':'Keine Berechtigung'},{status:auth.status});
   if(request.nextUrl.searchParams.has('refresh'))return NextResponse.json({error:'Manuelle Refreshes erfordern POST'},{status:405});
   try{
-    const release=await acquireHistorySyncLock();try{const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});expireSourceCaches();const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',12);return NextResponse.json({...result,campaigns})}finally{await release()}
+    const release=await acquireHistorySyncLock();try{const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});if(result.conversionRows.length){await publishRebillDaySnapshots(result.conversionRows,{from:result.from,to:result.to});for(const affiliateId of new Set(result.conversionRows.map(row=>row.affiliate_id).filter(Boolean)))revalidateTag(`affiliate-rebills-${affiliateId}`,{expire:0})}const{conversionRows,...publicResult}=result;void conversionRows;expireSourceCaches();const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',12);return NextResponse.json({...publicResult,campaigns})}finally{await release()}
   }catch(error){return failure(error)}
 }
 
@@ -31,7 +32,7 @@ export async function POST(request:NextRequest){
     const refresh=request.nextUrl.searchParams.get('refresh');
     if(refresh==='campaigns')return NextResponse.json({mode:'campaign-metadata',campaigns:await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',60)});
     if(refresh==='source-range'){const range=resolveManualSourceRange(request.nextUrl.searchParams),source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),refreshed=await refreshHistoryRange({store:createSupabaseSyncStore(),...range,includeConversions:false,loadConversions:source.loadConversions,loadReports:source.loadReports});expireSourceCaches();return NextResponse.json({mode:'manual-source-range',...range,upsertedConversions:refreshed.conversions.length,upsertedMetrics:refreshed.metrics.length})}
-    if(refresh==='conversion-range'){const range=resolveManualSourceRange(request.nextUrl.searchParams),affiliateId=request.nextUrl.searchParams.get('affiliate')||'';if(!/^\d+$/.test(affiliateId))return NextResponse.json({error:'Ungültige Affiliate-ID'},{status:400});const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),raw=await source.loadConversions(range.from,range.to,affiliateId),mapped=raw.map(conversionToCacheRow).filter((row):row is NonNullable<typeof row>=>row!==null),rows=Array.from(new Map(mapped.map(row=>[row.id,row])).values());await createSupabaseSyncStore().upsertConversions(rows);revalidateTag(`affiliate-rebills-${affiliateId}`,{expire:0});return NextResponse.json({mode:'manual-conversion-range',affiliateId,...range,upsertedConversions:rows.length})}
+    if(refresh==='conversion-range'){const range=resolveManualSourceRange(request.nextUrl.searchParams),affiliateId=request.nextUrl.searchParams.get('affiliate')||'';if(!/^\d+$/.test(affiliateId))return NextResponse.json({error:'Ungültige Affiliate-ID'},{status:400});const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),raw=await source.loadConversions(range.from,range.to,affiliateId),mapped=raw.map(conversionToCacheRow).filter((row):row is NonNullable<typeof row>=>row!==null),rows=Array.from(new Map(mapped.map(row=>[row.id,row])).values());await createSupabaseSyncStore().upsertConversions(rows);const rebillCache=await publishRebillDaySnapshots(rows,range,affiliateId);revalidateTag(`affiliate-rebills-${affiliateId}`,{expire:0});return NextResponse.json({mode:'manual-conversion-range',affiliateId,...range,upsertedConversions:rows.length,rebillCache})}
 
     if(refresh!=='30d')return NextResponse.json({error:'Unbekannter Refresh-Modus'},{status:400});
     const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),range=reportingRange('30d'),store=createSupabaseSyncStore();

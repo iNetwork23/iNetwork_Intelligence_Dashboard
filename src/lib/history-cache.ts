@@ -119,7 +119,7 @@ export async function runHistorySync(input:{
   const state=await input.store.getState()||initialSyncState(now);
   if(state.phase==='rolling'&&state.last_success_at&&now.getTime()-Date.parse(state.last_success_at)<55*60_000){
     const window=selectSyncWindow(state,now);
-    return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true};
+    return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true,conversionRows:[] as ConversionCacheRow[]};
   }
   const window=selectSyncWindow(state,now);
   const today=berlinDay(now);
@@ -129,7 +129,7 @@ export async function runHistorySync(input:{
   const conversions:ConversionCacheRow[]=[],metrics:DailyMetricRow[]=[];for(const segment of segments){const result=await refreshHistoryRange({store:input.store,...segment,loadConversions:input.loadConversions,loadReports:input.loadReports});conversions.push(...result.conversions);metrics.push(...result.metrics)};
   const next=advanceSyncState(state,window,now);
   await input.store.setState(next);
-  return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling'};
+  return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling',conversionRows:conversions};
 }
 
 export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetricRow[]{

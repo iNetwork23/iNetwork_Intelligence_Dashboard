@@ -19,6 +19,11 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(route).toContain("refresh==='source-range'");
   expect(route).toContain("refresh==='conversion-range'");
   expect(route).toContain("loadConversions(range.from,range.to,affiliateId)");
+  expect(route).toContain('publishRebillDaySnapshots');
+  expect(route).toContain('publishRebillDaySnapshots(result.conversionRows');
+  const rebillService=read('src/lib/rebill-concentration-service.ts');
+  expect(rebillService).toContain('loadCompleteRebillDaySnapshot');
+  expect(rebillService).toContain('if(snapshot.complete)return snapshot.events');
   expect(route).toContain('resolveManualSourceRange(request.nextUrl.searchParams)');
   expect(route).toContain('includeConversions:false');
   const supabase=read('src/lib/supabase.ts');

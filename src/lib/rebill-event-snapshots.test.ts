@@ -1,0 +1,9 @@
+import{describe,expect,it}from'vitest';
+import{buildRebillDaySnapshots,clampRebillSnapshotRange,decodeCompleteRebillDaySnapshots}from'./rebill-event-snapshots';
+import type{ConversionCacheRow}from'./history-cache';
+const row=(overrides:Partial<ConversionCacheRow>):ConversionCacheRow=>({id:'event-1',type:'rebill',converted_at:'2026-07-30T10:00:00Z',offer_url_id:'0',source_id:'ADV1',sub_source:'ADV2',cost:0,revenue:0,payout:0,lead_id:'api-customer-sha256:abc',raw:{},status:'approved',affiliate_id:'30',affiliate_name:'API',offer_id:'20',offer_name:'XLOVES API',offer_url_name:'API',campaign_id:'0',campaign_name:'Direct',...overrides});
+describe('rebill day snapshots',()=>{
+ it('publishes complete daily snapshots during an affiliate sync including empty days',()=>{const records=buildRebillDaySnapshots([row({}),row({id:'soi',type:'soi'})],{from:'2026-07-29',to:'2026-07-30'},'30');expect(records.map(record=>record.key)).toEqual(['rebill_day_v1:30:2026-07-29','rebill_day_v1:30:2026-07-30']);expect(records[0].value.events).toEqual([]);expect(records[1].value.events).toHaveLength(1);expect(JSON.stringify(records)).not.toContain('raw')});
+ it('clamps the UTC safety envelope to the latest day that can already contain events',()=>{expect(clampRebillSnapshotRange({from:'2025-07-30',to:'2026-07-31'},'2026-07-30')).toEqual({from:'2025-07-30',to:'2026-07-30'})});
+ it('decodes only a fully covered range and preserves pseudonymous event dimensions',()=>{const records=buildRebillDaySnapshots([row({})],{from:'2026-07-29',to:'2026-07-30'},'30');expect(decodeCompleteRebillDaySnapshots(records,'30',{from:'2026-07-29',to:'2026-07-30'})).toMatchObject({complete:true,events:[{type:'rebill',customerId:'api-customer-sha256:abc',sourceId:'ADV1',subSource:'ADV2'}]});expect(decodeCompleteRebillDaySnapshots(records.slice(1),'30',{from:'2026-07-29',to:'2026-07-30'})).toEqual({complete:false,events:[]})});
+});
