@@ -47,7 +47,38 @@ describe('Everflow source block writer',()=>{
   });
   await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).resolves.toMatchObject({settingId:777,created:true});
   const create=fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')!;
-  expect(JSON.parse(String(create[1]?.body)).ruleset.countries).toEqual(dachRuleset.countries.map(({country_id,targeting_type,match_type})=>({country_id,targeting_type,match_type})));
+  expect(JSON.parse(String(create[1]?.body)).ruleset.countries).toEqual(dachRuleset.countries.map(({country_id,targeting_type,match_type})=>({country_id,targeting_type,match_type})).sort((left,right)=>JSON.stringify(left).localeCompare(JSON.stringify(right))));
+ });
+
+ it('inherits geo targeting from an active percentage payout even when its fixed amount is zero',async()=>{
+  let tableReads=0;
+  const paid={network_custom_payout_revenue_setting_id:454,network_affiliate_ids:[30],network_offer_id:25,custom_setting_status:'active',is_custom_payout_enabled:true,payout_amount:0,payout_percentage:10,is_postback_disabled:true};
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable')){tableReads++;return response({custom_payout_revenue_settings:tableReads===1?[paid]:[paid,{network_custom_payout_revenue_setting_id:779,network_affiliate_ids:[30],network_offer_id:25}],paging:{total_count:tableReads===1?1:2}});}
+   if(path.includes('/454?relationship=all'))return response({...paid,network_offer_payout_revenue_id:0,relationship:{ruleset:dachRuleset,variables:{entries:[]}}});
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:779});
+   if(path.includes('/779?relationship=all')){const payload=JSON.parse(String(fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')?.[1]?.body));return response({...payload,network_custom_payout_revenue_setting_id:779,relationship:{ruleset:payload.ruleset,variables:{entries:block.variables}}});}
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).resolves.toMatchObject({settingId:779,created:true});
+  const create=fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')!;
+  expect(JSON.parse(String(create[1]?.body)).ruleset.countries).toHaveLength(3);
+ });
+
+ it('treats differently ordered but semantically identical targeting rulesets as one segment',async()=>{
+  let tableReads=0;
+  const summaries=[452,453].map(id=>({network_custom_payout_revenue_setting_id:id,network_affiliate_ids:[30],network_offer_id:25,custom_setting_status:'active',is_custom_payout_enabled:true,payout_amount:4,is_postback_disabled:false}));
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable')){tableReads++;return response({custom_payout_revenue_settings:tableReads===1?summaries:[...summaries,{network_custom_payout_revenue_setting_id:781,network_affiliate_ids:[30],network_offer_id:25}],paging:{total_count:tableReads===1?2:3}});}
+   if(path.includes('/452?relationship=all'))return response({...summaries[0],network_offer_payout_revenue_id:0,relationship:{ruleset:dachRuleset,variables:{entries:[]}}});
+   if(path.includes('/453?relationship=all'))return response({...summaries[1],network_offer_payout_revenue_id:0,relationship:{ruleset:{...dachRuleset,countries:[...dachRuleset.countries].reverse()},variables:{entries:[]}}});
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:781});
+   if(path.includes('/781?relationship=all')){const payload=JSON.parse(String(fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')?.[1]?.body));return response({...payload,network_custom_payout_revenue_setting_id:781,relationship:{ruleset:payload.ruleset,variables:{entries:block.variables}}});}
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).resolves.toMatchObject({settingId:781,created:true});
  });
 
  it('fails closed before creating when multiple paid targeting segments need separate shadow rules',async()=>{
@@ -65,13 +96,31 @@ describe('Everflow source block writer',()=>{
  });
 
  it('fails closed when Everflow read-back does not preserve postback suppression',async()=>{
+  let deleted=false;
   const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
    const path=String(url);
    if(path.includes('payoutrevenuetable'))return response({custom_payout_revenue_settings:[]});
    if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:778});
+   if(path.includes('/778')&&init?.method==='DELETE'){deleted=true;return response({result:true});}
+   if(path.includes('/778')&&deleted)return response({error:'not found'},404);
    return response({...buildEverflowBlockPayload(block,'dashboard-id'),network_custom_payout_revenue_setting_id:778,is_postback_disabled:false,relationship:{variables:{entries:block.variables}}});
   });
   await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('Verifikation');
+  expect(deleted).toBe(true);
+ });
+
+ it('reports uncertain state when rollback deletion cannot be read-back verified',async()=>{
+  let detailReads=0;
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable'))return response({custom_payout_revenue_settings:[]});
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:780});
+   if(path.includes('/780')&&init?.method==='DELETE')return response({result:true});
+   if(path.includes('/780')){detailReads++;return response({...buildEverflowBlockPayload(block,'dashboard-id'),network_custom_payout_revenue_setting_id:780,is_postback_disabled:false,relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}});}
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('Zustand unklar');
+  expect(detailReads).toBe(2);
  });
 
  it('deletes only the managed setting and verifies it is gone',async()=>{
