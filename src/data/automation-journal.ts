@@ -51,7 +51,7 @@ const journal={
       "affiliate": "Traffic Company",
       "mode": "live",
       "schedule": "alle 120 Minuten",
-      "enabled": true,
+      "enabled": false,
       "lastRunAt": "2026-07-30T17:17:37.538476+00:00",
       "nextRunAt": "2026-07-30T19:17:37.538476+00:00",
       "lastStatus": "ok",
