@@ -2,12 +2,12 @@ import{NextResponse}from'next/server';
 import AUTOMATION_JOURNAL from'@/data/automation-journal';
 import{audit,requestEvidence,securityStore}from'@/lib/access-store';
 import{normalizeAutomationDraft}from'@/lib/automation-config';
+import{assertAutomationCampaignAffiliateMapping,runAutomationPreflight}from'@/lib/automation-preflight';
 import{buildImportedAutomationDraft}from'@/lib/automation-import';
 import{automationScopeAllowed,mayConfigureAutomation,mayRunLiveAutomation}from'@/lib/automation-policy';
 import{automationRuntimeDependencies}from'@/lib/automation-runtime';
 import{executeAutomationRun}from'@/lib/automation-runner';
 import{createAutomationConfiguration,getAutomationConfiguration,listAutomationConfigurations,transitionAutomation,updateAutomationConfigurationAuthorized,withAutomationLock}from'@/lib/automation-store';
-import{runAutomationPreflight}from'@/lib/automation-preflight';
 import{resolveCurrentUserUncached,requirePermission,type CurrentUser}from'@/lib/session';
 import{can}from'@/lib/rbac';
 import{canonicalOrigin,checkCsrf,parseBoundedJson,securityHeaders}from'@/lib/security';
@@ -25,7 +25,7 @@ export async function POST(request:Request){
  try{
   if(action==='import_legacy'){
    const campaignId=Number(input.campaignId),affiliateId=Number(input.affiliateId);if(!automationScopeAllowed(auth.user.access,{campaignId,affiliateId,offerIds:[]}))throw new Error('Keine Berechtigung');
-   const config=await buildImportedAutomationDraft({campaignId,affiliateId,apiKey:process.env.EVERFLOW_API_KEY||''});assertScoped(auth.user,config);
+   await assertAutomationCampaignAffiliateMapping(campaignId,affiliateId);const config=await buildImportedAutomationDraft({campaignId,affiliateId,apiKey:process.env.EVERFLOW_API_KEY||''});assertScoped(auth.user,config);
    const created=await withAutomationLock(store,config.id,async lease=>{await fresh(auth.user,config);const result=await createAutomationConfiguration(store,config,auth.user.actorId,lease);await audit({actorId:auth.user.actorId,action:'automation.import_legacy',targetId:result.id,after:result,...evidence});return result});return json({ok:true,configuration:created},201);
   }
   if(action==='create'){

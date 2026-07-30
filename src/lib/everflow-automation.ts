@@ -7,7 +7,7 @@ type JsonValue=null|boolean|number|string|JsonValue[]|{[key:string]:JsonValue};
 type Redirect={network_campaign_redirect_id?:number;redirect_network_offer_id:number;redirect_network_offer_url_id:number;routing_value:number;ruleset?:unknown};
 type Labels={entries?:string[]}|string[];
 export type AutomationCampaign={
- network_campaign_id:number;network_affiliate_id:number;campaign_name:string;campaign_status:string;network_tracking_domain_id:number;redirect_routing_type:string;
+ network_campaign_id:number;network_affiliate_id?:number;campaign_name:string;campaign_status:string;network_tracking_domain_id:number;redirect_routing_type:string;
  is_open_to_affiliates:boolean;is_use_secure_link:boolean;catch_all_network_offer_id?:number;data_collection_threshold?:number;data_lookback_window?:string;
  metric?:string;optimization_goal?:number;run_frequency?:string;conversion_method?:string;is_whitelist_check_enabled?:boolean;
  relationship:{redirects:{entries:Redirect[]};labels?:Labels};
@@ -40,8 +40,8 @@ function labelEntries(campaign:AutomationCampaign):string[]{
 }
 function assertCompleteCampaign(campaign:AutomationCampaign,id?:number,affiliateId?:number){
  if(id!==undefined&&campaign.network_campaign_id!==id)throw new Error('Everflow lieferte eine andere Campaign-ID');
- if(affiliateId!==undefined&&campaign.network_affiliate_id!==affiliateId)throw new Error('Everflow Campaign gehört zu einem anderen Affiliate');
- if(!safeId(campaign.network_campaign_id)||!safeId(campaign.network_affiliate_id)||typeof campaign.campaign_name!=='string'||!campaign.campaign_name.trim())throw new Error('Everflow lieferte keinen vollständigen Campaign-Snapshot');
+ if(affiliateId!==undefined&&campaign.network_affiliate_id!==undefined&&campaign.network_affiliate_id!==affiliateId)throw new Error('Everflow Campaign gehört zu einem anderen Affiliate');
+ if(!safeId(campaign.network_campaign_id)||(campaign.network_affiliate_id!==undefined&&!safeId(campaign.network_affiliate_id))||typeof campaign.campaign_name!=='string'||!campaign.campaign_name.trim())throw new Error('Everflow lieferte keinen vollständigen Campaign-Snapshot');
  if(!enumValue(campaign.campaign_status,['active','paused','deleted'])||!safeId(campaign.network_tracking_domain_id)||!enumValue(campaign.redirect_routing_type,['priority','weight','kpi']))throw invalidSnapshot();
  if(typeof campaign.is_open_to_affiliates!=='boolean'||typeof campaign.is_use_secure_link!=='boolean'||!Array.isArray(campaign.relationship?.redirects?.entries))throw new Error('Everflow lieferte keinen vollständigen Campaign-Snapshot');
  labelEntries(campaign);
