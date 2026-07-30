@@ -27,6 +27,7 @@ describe('automatic Supabase reporting refresh',()=>{
   const snapshotStore=read('src/lib/rebill-event-snapshot-store.ts');
   expect(snapshotStore).toContain("from('conversions')");
   expect(snapshotStore).toContain("eq('type',type)");
+  expect(snapshotStore).toContain("order('converted_at').order('id')");
   expect(snapshotStore).toContain("upsert(records)");
   expect(snapshotStore).not.toContain("start+=250");
   expect(route).toContain('resolveManualSourceRange(request.nextUrl.searchParams)');
