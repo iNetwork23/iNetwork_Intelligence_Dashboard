@@ -119,6 +119,7 @@ export default function SourceBlockButton(props: Props) {
   const source = props.mainValue || "nicht übermittelt";
   const sub = props.subValue || "nicht übermittelt";
   const isSubSource = props.level === "sub_source";
+  const controlScope = isSubSource ? fieldSub : fieldMain;
   const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source} ${active ? "wieder aktivieren" : "ausschalten"}`;
 
   const openProductWide = async () => {
@@ -217,7 +218,7 @@ export default function SourceBlockButton(props: Props) {
           <span>
             <small>{isSubSource ? "Unterquelle" : "Hauptquelle"}</small>
             <b id="source-block-title">
-              {active&&!productWide ? "Wieder aktivieren" : productWide ? "Alle Produkte sperren" : "Ausschalten"}
+              {active&&!productWide ? `${controlScope} wieder aktivieren` : productWide ? `${controlScope} überall sperren` : `${controlScope} ausschalten`}
             </b>
           </span>
           <button
@@ -300,8 +301,8 @@ export default function SourceBlockButton(props: Props) {
             {busy
               ? "Wird verifiziert …"
               : active&&!productWide
-                ? "Aktivieren"
-                : productWide ? "Alle gefundenen Produkte sperren" : "Jetzt ausschalten"}
+                ? `${controlScope} aktivieren`
+                : productWide ? `${controlScope} in allen gefundenen Produkten sperren` : `${controlScope} jetzt ausschalten`}
           </button>
         </footer>
       </div>
@@ -319,9 +320,9 @@ export default function SourceBlockButton(props: Props) {
         aria-pressed={Boolean(active)}
       >
         <PowerIcon />
-        <span>{active ? "Ausgeschaltet" : "Ausschalten"}</span>
+        <span>{active ? `${controlScope} ausgeschaltet` : `${controlScope} ausschalten`}</span>
       </button>
-      <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>Alle Produkte sperren</button>
+      <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
       {error && (
         <small className="sourceBlockError" role="alert">
           {error}
