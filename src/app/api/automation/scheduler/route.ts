@@ -1,0 +1,12 @@
+import{timingSafeEqual}from'node:crypto';
+import{NextResponse}from'next/server';
+import{audit,securityStore}from'@/lib/access-store';
+import{automationRuntimeDependencies}from'@/lib/automation-runtime';
+import{executeAutomationRun}from'@/lib/automation-runner';
+import{automationIsDue}from'@/lib/automation-scheduler';
+import{listAutomationConfigurations}from'@/lib/automation-store';
+import{securityHeaders}from'@/lib/security';
+export const dynamic='force-dynamic';export const maxDuration=300;
+const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{...securityHeaders,'Cache-Control':'private, no-store'}});
+function authorized(request:Request){const expected=process.env.CRON_SECRET||'',provided=request.headers.get('authorization')?.replace(/^Bearer\s+/,'')||'';if(!expected||expected.length!==provided.length)return false;return timingSafeEqual(Buffer.from(expected),Buffer.from(provided))}
+export async function GET(request:Request){if(!authorized(request))return json({error:'Nicht autorisiert'},401);const store=securityStore(),now=new Date(),configs=await listAutomationConfigurations(store),due=configs.filter(config=>automationIsDue(config,now)),results:unknown[]=[];for(const config of due){const actorId='automation-scheduler',runtime=automationRuntimeDependencies({authorize:async()=>{},beforeWrite:async value=>{await audit({actorId,action:'automation.scheduler_write_planned',targetId:config.id,before:{baseline:value.config.acceptedBaselineFingerprint,slots:value.config.slots},after:{action:value.evaluation.action,targetSlots:value.evaluation.targetSlots}})},afterWrite:async value=>{await audit({actorId,action:'automation.scheduler_write_verified',targetId:config.id,after:{fingerprint:value.afterFingerprint,action:value.evaluation.action}})},onIncident:async value=>{await audit({actorId,action:'automation.scheduler_incident',targetId:config.id,after:{run:value.run,incident:value.incident}})}});try{const result=await executeAutomationRun(store,config.id,'live',actorId,runtime,{requireDueAt:now});results.push({id:config.id,ok:true,decision:result.evaluation.action.type,writesPerformed:result.writesPerformed})}catch(error){const message=error instanceof Error?error.message:'Unbekannter Schedulerfehler';results.push({id:config.id,ok:false,error:message})}}return json({ok:results.every(item=>typeof item==='object'&&item!==null&&'ok'in item&&(item as{ok:boolean}).ok),checked:configs.length,due:due.length,results})}

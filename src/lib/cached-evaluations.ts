@@ -32,13 +32,18 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
 
 export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const prefix='source_day_generation:',{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`${prefix}${range.from}`).lte('key',`${prefix}${range.to}`).order('key');if(error)throw new Error(`Supabase source freshness: ${error.message}`);return resolveSnapshotFreshness(range.from,range.to,(data||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return{date:value.date||'',generation:value.generation||''}}))}
 
-export async function loadAffiliateConversionsFromCache(affiliateId:string,lookbackDays=90,now=new Date()):Promise<ConversionRow[]>{
+export async function loadAffiliateConversionsFromCache(affiliateId:string,lookbackDays=90,now=new Date()):Promise<Array<ConversionRow&{stableCustomerId?:string}>>{
   const from=new Date(now.getTime()-(lookbackDays-1)*86_400_000).toISOString();
-  const rows:ConversionRow[]=[];
+  const rows:Array<ConversionRow&{stableCustomerId?:string}>=[];
   for(let start=0;;start+=1000){
-    const {data,error}=await getSupabaseAdmin().from('conversions').select('raw,type').eq('affiliate_id',affiliateId).gte('converted_at',from).or('status.eq.approved,status.is.null').order('converted_at').order('id').range(start,start+999);
+    const {data,error}=await getSupabaseAdmin().from('conversions').select('raw,type,lead_id').eq('affiliate_id',affiliateId).gte('converted_at',from).or('status.eq.approved,status.is.null').order('converted_at').order('id').range(start,start+999);
     if(error)throw new Error(`Supabase affiliate conversions: ${error.message}`);
-    const databaseCount=(data||[]).length,batch=(data||[]).map(item=>{const raw=item.raw as ConversionRow;return item.type==='soi'&&raw.event==='CPL SOI'?{...raw,event:'SOI'}:raw}).filter(row=>row?.transaction_id&&row?.event);
+    const databaseCount=(data||[]).length,batch=(data||[]).map(item=>{
+      const raw=item.raw as ConversionRow,lead_id=typeof item.lead_id==='string'?item.lead_id:'';
+      const normalized=item.type==='soi'&&raw.event==='CPL SOI'?{...raw,event:'SOI'}:raw;
+      const stableApi=/^api-customer-sha256:[0-9a-f]{64}$/.test(lead_id)?lead_id:'',stableTracked=normalized.traffic_mode==='tracked'&&lead_id.length>0&&lead_id===normalized.transaction_id?`tracked-transaction:${lead_id}`:'';
+      return stableApi||stableTracked?{...normalized,stableCustomerId:stableApi||stableTracked}:normalized;
+    }).filter(row=>row?.transaction_id&&row?.event);
     rows.push(...batch);
     if(databaseCount<1000)break;
   }

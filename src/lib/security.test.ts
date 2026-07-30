@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-import {createOpaqueSession,validateOpaqueSession,revokeSession,revokeUserSessions,checkCsrf,consumeRateLimit,recordRateLimitFailure,resetRateLimit,parseBoundedJson,MemorySecurityStore,canonicalOrigin,MAX_ACTIVE_SESSIONS,withSecurityLock} from './security';
+import {acquireSecurityLease,createOpaqueSession,validateOpaqueSession,revokeSession,revokeUserSessions,checkCsrf,consumeRateLimit,recordRateLimitFailure,resetRateLimit,parseBoundedJson,MemorySecurityStore,canonicalOrigin,MAX_ACTIVE_SESSIONS,withSecurityLock} from './security';
 import {parseAccessMetadata} from './rbac';
 
 describe('session and HTTP security',()=>{
@@ -64,14 +64,22 @@ describe('session and HTTP security',()=>{
   const first=withSecurityLock(store,'last-super-admin',async()=>{entered();await wait;return 'ok'});await started;
   await expect(withSecurityLock(store,'last-super-admin',async()=> 'overlap')).rejects.toThrow(/läuft/);release();expect(await first).toBe('ok');
  });
- it('keeps an active security lock for the full mutation without lease expiry',async()=>{
+ it('renews an active leased lock and reclaims an expired abandoned lock without letting the stale owner delete its successor',async()=>{
   vi.useFakeTimers();
   try{
    const store=new MemorySecurityStore();let release!:()=>void,entered!:()=>void;const wait=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>entered=resolve);
-   const first=withSecurityLock(store,'long-security-change',async()=>{entered();await wait});await started;
-   await vi.advanceTimersByTimeAsync(120_000);
-   await expect(withSecurityLock(store,'long-security-change',async()=>undefined)).rejects.toThrow(/läuft/);
+   const first=withSecurityLock(store,'long-security-change',async()=>{entered();await wait},{leaseMs:3000});await started;
+   await vi.advanceTimersByTimeAsync(10_000);
+   await expect(withSecurityLock(store,'long-security-change',async()=>undefined,{leaseMs:3000})).rejects.toThrow(/läuft/);
    release();await first;
+
+   const abandoned=await acquireSecurityLease(store,'abandoned-change',{leaseMs:3000,now:()=>0});
+   expect(abandoned).not.toBeNull();
+   const successor=await acquireSecurityLease(store,'abandoned-change',{leaseMs:3000,now:()=>4000});
+   expect(successor).not.toBeNull();
+   expect(await abandoned!.release()).toBe(false);
+   await expect(acquireSecurityLease(store,'abandoned-change',{leaseMs:3000,now:()=>4001})).resolves.toBeNull();
+   expect(await successor!.release()).toBe(true);
   }finally{vi.useRealTimers()}
  });
 

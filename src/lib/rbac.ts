@@ -1,4 +1,4 @@
-export const ALL_PERMISSIONS=['dashboard.view','statistics.view','finance.view','partners.view','campaigns.view','campaigns.edit','smartlinks.view','smartlinks.edit','landingpages.view','landingpages.manage','exports.download','users.manage','roles.manage','settings.manage','api.manage','audit.view'] as const;
+export const ALL_PERMISSIONS=['dashboard.view','statistics.view','finance.view','partners.view','campaigns.view','campaigns.edit','smartlinks.view','smartlinks.edit','landingpages.view','landingpages.manage','automations.manage','automations.live','exports.download','users.manage','roles.manage','settings.manage','api.manage','audit.view'] as const;
 export type Permission=typeof ALL_PERMISSIONS[number];
 export type StandardRole='super_admin'|'admin'|'employee'|'partner'|'read_only';
 export type AccountStatus='active'|'blocked'|'deactivated';
@@ -44,7 +44,7 @@ export function assertScopesSupported(access:AccessMetadata,supported:readonly S
 export function assertMayRemoveSuperAdmin(input:{targetIsSuperAdmin:boolean;activeSuperAdminCount:number;willRemainActiveSuperAdmin:boolean}){if(input.targetIsSuperAdmin&&!input.willRemainActiveSuperAdmin&&input.activeSuperAdminCount<=1)throw new Error('Der letzte aktive Super-Admin darf nicht entfernt werden.');}
 const rank:Record<StandardRole,number>={read_only:0,partner:1,employee:2,admin:3,super_admin:4};
 export const mayImpersonate=(actor:StandardRole,target:StandardRole)=>rank[actor]>rank[target];
-const SENSITIVE_ADMIN_PERMISSIONS=new Set<Permission>(['users.manage','roles.manage','settings.manage','api.manage','audit.view']);
+const SENSITIVE_ADMIN_PERMISSIONS=new Set<Permission>(['users.manage','roles.manage','settings.manage','api.manage','audit.view','automations.live']);
 export function assertMayDelegatePermissions(actor:AccessMetadata,requested:AccessMetadata){
  if(actor.role==='super_admin')return;
  const actorPermissions=effectivePermissions(actor);

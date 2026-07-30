@@ -1,0 +1,2 @@
+type Schedulable={status:string;writeEnabled:boolean;schedule:{intervalMinutes:number};runs:ReadonlyArray<{completedAt:string}>};
+export function automationIsDue(config:Schedulable,now=new Date()){if(config.status!=='active'||!config.writeEnabled)return false;const last=[...config.runs].sort((a,b)=>b.completedAt.localeCompare(a.completedAt))[0];if(!last)return true;const completed=Date.parse(last.completedAt);return Number.isFinite(completed)&&now.getTime()-completed>=config.schedule.intervalMinutes*60_000}

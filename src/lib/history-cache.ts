@@ -75,7 +75,7 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   const type=(!row.is_event&&(normalized==='soi'||normalized==='cpl soi'))?'soi':row.is_event&&normalized==='sale'?'first_sale':row.is_event&&normalized==='rebill'?'rebill':null;
   if(!type)return null;
   const relationship=row.relationship||{},trafficMode=isApiOffer(relationship.offer?.name||'')?'api':'tracked',sourceValue=trafficMode==='api'?row.adv1:row.source_id,subValue=trafficMode==='api'?row.adv2:row.sub1;
-  const apiCustomerIdentity=trafficMode==='api'?(row.adv4?.trim()||row.email?.trim().toLowerCase()||''):'',customerId=apiCustomerIdentity?`api-customer-sha256:${createHash('sha256').update(apiCustomerIdentity).digest('hex')}`:row.transaction_id;
+  const apiCustomerIdentity=trafficMode==='api'?(row.adv4?.trim()||row.email?.trim().toLowerCase()||''):'',customerId=trafficMode==='api'?(apiCustomerIdentity?`api-customer-sha256:${createHash('sha256').update(apiCustomerIdentity).digest('hex')}`:''):row.transaction_id;
   const fallback=[row.transaction_id,type,row.event,row.conversion_unix_timestamp].map(encodeURIComponent).join(':');
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),

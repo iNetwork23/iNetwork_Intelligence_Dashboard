@@ -1,0 +1,9 @@
+import{NextResponse}from'next/server';
+import{loadAutomationOfferLandingpages,searchAutomationOffers}from'@/lib/automation-inventory';
+import{automationScopeAllowed,filterAutomationOffersByScope,mayConfigureAutomation}from'@/lib/automation-policy';
+import{can}from'@/lib/rbac';
+import{requirePermission}from'@/lib/session';
+import{securityHeaders}from'@/lib/security';
+export const dynamic='force-dynamic';
+const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{...securityHeaders,'Cache-Control':'private, no-store'}});
+export async function GET(request:Request){const auth=await requirePermission('automations.manage');if(!auth.ok)return json({error:auth.status===401?'Nicht angemeldet':'Keine Berechtigung'},auth.status);if(!mayConfigureAutomation(auth.user.access)||!can(auth.user.access,'finance.view'))return json({error:'Keine Berechtigung'},403);const url=new URL(request.url),q=(url.searchParams.get('q')||'').slice(0,100),affiliateId=Number(url.searchParams.get('affiliateId')),campaignId=Number(url.searchParams.get('campaignId')),offerIds=(url.searchParams.get('offerIds')||'').split(',').filter(Boolean).map(Number);try{if(offerIds.length){if(!automationScopeAllowed(auth.user.access,{affiliateId,campaignId,offerIds}))return json({error:'Keine Berechtigung'},403);return json({items:await loadAutomationOfferLandingpages(offerIds,affiliateId,process.env.EVERFLOW_API_KEY||'')})}if(!automationScopeAllowed(auth.user.access,{affiliateId,campaignId,offerIds:[]}))return json({error:'Keine Berechtigung'},403);const offers=await searchAutomationOffers(q,process.env.EVERFLOW_API_KEY||'');return json({offers:filterAutomationOffersByScope(auth.user.access,offers)})}catch(error){return json({error:error instanceof Error?error.message:'Everflow-Inventar konnte nicht geladen werden'},400)}}

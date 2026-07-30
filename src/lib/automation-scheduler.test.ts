@@ -1,0 +1,4 @@
+import {describe,expect,it} from 'vitest';
+import {automationIsDue} from './automation-scheduler';
+const base={status:'active',writeEnabled:true,schedule:{intervalMinutes:120},runs:[]} as const;
+describe('automation scheduler due policy',()=>{it('runs newly activated automations and respects the configured interval',()=>{const now=new Date('2026-07-30T12:00:00Z');expect(automationIsDue(base,now)).toBe(true);expect(automationIsDue({...base,runs:[{completedAt:'2026-07-30T11:00:00Z'}]},now)).toBe(false);expect(automationIsDue({...base,runs:[{completedAt:'2026-07-30T09:59:59Z'}]},now)).toBe(true)});it('never schedules paused or write-disabled configurations',()=>{expect(automationIsDue({...base,status:'paused'},new Date())).toBe(false);expect(automationIsDue({...base,writeEnabled:false},new Date())).toBe(false)})});

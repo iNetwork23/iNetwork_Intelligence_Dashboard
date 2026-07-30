@@ -1,0 +1,5 @@
+import{can,type AccessMetadata}from'./rbac';
+export const mayConfigureAutomation=(access:AccessMetadata)=>access.role!=='partner'&&can(access,'automations.manage')&&can(access,'campaigns.edit');
+export const mayRunLiveAutomation=(access:AccessMetadata)=>mayConfigureAutomation(access)&&can(access,'automations.live')&&can(access,'api.manage');
+export function automationScopeAllowed(access:AccessMetadata,input:{affiliateId:number;campaignId:number;offerIds:number[]}){if(access.role==='partner')return false;if(access.scopes.account.length||access.scopes.source.length||access.scopes.sub_source.length)return false;const includes=(values:string[],value:number)=>!values.length||values.includes(String(value));return includes(access.scopes.affiliate,input.affiliateId)&&includes(access.scopes.campaign,input.campaignId)&&input.offerIds.every(id=>includes(access.scopes.offer,id))}
+export function filterAutomationOffersByScope<T extends{offerId:number}>(access:AccessMetadata,offers:T[]){if(!access.scopes.offer.length)return offers;const allowed=new Set(access.scopes.offer);return offers.filter(offer=>allowed.has(String(offer.offerId)))}

@@ -3,9 +3,17 @@ import {ALL_PERMISSIONS,can,parseAccessMetadata,filterPartnerRows,foreignScopeRe
 
 describe('central RBAC',()=>{
  it('is deny-by-default and exposes the complete permission registry',()=>{
-  expect(ALL_PERMISSIONS).toHaveLength(16);
+  expect(ALL_PERMISSIONS).toHaveLength(18);
   expect(can(parseAccessMetadata({role:'employee'}),'dashboard.view')).toBe(true);
   expect(can(parseAccessMetadata({role:'employee'}),'settings.manage')).toBe(false);
+ });
+ it('separates automation configuration from live-write permission',()=>{
+  const employee=parseAccessMetadata({role:'employee',status:'active',version:1});
+  expect(can(employee,'automations.manage')).toBe(false);
+  expect(can(employee,'automations.live')).toBe(false);
+  const delegated=parseAccessMetadata({role:'employee',status:'active',version:1,grants:['automations.manage']});
+  expect(can(delegated,'automations.manage')).toBe(true);
+  expect(can(delegated,'automations.live')).toBe(false);
  });
  it('uses grants minus denials with denial precedence',()=>{
   const access=parseAccessMetadata({role:'employee',grants:['settings.manage','finance.view'],denials:['finance.view']});

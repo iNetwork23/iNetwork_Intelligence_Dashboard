@@ -28,7 +28,7 @@ describe('history cache sync windows',()=>{
 describe('Everflow conversion mapping',()=>{
   it('limits a historical conversion backfill to the requested affiliate',()=>{expect(conversionReportBody('2026-01-01','2026-01-07','30').query.filters).toEqual([{resource_type:'affiliate',filter_id_value:'30'}])});
   const base:EverflowConversion={conversion_id:'cv-1',transaction_id:'lead-1',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',status:'approved',payout:3,revenue:0,source_id:'src',sub1:'sub',relationship:{affiliate:{network_affiliate_id:6,name:'Partner'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2774,name:'LP'}}};
-  it('uses the stable conversion id and transaction id for the LTV chain',()=>{
+  it('preserves the stable conversion id and tracked transaction identity for backward-compatible LTV joins',()=>{
     expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{transaction_id:'lead-1',event:'SOI',is_event:false,relationship:{offer:{network_offer_id:57},offer_url:{network_offer_url_id:2774}}}});
     expect(conversionToCacheRow(base)?.raw).not.toHaveProperty('conversion_id');
   });
