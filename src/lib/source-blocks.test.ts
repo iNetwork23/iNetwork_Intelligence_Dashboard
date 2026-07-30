@@ -53,6 +53,7 @@ describe('source block contract',()=>{
     ];
     expect(metricMatchesSourceBlock(rows[0],block)).toBe(true);
     expect(metricMatchesSourceBlock(rows[1],block)).toBe(false);
+    expect(metricMatchesSourceBlock({...rows[0],raw:{adv1:'different-main',adv2:'P-3591625022'}},block)).toBe(false);
     expect(summarizeSourceBlockViolations(rows,block)).toEqual({sois:4,payout:0,lastTrafficDate:'2026-07-28'});
   });
 });

@@ -151,7 +151,6 @@ export default function AccessConsole() {
     [query, setQuery] = useState(""),
     [roleFilter, setRoleFilter] = useState("all"),
     [statusFilter, setStatusFilter] = useState("all"),
-    [mfaFilter, setMfaFilter] = useState("all"),
     [auditQuery, setAuditQuery] = useState(""),
     [auditAction, setAuditAction] = useState("all");
   const createUserDialog = useRef<HTMLDialogElement>(null);
@@ -268,7 +267,7 @@ export default function AccessConsole() {
     query,
     role: roleFilter,
     status: statusFilter,
-    mfa: mfaFilter,
+    mfa: "all",
   });
   const userById = new Map(users.map((user) => [user.id, user.email]));
   const filteredAudit = (data.audit || []).filter(
@@ -289,21 +288,9 @@ export default function AccessConsole() {
         .length,
     ],
     ["Partner", users.filter((u) => u.access.role === "partner").length],
-    ["MFA aktiviert", users.filter((u) => u.mfaEnabled).length],
     ["Noch nie angemeldet", users.filter((u) => !u.lastLogin).length],
   ];
   const attention = [
-    ...users
-      .filter(
-        (u) =>
-          ["admin", "super_admin"].includes(u.access.role) && !u.mfaEnabled,
-      )
-      .map((u) => ({
-        level: "danger",
-        title: "Administrator ohne MFA",
-        text: `${u.email} hat keine Zwei-Faktor-Anmeldung aktiviert.`,
-        target: "users" as View,
-      })),
     ...users
       .filter((u) => !u.lastLogin)
       .map((u) => ({
@@ -469,17 +456,7 @@ export default function AccessConsole() {
                 <option value="deactivated">Deaktiviert</option>
               </select>
             </label>
-            <label>
-              <span>Nach MFA filtern</span>
-              <select
-                value={mfaFilter}
-                onChange={(e) => setMfaFilter(e.target.value)}
-              >
-                <option value="all">Alle MFA-Zustände</option>
-                <option value="enabled">MFA aktiviert</option>
-                <option value="disabled">MFA nicht aktiviert</option>
-              </select>
-            </label>
+
           </div>
           <div className="accessUsers">
             {filteredUsers.map((user) => (
@@ -506,11 +483,7 @@ export default function AccessConsole() {
                       (role) => role.id === user.access.customRoleId,
                     )?.name || roleLabel(user.access.role)}
                   </strong>
-                  <span
-                    className={`mfaBadge ${user.mfaEnabled ? "enabled" : "disabled"}`}
-                  >
-                    {user.mfaEnabled ? "MFA aktiv" : "MFA fehlt"}
-                  </span>
+
                   <span className="summaryChevron" aria-hidden="true">
                     ›
                   </span>
@@ -675,17 +648,17 @@ export default function AccessConsole() {
                       >
                         Ansicht übernehmen
                       </button>
-                      <button
+                      {user.mfaEnabled && <button
                         className="danger"
                         onClick={() =>
                           void act(
                             { action: "reset_mfa", userId: user.id },
-                            `Zwei-Faktor-Anmeldung von ${user.email} wirklich zurücksetzen? Der Faktor wird gelöscht und alle Sitzungen werden beendet.`,
+                            `Legacy-MFA-Daten von ${user.email} wirklich löschen? Der alte Faktor wird entfernt und alle Sitzungen werden beendet.`,
                           )
                         }
                       >
-                        MFA zurücksetzen
-                      </button>
+                        Legacy-MFA-Daten löschen
+                      </button>}
                       <button
                         className="danger"
                         onClick={() =>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSupabaseAdmin, getSupabasePasswordAuth } from '@/lib/supabase';
 import { audit, listAudit, requestEvidence, securityStore } from '@/lib/access-store';
-import { currentUser } from '@/lib/session';
+import { currentUser, resolveCurrentUserUncached } from '@/lib/session';
 import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, STANDARD_ROLES, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     evidence = requestEvidence(request);
   try {
     return await withSecurityLock(securityStore(), 'admin-access-mutation', async () => {
-      const actor = await currentUser();
+      const actor = await resolveCurrentUserUncached();
       if (!actor || actor.id !== initialActor.id || actor.actorId !== initialActor.actorId)
         return json({ error: 'Berechtigung wurde zwischenzeitlich geändert. Bitte neu anmelden.' }, 403);
     if (action === 'exit_impersonation') {

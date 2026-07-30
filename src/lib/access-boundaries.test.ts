@@ -2,6 +2,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 const read=(path:string)=>readFileSync(new URL(`../app/${path}`,import.meta.url),'utf8');
 describe('wired server authorization boundaries',()=>{
+ it('uses an uncached actor resolver inside the admin mutation lock',()=>{const session=readFileSync(new URL('./session.ts',import.meta.url),'utf8'),route=read('api/admin/access/route.ts');expect(session).toContain('export async function resolveCurrentUserUncached');expect(route).toContain('resolveCurrentUserUncached()');expect(route).not.toMatch(/withSecurityLock[\s\S]{0,300}const actor = await currentUser\(\)/)});
  it('does not require MFA during dashboard login or session validation',()=>{
   const login=read('api/auth/login/route.ts'),session=readFileSync(new URL('./session.ts',import.meta.url),'utf8');
   const page=read('login/page.tsx');
@@ -21,9 +22,9 @@ describe('wired server authorization boundaries',()=>{
  it.each([
   ['automation/page.tsx','campaigns.edit'],['cohorts/page.tsx','statistics.view'],['smartlinks/page.tsx','smartlinks.view'],
  ])('%s is permission gated on the server',(file,permission)=>expect(read(file)).toContain(`can(user.access,'${permission}')`));
- it('uses an isolated Supabase password client and failure-only rate limiting',()=>{
+ it('uses an isolated Supabase password client and independent login rate-limit buckets',()=>{
   const login=read('api/auth/login/route.ts');
-  expect(login).toContain('getSupabasePasswordAuth');expect(login).toContain('recordRateLimitFailure');expect(login).toContain('resetRateLimit');expect(login).toContain('canonicalOrigin');
+  expect(login).toContain('getSupabasePasswordAuth');expect(login).toContain('consumeLoginRateLimits');expect(login).not.toContain('Promise.all(rateKeys.map(key=>consumeRateLimit');expect(login).toContain('recordRateLimitFailure');expect(login).toContain('resetRateLimit(store,identityKey)');expect(login).not.toContain('resetRateLimit(store,ipKey)');expect(login).toContain('canonicalOrigin');
  });
  it('accepts either an email address or a provisioned username in the login form',()=>{
   const login=read('login/page.tsx');
@@ -48,8 +49,8 @@ describe('wired server authorization boundaries',()=>{
  it('creates provisioned users fail-closed and activates them only after the index and audit persist',()=>{
   const admin=read('api/admin/access/route.ts');expect(admin).toContain('provisionDirectUser({');expect(admin).toContain('createBlocked:');expect(admin).toContain('activate:');expect(admin).toContain('block:');expect(admin).toContain('exists:');expect(admin).toContain('writeAudit: audit');
  });
- it('keeps the authenticated MFA management lifecycle separate from login',()=>{
-  const login=read('api/auth/login/route.ts');expect(login).not.toContain('verifyMfaChallenge');expect(read('api/auth/mfa/route.ts')).toContain('beginMfaEnrollment');
+ it('keeps MFA enrollment disabled consistently with the password-only login policy',()=>{
+  const login=read('api/auth/login/route.ts'),mfa=read('api/auth/mfa/route.ts');expect(login).not.toContain('verifyMfaChallenge');expect(mfa).not.toContain('beginMfaEnrollment');expect(mfa).toContain('policy:\'password_only\'');
  });
  it('revokes app and Supabase sessions after password setup',()=>{
   const source=read('api/auth/password-setup/route.ts');expect(source).toContain('revokeUserSessions');expect(source).toContain("signOut(input.accessToken,'global')");
@@ -60,22 +61,22 @@ describe('wired server authorization boundaries',()=>{
   expect(route).toContain('roleOptions');expect(route).toMatch(/if\s*\(mayRoles\)\s*response\.roles\s*=/);expect(route).toMatch(/if\s*\(mayRoles\)\s*response\.standardRoles\s*=/);expect(console).toContain('data.roleOptions');
   expect(console).toContain('customRoleId');expect(console).toContain("action:'delete_role'");expect(console).toContain('Benutzerdefinierte Rolle');
  });
- it('wires assigned-role protection and an audited, hierarchical MFA reset',()=>{
+ it('wires assigned-role protection and audited cleanup of legacy MFA data',()=>{
   const admin=read('api/admin/access/route.ts'),console=read('admin/access/AccessConsole.tsx');
   expect(admin).toContain('assertRoleIsUnassigned');expect(admin).toMatch(/action\s*===\s*["']reset_mfa["']/);expect(admin).toContain('assertMayManageUser');expect(admin).toContain('resetMfa');expect(admin).toContain('revokeUserSessions');expect(admin).toMatch(/action:\s*["']user\.mfa_reset["']/);
-  expect(console).toContain("action:'reset_mfa'");expect(console).toMatch(/MFA[\s\S]*wirklich zurücksetzen/i);
+  expect(console).toContain("action:'reset_mfa'");expect(console).toContain('Legacy-MFA-Daten löschen');
  });
  it('gives access forms labels and exposes capability-based security/admin navigation',()=>{
   const console=read('admin/access/AccessConsole.tsx'),shell=read('components/DashboardShell.tsx');
   for(const name of ['create-username','create-email','create-password','create-password-confirm','create-role','custom-role-name','custom-role-base'])expect(console).toContain(name);
   expect(shell).toContain("can(user.access,'users.manage')");expect(shell).toContain("can(user.access,'roles.manage')");expect(shell).toContain("can(user.access,'audit.view')");
  });
- it('provides a global impersonation exit and discoverable MFA security settings',()=>{
-  const layout=read('layout.tsx'),sidebar=read('components/AdminSidebar.tsx'),exit=read('api/auth/impersonation/exit/route.ts');expect(layout).toContain('DashboardShell');expect(sidebar).toContain('/api/auth/impersonation/exit');expect(sidebar).toContain('Sicherheit & MFA');expect(exit).toContain("new URL('/',request.url)");expect(exit).toContain("current.actorId==='legacy-admin'");
-  expect(existsSync(new URL('../app/settings/security/page.tsx',import.meta.url))).toBe(true);expect(read('settings/security/SecuritySettings.tsx')).toContain('/api/auth/mfa');
+ it('provides a global impersonation exit and a non-enrollable security policy page',()=>{
+  const layout=read('layout.tsx'),sidebar=read('components/AdminSidebar.tsx'),exit=read('api/auth/impersonation/exit/route.ts');expect(layout).toContain('DashboardShell');expect(sidebar).toContain('/api/auth/impersonation/exit');expect(sidebar).toContain('Sicherheit');expect(exit).toContain("new URL('/',request.url)");expect(exit).toContain("current.actorId==='legacy-admin'");
+  expect(existsSync(new URL('../app/settings/security/page.tsx',import.meta.url))).toBe(true);const settings=read('settings/security/SecuritySettings.tsx'),mfaRoute=read('api/auth/mfa/route.ts');expect(settings).not.toContain('/api/auth/mfa');expect(settings).not.toContain('MFA aktivieren');expect(mfaRoute).not.toContain('beginMfaEnrollment');expect(mfaRoute).toContain('},410)');
  });
  it('serializes every admin mutation and refreshes actor authorization inside the lock',()=>{
-  const admin=read('api/admin/access/route.ts'),lock=admin.indexOf("withSecurityLock(securityStore(), 'admin-access-mutation'"),freshActor=admin.indexOf('const actor = await currentUser()',lock),actions=admin.indexOf("if (action === 'exit_impersonation')",freshActor);expect(lock).toBeGreaterThan(-1);expect(freshActor).toBeGreaterThan(lock);expect(actions).toBeGreaterThan(freshActor);expect(lock).toBeLessThan(admin.lastIndexOf('activeSupers'));expect(lock).toBeLessThan(admin.lastIndexOf('freshResult'));expect(admin.lastIndexOf('freshResult')).toBeLessThan(admin.lastIndexOf('expectedVersion'));
+  const admin=read('api/admin/access/route.ts'),lock=admin.indexOf("withSecurityLock(securityStore(), 'admin-access-mutation'"),freshActor=admin.indexOf('const actor = await resolveCurrentUserUncached()',lock),actions=admin.indexOf("if (action === 'exit_impersonation')",freshActor);expect(lock).toBeGreaterThan(-1);expect(freshActor).toBeGreaterThan(lock);expect(actions).toBeGreaterThan(freshActor);expect(lock).toBeLessThan(admin.lastIndexOf('activeSupers'));expect(lock).toBeLessThan(admin.lastIndexOf('freshResult'));expect(admin.lastIndexOf('freshResult')).toBeLessThan(admin.lastIndexOf('expectedVersion'));
  });
  it('serializes Campaign pause/resume, rechecks scope, audits, and rolls back audit failures before unlock',()=>{const route=read('api/campaign-status/route.ts'),lock=route.indexOf('withSecurityLock'),scope=route.lastIndexOf('assertVisibleCampaign'),mutation=route.indexOf('setEverflowCampaignStatus',scope),audit=route.indexOf('await audit',mutation),rollback=route.indexOf('setEverflowCampaignStatus',audit);expect(route).toContain("requirePermission('api.manage')");expect(route).toContain("can(access,'campaigns.edit')");expect(route).toContain('checkCsrf');expect(route).toContain('CAMPAIGN_STATUS_UNCLEAR_MANUAL_INTERVENTION');expect(lock).toBeGreaterThan(-1);expect(scope).toBeGreaterThan(lock);expect(mutation).toBeGreaterThan(scope);expect(audit).toBeGreaterThan(mutation);expect(rollback).toBeGreaterThan(audit)});
  it('rechecks Smartlink source tuples server-side instead of trusting display labels',()=>{const route=read('api/source-blocks/route.ts');expect(route).toContain('originCampaignId');expect(route).toContain('getAffiliateSmartlinks');expect(route).toContain('row.mainValue??null');expect(route).toContain('row.subValue??null')});

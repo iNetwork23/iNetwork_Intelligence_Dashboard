@@ -24,7 +24,8 @@ describe("professional access console contract", () => {
     expect(s).toContain("Benutzer durchsuchen");
     expect(s).toContain("Nach Rolle filtern");
     expect(s).toContain("Nach Status filtern");
-    expect(s).toContain("Nach MFA filtern");
+    expect(s).not.toContain("Nach MFA filtern");
+    expect(s).not.toContain("Administrator ohne MFA");
     expect(s).toContain("Benutzer anlegen");
     expect(s).toContain('name="username"');
     expect(s).toContain('name="email"');
@@ -33,7 +34,7 @@ describe("professional access console contract", () => {
     expect(s).toContain('autoComplete="new-password"');
     expect(s).toContain('action: "create_user"');
   });
-  it("loads names and MFA state from the protected admin API", () => {
+  it("loads names and legacy MFA cleanup state from the protected admin API", () => {
     const route = readFileSync(
       new URL("../app/api/admin/access/route.ts", import.meta.url),
       "utf8",
