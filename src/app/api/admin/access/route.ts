@@ -7,7 +7,7 @@ import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, ass
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
 import { assertRoleIsUnassigned, buildRoleOptions, type CustomRoleDefinition } from '@/lib/admin-access-policy';
-import { parseProvisionedUser, usernameIndexKey, type UsernameIndexRecord } from '@/lib/user-provisioning';
+import { DuplicateProvisioningIdentityError, parseProvisionedUser, provisionDirectUser, ProvisioningUncertainError } from '@/lib/user-provisioning';
 export const dynamic = 'force-dynamic';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: securityHeaders });
 type CustomRole = CustomRoleDefinition;
@@ -195,58 +195,51 @@ export async function POST(request: Request) {
         target: parseAccessMetadata({ role: 'read_only' }),
         requested,
       });
-      const store = securityStore(),
-        indexKey = usernameIndexKey(account.username),
-        owner = crypto.randomUUID(),
-        reserved = await store.setIfAbsent(indexKey, {
-          owner,
-          state: 'creating',
-          username: account.username,
-          email: account.email,
-        });
-      if (!reserved) return json({ error: 'Benutzername oder E-Mail ist bereits vergeben.' }, 409);
-      const supabase = getSupabaseAdmin();
-      let createdUserId = '';
       try {
-        const created = await supabase.auth.admin.createUser({
-          email: account.email,
-          password: account.password,
-          email_confirm: true,
-          user_metadata: {
-            username: account.username,
-          },
-          app_metadata: metadata,
-        });
-        if (created.error || !created.data.user) {
-          if (/already|registered|exists/i.test(created.error?.message || '')) {
-            await store.deleteIfOwner(indexKey, owner);
-            return json({ error: 'Benutzername oder E-Mail ist bereits vergeben.' }, 409);
-          }
-          throw new Error('create user');
-        }
-        createdUserId = created.data.user.id;
-        const index: UsernameIndexRecord = {
-          userId: createdUserId,
-          email: account.email,
-          username: account.username,
-        };
-        await store.set(indexKey, index);
-        await audit({
+        const supabase = getSupabaseAdmin(),
+          result = await provisionDirectUser({
+          account,
+          metadata,
           actorId: actor.actorId,
-          action: 'user.create',
-          targetId: createdUserId,
-          after: { identity: { username: account.username, email: account.email }, access: metadata },
-          ...evidence,
+          evidence,
+          store: securityStore(),
+          auth: {
+            createBlocked: async (attributes) => {
+              const created = await supabase.auth.admin.createUser(attributes);
+              if (created.error || !created.data.user) {
+                if (/already|registered|exists/i.test(created.error?.message || ''))
+                  throw new DuplicateProvisioningIdentityError('Benutzername oder E-Mail ist bereits vergeben.');
+                throw new Error('Benutzerkonto konnte nicht angelegt werden.');
+              }
+              return { userId: created.data.user.id };
+            },
+            activate: async (userId, attributes) => {
+              const updated = await supabase.auth.admin.updateUserById(userId, attributes);
+              if (updated.error) throw new Error('Benutzerkonto konnte nicht aktiviert werden.');
+            },
+            block: async (userId, attributes) => {
+              const updated = await supabase.auth.admin.updateUserById(userId, attributes);
+              if (updated.error) throw updated.error;
+            },
+            remove: async (userId) => {
+              const removed = await supabase.auth.admin.deleteUser(userId);
+              if (removed.error) throw removed.error;
+            },
+            exists: async (userId) => {
+              const current = await supabase.auth.admin.getUserById(userId);
+              if (current.error && /not found/i.test(current.error.message)) return false;
+              if (current.error) throw current.error;
+              return Boolean(current.data.user);
+            },
+          },
+          writeAudit: audit,
         });
-        return json({ ok: true, userId: createdUserId }, 201);
+        return json({ ok: true, userId: result.userId }, 201);
       } catch (error) {
-        if (createdUserId) {
-          const removed = await supabase.auth.admin.deleteUser(createdUserId);
-          if (removed.error) console.error('Provisioning rollback failed', removed.error.message);
-          await store.delete(indexKey);
-        } else {
-          await store.deleteIfOwner(indexKey, owner);
-        }
+        if (error instanceof DuplicateProvisioningIdentityError)
+          return json({ error: error.message }, 409);
+        if (error instanceof ProvisioningUncertainError)
+          return json({ error: error.message }, 503);
         throw error;
       }
     }

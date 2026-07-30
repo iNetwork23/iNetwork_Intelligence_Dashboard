@@ -31,8 +31,8 @@ describe('wired server authorization boundaries',()=>{
   expect(login).toContain('type="text"');
   expect(login).toContain('autoComplete="username"');
   const route=read('api/auth/login/route.ts');
-  expect(route).toContain('resolveLoginEmail');
-  expect(route).toContain('resolvedEmail');
+  expect(route).toContain('resolveLoginIdentity');
+  expect(route).toContain('usernameIdentityMatches');
  });
  it('has a scoped, finance-safe, audited export API',()=>{
   expect(existsSync(new URL('../app/api/exports/route.ts',import.meta.url))).toBe(true);
@@ -44,6 +44,9 @@ describe('wired server authorization boundaries',()=>{
  });
  it('wires hierarchy guards, custom-role assignment, and isolated resets into user management',()=>{
   const admin=read('api/admin/access/route.ts');expect(admin).toContain('assertMayManageUser');expect(admin).toContain('custom_role');expect(admin).toContain('customRoleId');expect(admin).toContain('getSupabasePasswordAuth');
+ });
+ it('creates provisioned users fail-closed and activates them only after the index and audit persist',()=>{
+  const admin=read('api/admin/access/route.ts');expect(admin).toContain('provisionDirectUser({');expect(admin).toContain('createBlocked:');expect(admin).toContain('activate:');expect(admin).toContain('block:');expect(admin).toContain('exists:');expect(admin).toContain('writeAudit: audit');
  });
  it('keeps the authenticated MFA management lifecycle separate from login',()=>{
   const login=read('api/auth/login/route.ts');expect(login).not.toContain('verifyMfaChallenge');expect(read('api/auth/mfa/route.ts')).toContain('beginMfaEnrollment');
