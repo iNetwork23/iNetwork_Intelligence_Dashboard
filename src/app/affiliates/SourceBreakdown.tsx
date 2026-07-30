@@ -18,6 +18,9 @@ import {
 import SourceBlockButton from "./SourceBlockButton";
 import type { ResolvedSourcePeriod } from "../../lib/source-period";
 import type { SnapshotFreshness } from "../../lib/snapshot-generation";
+import type { RebillConcentration } from "../../lib/rebill-concentration";
+import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
+export const sourceRebillKey=(sourceId:string,subSource:string|null)=>`${sourceId}\u001f${!subSource||subSource===NO_SUB_SOURCE?'':subSource}`;
 const num = (n: number) => new Intl.NumberFormat("de-DE").format(n),
   pct = (n: number) => `${n.toFixed(1).replace(".", ",")} %`,
   eur = (n: number) =>
@@ -67,6 +70,7 @@ export default function SourceBreakdown({
   canManage = false,
   affiliateName = "Affiliate",
   offerName = "Offer",
+  rebillAnalyses = {},
 }: {
   rows: SourceBreakdownRow[];
   apiMode?: boolean;
@@ -79,6 +83,7 @@ export default function SourceBreakdown({
   canManage?: boolean;
   affiliateName?: string;
   offerName?: string;
+  rebillAnalyses?: Record<string,RebillConcentration>;
 }) {
   const reportWindow: BreakdownWindow = "days30",
     [sort, setSort] = useState<BreakdownSort>(initialSort),
@@ -323,6 +328,7 @@ export default function SourceBreakdown({
                           {eur(leaf.metric.profit)} Profit
                         </b>
                       </span>
+                      {rebillAnalyses[sourceRebillKey(leaf.sourceId,leaf.subSource)]&&<div className="trafficLeafRebill"><RebillConcentrationPanel analysis={rebillAnalyses[sourceRebillKey(leaf.sourceId,leaf.subSource)]} scope={`${apiMode?'ADV2':'Sub-Source'} ${leaf.subSource||leaf.sourceId} · ${rangeLabel}`}/></div>}
                     </article>
                   ))}
                 </div>

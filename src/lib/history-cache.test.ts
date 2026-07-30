@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {advanceSyncState,canonicalMetricRows,conversionToCacheRow,initialSyncState,loadDailyReportSlices,metricRows,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
+import {advanceSyncState,canonicalMetricRows,conversionReportBody,conversionToCacheRow,initialSyncState,loadDailyReportSlices,metricRows,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
 
 describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
@@ -26,6 +26,7 @@ describe('history cache sync windows',()=>{
 });
 
 describe('Everflow conversion mapping',()=>{
+  it('limits a historical conversion backfill to the requested affiliate',()=>{expect(conversionReportBody('2026-01-01','2026-01-07','30').query.filters).toEqual([{resource_type:'affiliate',filter_id_value:'30'}])});
   const base:EverflowConversion={conversion_id:'cv-1',transaction_id:'lead-1',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',status:'approved',payout:3,revenue:0,source_id:'src',sub1:'sub',relationship:{affiliate:{network_affiliate_id:6,name:'Partner'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2774,name:'LP'}}};
   it('uses the stable conversion id and transaction id for the LTV chain',()=>{
     expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{transaction_id:'lead-1',event:'SOI',is_event:false,relationship:{offer:{network_offer_id:57},offer_url:{network_offer_url_id:2774}}}});
@@ -35,6 +36,10 @@ describe('Everflow conversion mapping',()=>{
     expect(conversionToCacheRow({...base,conversion_id:'sale',is_event:true,event:'Sale'})?.type).toBe('first_sale');
     expect(conversionToCacheRow({...base,conversion_id:'rebill',is_event:true,event:'Rebill'})?.type).toBe('rebill');
     expect(conversionToCacheRow({...base,conversion_id:'coin',is_event:true,event:'Coin Spend'})).toBeNull();
+  });
+  it('maps API ADV1 and ADV2 into the canonical conversion source fields',()=>{
+    const api={...base,source_id:'',sub1:'',adv1:'publisher-a',adv2:'placement-b',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES API'}}};
+    expect(conversionToCacheRow(api)).toMatchObject({source_id:'publisher-a',sub_source:'placement-b',raw:{traffic_mode:'api',adv1:'publisher-a',adv2:'placement-b'}});
   });
 });
 

@@ -6,7 +6,7 @@ import{isApiOffer}from'./affiliate-source-dimensions';
 
 export type EverflowConversion={
   conversion_id?:string;transaction_id:string;conversion_unix_timestamp:number;is_event:boolean;event:string;status?:string;
-  payout?:number;revenue?:number;cost?:number;source_id?:string;sub1?:string;is_scrub?:boolean;
+  payout?:number;revenue?:number;cost?:number;source_id?:string;sub1?:string;adv1?:string;adv2?:string;is_scrub?:boolean;
   relationship?:{
     affiliate?:{network_affiliate_id:number;name?:string};offer?:{network_offer_id:number;name?:string};
     offer_url?:{network_offer_url_id:number;name?:string};campaign?:{network_campaign_id:number;name?:string};
@@ -67,17 +67,18 @@ export function advanceSyncState(state:SyncState,window:SyncWindow,now=new Date(
 
 const text=(value:unknown)=>value===undefined||value===null||value===''?null:String(value);
 const amount=(value:unknown)=>Number.isFinite(Number(value))?Number(value):0;
+export function conversionReportBody(from:string,to:string,affiliateId?:string){if(affiliateId!==undefined&&!/^\d+$/.test(affiliateId))throw new Error('Ungültige Affiliate-ID');return{from,to,timezone_id:80,currency_id:'EUR',show_conversions:true,show_events:true,query:{filters:affiliateId?[{resource_type:'affiliate',filter_id_value:affiliateId}]:[],search_terms:[]}}}
 
 export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|null{
   const normalized=row.event.trim().toLowerCase();
   const type=(!row.is_event&&(normalized==='soi'||normalized==='cpl soi'))?'soi':row.is_event&&normalized==='sale'?'first_sale':row.is_event&&normalized==='rebill'?'rebill':null;
   if(!type)return null;
-  const relationship=row.relationship||{};
+  const relationship=row.relationship||{},trafficMode=isApiOffer(relationship.offer?.name||'')?'api':'tracked',sourceValue=trafficMode==='api'?row.adv1:row.source_id,subValue=trafficMode==='api'?row.adv2:row.sub1;
   const fallback=[row.transaction_id,type,row.event,row.conversion_unix_timestamp].map(encodeURIComponent).join(':');
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),
-    offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:text(row.source_id),sub_source:text(row.sub1),cost:amount(row.cost),
-    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
+    offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:text(sourceValue),sub_source:text(subValue),cost:amount(row.cost),
+    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,traffic_mode:trafficMode,adv1:text(row.adv1),adv2:text(row.adv2),relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
     affiliate_id:text(relationship.affiliate?.network_affiliate_id),affiliate_name:text(relationship.affiliate?.name),offer_id:text(relationship.offer?.network_offer_id),
     offer_name:text(relationship.offer?.name),offer_url_name:text(relationship.offer_url?.name),campaign_id:text(relationship.campaign?.network_campaign_id),
     campaign_name:text(relationship.campaign?.name),

@@ -17,6 +17,8 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(route).toContain('runHistorySync');
   expect(route).toContain('createSupabaseSyncStore');
   expect(route).toContain("refresh==='source-range'");
+  expect(route).toContain("refresh==='conversion-range'");
+  expect(route).toContain("loadConversions(range.from,range.to,affiliateId)");
   expect(route).toContain('resolveManualSourceRange(request.nextUrl.searchParams)');
   expect(route).toContain('includeConversions:false');
   const supabase=read('src/lib/supabase.ts');

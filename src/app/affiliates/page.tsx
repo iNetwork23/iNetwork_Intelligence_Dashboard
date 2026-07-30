@@ -11,7 +11,7 @@ import {
   groupAffiliateOffers,
   type AffiliateVariant,
 } from "@/lib/affiliate-optimizer";
-import type { SourceBreakdownRow } from "@/lib/source-breakdown";
+import { NO_SUB_SOURCE, type SourceBreakdownRow } from "@/lib/source-breakdown";
 import type { LeadLatencyAnalysis, UrlLeadMaturity } from "@/lib/lead-latency";
 import type { SnapshotFreshness } from "@/lib/snapshot-generation";
 import {
@@ -29,7 +29,7 @@ import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
 import DataReloadButton from'./DataReloadButton';
 import InstantLink from "./InstantLink";
 import LazyDetails from "./LazyDetails";
-import SourceBreakdown from "./SourceBreakdown";
+import SourceBreakdown, { sourceRebillKey } from "./SourceBreakdown";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
@@ -200,6 +200,10 @@ export default async function AffiliateOptimizerPage({
     );
   const period = resolveAffiliatePeriod(query),
     sourcePeriod = resolveSourcePeriod(query),
+    directRebillRange = {
+      from: period.from < sourcePeriod.from ? period.from : sourcePeriod.from,
+      to: period.to > sourcePeriod.to ? period.to : sourcePeriod.to,
+    },
     openSourceDetails = new Set(
       (query.sourceOpen || "")
         .split(",")
@@ -241,7 +245,7 @@ export default async function AffiliateOptimizerPage({
             }),
             getAffiliateRebillEvents(
               query.affiliate,
-              { from: period.from, to: period.to },
+              directRebillRange,
               user.access,
             ),
           ])
@@ -357,7 +361,7 @@ export default async function AffiliateOptimizerPage({
         }),
         getAffiliateRebillEvents(
           selected.affiliateId,
-          { from: period.from, to: period.to },
+          directRebillRange,
           user.access,
         ),
       ]));
@@ -436,16 +440,30 @@ export default async function AffiliateOptimizerPage({
       from: period.from,
       to: period.to,
     }),
+    sourceRebillIndex = buildRebillCustomerIndex(rebillEvents, {
+      from: sourcePeriod.from,
+      to: sourcePeriod.to,
+    }),
     rebillAnalysis = (
       firstSales: number,
       totalRebills: number,
       scope: { campaignId?: string; offerId?: string; offerUrlId?: string },
+      index = rebillIndex,
     ) => analyzeRebillConcentration({
       firstSales,
       totalRebills,
-      customerIds: rebillCustomerIdsFromIndex(rebillIndex, scope),
-      firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(rebillIndex, scope),
+      customerIds: rebillCustomerIdsFromIndex(index, scope),
+      firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(index, scope),
     }),
+    sourceRebillAnalyses = (rows: SourceBreakdownRow[]) => Object.fromEntries(rows.filter((row)=>row.days30.rebills>0).map((row) => [
+      sourceRebillKey(row.sourceId,row.subSource===NO_SUB_SOURCE?null:row.subSource),
+      analyzeRebillConcentration({
+        firstSales: row.days30.firstSales,
+        totalRebills: row.days30.rebills,
+        customerIds: rebillCustomerIdsFromIndex(sourceRebillIndex,{campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
+        firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(sourceRebillIndex,{campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
+      }),
+    ])),
     smartlinkRebillAnalyses: Record<number, RebillConcentration> =
       Object.fromEntries(
         smartlinkInsights.map((data) => {
@@ -967,6 +985,7 @@ export default async function AffiliateOptimizerPage({
                           sourceRowsByUrl.get(`${v.offerId}|${v.offerUrlId}`) ||
                           []
                         }
+                        rebillAnalyses={sourceRebillAnalyses(sourceRowsByUrl.get(`${v.offerId}|${v.offerUrlId}`)||[])}
                         apiMode={v.trafficMode === "api"}
                         rangeLabel={sourcePeriod.label}
                         sourcePeriod={sourcePeriod}
