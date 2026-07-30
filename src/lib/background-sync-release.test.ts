@@ -23,7 +23,12 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(route).toContain('publishRebillDaySnapshots(result.conversionRows');
   const rebillService=read('src/lib/rebill-concentration-service.ts');
   expect(rebillService).toContain('loadCompleteRebillDaySnapshot');
-  expect(rebillService).toContain('if(snapshot.complete)return snapshot.events');
+  expect(rebillService).toContain('rebillQuerySegments');
+  const snapshotStore=read('src/lib/rebill-event-snapshot-store.ts');
+  expect(snapshotStore).toContain("from('conversions')");
+  expect(snapshotStore).toContain("eq('type',type)");
+  expect(snapshotStore).toContain("upsert(records)");
+  expect(snapshotStore).not.toContain("start+=250");
   expect(route).toContain('resolveManualSourceRange(request.nextUrl.searchParams)');
   expect(route).toContain('includeConversions:false');
   const supabase=read('src/lib/supabase.ts');
