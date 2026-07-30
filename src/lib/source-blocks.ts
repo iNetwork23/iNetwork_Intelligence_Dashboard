@@ -28,6 +28,7 @@ const identityParts=(block:Pick<NormalizedSourceBlock,'affiliateId'|'offerId'|'t
 export const sourceBlockIdentityKey=(block:Pick<NormalizedSourceBlock,'affiliateId'|'offerId'|'trafficMode'|'level'|'mainField'|'mainValue'|'subField'|'subValue'>)=>identityParts(block).map(value=>encodeURIComponent(String(value))).join(':');
 export const sourceBlockStoreKey=(block:Pick<NormalizedSourceBlock,'affiliateId'|'offerId'|'trafficMode'|'level'|'mainField'|'mainValue'|'subField'|'subValue'>)=>`source-block:v1:${sourceBlockIdentityKey(block)}`;
 export const sourceBlockLabel=(block:Pick<NormalizedSourceBlock,'mainValue'|'subValue'|'level'>)=>block.level==='sub_source'?`${block.mainValue||'nicht übermittelt'} → ${block.subValue}`:(block.mainValue||'nicht übermittelt');
+export const sourceBlockRequiredConfirmation=(block:Pick<NormalizedSourceBlock,'mainValue'|'subValue'|'level'>)=>(block.level==='sub_source'?block.subValue:block.mainValue)||'NICHT ÜBERMITTELT';
 
 export type SourceBlockMetricRow={metric_date:string;affiliate_id:string;offer_id:string;source_id:string;sub_source:string;sois:number;payout:number;raw?:Record<string,unknown>};
 const rowValue=(row:SourceBlockMetricRow,field:string)=>{if(field==='source_id')return normalizedValue(row.source_id);if(field==='sub1')return normalizedValue(row.sub_source);return normalizedValue(row.raw?.[field])};

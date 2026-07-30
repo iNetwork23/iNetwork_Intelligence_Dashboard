@@ -1,6 +1,6 @@
 import {describe,expect,it,vi} from 'vitest';
 import {MemorySecurityStore} from './security';
-import {activateSourceBlock,deactivateSourceBlock,listSourceBlocks} from './source-block-service';
+import {activateSourceBlock,activateSourceBlocksAtomically,deactivateSourceBlock,listSourceBlocks} from './source-block-service';
 const input={affiliateId:'30',affiliateName:'DatingLeads by Lewis',offerId:'25',offerName:'WhatsMeet - API',trafficMode:'api' as const,level:'sub_source' as const,mainValue:null,subValue:'P-3591625022'};
 
 describe('source block persistence',()=>{
@@ -23,5 +23,13 @@ describe('source block persistence',()=>{
   const store=new FailingStore(),rollback=vi.fn(async()=>({deleted:true}));
   await expect(activateSourceBlock(store,input,{actorId:'admin',activate:async()=>({settingId:777,created:true}),deactivate:rollback})).rejects.toThrow('store down');
   expect(rollback).toHaveBeenCalledWith(777);
+ });
+ it('rolls back only rules newly created by a failed product-wide activation',async()=>{
+  const store=new MemorySecurityStore(),removed:number[]=[];
+  await activateSourceBlock(store,input,{actorId:'admin',activate:async()=>({settingId:700,created:true}),deactivate:async id=>{removed.push(id);return{deleted:true}}});
+  const offers=[{...input,offerId:'25'},{...input,offerId:'26',offerName:'Offer 26'},{...input,offerId:'27',offerName:'Offer 27'}];
+  await expect(activateSourceBlocksAtomically(store,offers,{actorId:'admin',activate:async block=>{if(block.offerId===27)throw new Error('third failed');return{settingId:700+block.offerId,created:true}},deactivate:async id=>{removed.push(id);return{deleted:true}}})).rejects.toThrow('third failed');
+  expect(removed).toEqual([726]);
+  expect((await listSourceBlocks(store)).find(x=>x.offerId===25)?.status).toBe('active');
  });
 });
