@@ -82,6 +82,50 @@ describe('Everflow source block writer',()=>{
   expect(JSON.parse(String(create[1]?.body)).ruleset.countries).toEqual([]);
  });
 
+ it('ignores an event-specific Sale/Rebill rule even when it targets the exact Source/Sub1 pair',async()=>{
+  let tableReads=0;
+  const eventSpecific={...buildEverflowBlockPayload(block,'sale-rule'),network_custom_payout_revenue_setting_id:793,network_offer_payout_revenue_id:267,payout_amount:4,is_postback_disabled:false,relationship:{ruleset:dachRuleset,variables:{entries:block.variables}}};
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable')){tableReads++;return response({custom_payout_revenue_settings:tableReads===1?[eventSpecific]:[eventSpecific,{network_custom_payout_revenue_setting_id:794,network_affiliate_ids:[30],network_offer_id:25}],paging:{total_count:tableReads===1?1:2}});}
+   if(path.includes('/793?relationship=all'))return response(eventSpecific);
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:794});
+   if(path.includes('/794?relationship=all')){const payload=JSON.parse(String(fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')?.[1]?.body));return response({...payload,network_custom_payout_revenue_setting_id:794,relationship:{ruleset:payload.ruleset,variables:{entries:block.variables}}});}
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).resolves.toMatchObject({settingId:794,created:true});
+ });
+
+ it('fails closed when duplicate base-SOI Source/Sub1 rules include a paid conflict',async()=>{
+  const valid={...buildEverflowBlockPayload(block,'valid'),network_custom_payout_revenue_setting_id:795,relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}};
+  const paid={...valid,network_custom_payout_revenue_setting_id:796,payout_amount:4,is_postback_disabled:false};
+  const rows=[valid,paid];
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable'))return response({custom_payout_revenue_settings:rows,paging:{total_count:2}});
+   if(path.includes('/795?relationship=all'))return response(valid);
+   if(path.includes('/796?relationship=all'))return response(paid);
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')throw new Error('must not create');
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('widersprüchliche Everflow-Regel');
+  expect(fetcher.mock.calls.some(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')).toBe(false);
+ });
+
+ it('fails closed when duplicate zero-payout Source/Sub1 rules have different targeting',async()=>{
+  const empty={...buildEverflowBlockPayload(block,'empty'),network_custom_payout_revenue_setting_id:797,relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}};
+  const targeted={...empty,network_custom_payout_revenue_setting_id:798,relationship:{ruleset:dachRuleset,variables:{entries:block.variables}}};
+  const rows=[empty,targeted];
+  const fetcher=vi.fn(async(url:string|URL|Request)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable'))return response({custom_payout_revenue_settings:rows,paging:{total_count:2}});
+   if(path.includes('/797?relationship=all'))return response(empty);
+   if(path.includes('/798?relationship=all'))return response(targeted);
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('widersprüchliche Everflow-Regel');
+ });
+
  it('treats differently ordered but semantically identical targeting rulesets as one segment',async()=>{
   let tableReads=0;
   const summaries=[452,453].map(id=>({network_custom_payout_revenue_setting_id:id,network_affiliate_ids:[30],network_offer_id:25,custom_setting_status:'active',is_custom_payout_enabled:true,payout_amount:4,is_postback_disabled:false}));
