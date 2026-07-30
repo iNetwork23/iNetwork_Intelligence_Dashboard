@@ -1,4 +1,34 @@
 'use client';
-import{useDeferredValue,useMemo,useState}from'react';import{buildActionCandidates,type BreakdownWindow,type ConversionMetric,type SourceBreakdownRow}from'@/lib/source-breakdown';
-const num=(n:number)=>new Intl.NumberFormat('de-DE').format(n),pct=(n:number)=>`${n.toFixed(1).replace('.',',')} %`,eur=(n:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n),metric=(m:ConversionMetric)=>m.clicks?`${pct(m.cvr)} (${num(m.sois)} / ${num(m.clicks)})`:`n/a (${num(m.sois)} / 0)`;
-export default function TrafficActionLists({rows,urls}:{rows:SourceBreakdownRow[];urls:Record<string,string>}){const[window,setWindow]=useState<BreakdownWindow>('days30'),deferredWindow=useDeferredValue(window),{stop,scale,watch}=useMemo(()=>{const all=buildActionCandidates(rows,deferredWindow);return{stop:all.filter(x=>x.assessment.action==='ABSCHALTEN'),scale:all.filter(x=>x.assessment.action==='SKALIEREN'),watch:all.filter(x=>x.assessment.action==='BEOBACHTEN')}},[rows,deferredWindow]),refreshing=window!==deferredWindow;const list=(items:ReturnType<typeof buildActionCandidates>,action:'stop'|'scale')=><div className={`actionCandidateList ${action}`}>{items.length?items.map(x=><article key={`${x.pathKey}|${x.sourceId}|${x.subSource||'source'}`}><header><b>{urls[x.offerUrlId]||`URL #${x.offerUrlId}`}</b><small>URL #{x.offerUrlId}</small></header><code>Source: {x.sourceId} · {x.subSource?`Sub-Source: ${x.subSource}`:'keine Sub-Source (Source-Fallback)'}</code><div><span>{metric(x.metric)}</span><b className={x.metric.profit>=0?'up':'down'}>{eur(x.metric.profit)}</b></div><p>{x.assessment.reason}</p></article>):<p className="actionEmpty">Keine {action==='stop'?'Abschalt-':'Skalierungs-'}Kandidaten im gewählten Fenster.</p>}</div>;return <section className={`trafficActionReport${refreshing?' isRefreshing':''}`} aria-busy={refreshing}><header><div><span>DIREKT UMSETZBARE TRAFFIC-ENTSCHEIDUNGEN</span><h2>Tracker-Liste auf tiefster Ebene</h2><p>Offer-URL, Source-ID und Sub-Source eindeutig benannt</p></div><div className="actionWindow">{([['today','Heute'],['days7','7 Tage'],['days30','30 Tage']]as const).map(([id,label])=><button type="button" className={window===id?'active':''} onClick={()=>setWindow(id)} key={id}>{label}</button>)}</div></header><div className="actionReportSummary"><span><b className="down">{stop.length}</b> Abschalten</span><span><b className="up">{scale.length}</b> Skalieren</span><span><b>{watch.length}</b> Beobachten</span></div><div className="actionReportColumns"><section><h3>ABSCHALTEN</h3>{list(stop,'stop')}</section><section><h3>SKALIEREN</h3>{list(scale,'scale')}</section></div></section>}
+
+import {useDeferredValue,useMemo,useState} from 'react';
+import SourceSearchField from '../components/SourceSearchField';
+import {rankSourceMatches} from '@/lib/source-search';
+import {buildActionCandidates,type BreakdownWindow,type ConversionMetric,type SourceBreakdownRow} from '@/lib/source-breakdown';
+
+const num=(n:number)=>new Intl.NumberFormat('de-DE').format(n);
+const pct=(n:number)=>`${n.toFixed(1).replace('.',',')} %`;
+const eur=(n:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n);
+const metric=(m:ConversionMetric)=>m.clicks?`${pct(m.cvr)} (${num(m.sois)} / ${num(m.clicks)})`:`n/a (${num(m.sois)} / 0)`;
+
+export default function TrafficActionLists({rows,urls}:{rows:SourceBreakdownRow[];urls:Record<string,string>}){
+ const [window,setWindow]=useState<BreakdownWindow>('days30');
+ const [query,setQuery]=useState('');
+ const deferredWindow=useDeferredValue(window);
+ const deferredQuery=useDeferredValue(query);
+ const {stop,scale,watch}=useMemo(()=>{
+  const all=rankSourceMatches(buildActionCandidates(rows,deferredWindow),deferredQuery,item=>[item.sourceId,item.subSource]);
+  return{
+   stop:all.filter(item=>item.assessment.action==='ABSCHALTEN'),
+   scale:all.filter(item=>item.assessment.action==='SKALIEREN'),
+   watch:all.filter(item=>item.assessment.action==='BEOBACHTEN'),
+  };
+ },[rows,deferredWindow,deferredQuery]);
+ const refreshing=window!==deferredWindow||query!==deferredQuery;
+ const list=(items:ReturnType<typeof buildActionCandidates>,action:'stop'|'scale')=><div className={`actionCandidateList ${action}`}>{items.length?items.map(item=><article key={`${item.pathKey}|${item.sourceId}|${item.subSource||'source'}`}><header><b>{urls[item.offerUrlId]||`URL #${item.offerUrlId}`}</b><small>URL #{item.offerUrlId}</small></header><code>Source: {item.sourceId} · {item.subSource?`Sub-Source: ${item.subSource}`:'keine Sub-Source (Source-Fallback)'}</code><div><span>{metric(item.metric)}</span><b className={item.metric.profit>=0?'up':'down'}>{eur(item.metric.profit)}</b></div><p>{item.assessment.reason}</p></article>):<p className="actionEmpty">Keine {action==='stop'?'Abschalt-':'Skalierungs-'}Kandidaten für den Zeitraum und Suchbegriff.</p>}</div>;
+ return <section className={`trafficActionReport${refreshing?' isRefreshing':''}`} aria-busy={refreshing}>
+  <header><div><span>DIREKT UMSETZBARE TRAFFIC-ENTSCHEIDUNGEN</span><h2>Tracker-Liste auf tiefster Ebene</h2><p>Offer-URL, Source-ID und Sub-Source eindeutig benannt</p></div><div className="actionWindow">{([['today','Heute'],['days7','7 Tage'],['days30','30 Tage']]as const).map(([id,label])=><button type="button" className={window===id?'active':''} onClick={()=>setWindow(id)} key={id}>{label}</button>)}</div></header>
+  <div className="trafficActionSearch"><SourceSearchField value={query} onChange={setQuery} placeholder="Source oder Sub1 in der Maßnahmenliste suchen" scopeId="traffic-actions"/></div>
+  <div className="actionReportSummary"><span><b className="down">{stop.length}</b> Abschalten</span><span><b className="up">{scale.length}</b> Skalieren</span><span><b>{watch.length}</b> Beobachten</span></div>
+  <div className="actionReportColumns"><section><h3>ABSCHALTEN</h3>{list(stop,'stop')}</section><section><h3>SKALIEREN</h3>{list(scale,'scale')}</section></div>
+ </section>;
+}
