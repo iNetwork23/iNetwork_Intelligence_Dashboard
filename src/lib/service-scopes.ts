@@ -1,6 +1,7 @@
 import {assertScopesSupported,type AccessMetadata,type ScopeKey} from './rbac';
 
 type ScopedSourceRow={columns:Array<{column_type:string;id:string}>};
+type CampaignAffiliateRow={columns:Array<{column_type:string;id:string}>};
 const SOURCE_COLUMN_TYPES:Partial<Record<ScopeKey,string[]>>={affiliate:['affiliate'],offer:['offer'],campaign:['campaign'],source:['source_id'],sub_source:['sub1']};
 export function sourceRowsForAccess<T extends ScopedSourceRow>(rows:T[],access:AccessMetadata):T[]{
  if(access.role!=='partner')return rows;
@@ -12,6 +13,14 @@ export function campaignDirectoryForAccess<T extends {network_campaign_id:number
  if(access.role!=='partner')return campaigns;
  const allowed=new Set(access.scopes.campaign);
  return campaigns.filter(campaign=>allowed.has(String(campaign.network_campaign_id)));
+}
+export function campaignAffiliateRowsForAccess<T extends CampaignAffiliateRow>(rows:T[],access:AccessMetadata):T[]{
+ if(access.role!=='partner')return rows;
+ if(!access.scopes.affiliate.length||!access.scopes.campaign.length)return[];
+ return rows.filter(row=>{
+  const affiliate=row.columns.find(column=>column.column_type==='affiliate')?.id||'',campaign=row.columns.find(column=>column.column_type==='campaign')?.id||'';
+  return access.scopes.affiliate.includes(affiliate)&&access.scopes.campaign.includes(campaign);
+ });
 }
 export function partnerAffiliateForSmartlink(access:AccessMetadata):string|undefined{
  assertScopesSupported(access,['affiliate','campaign']);

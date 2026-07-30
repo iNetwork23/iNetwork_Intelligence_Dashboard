@@ -3,10 +3,10 @@ import{loadAffiliateSmartlinkInsightsFromCache,loadCampaignAffiliateRowsFromCach
 import{aggregateCampaignAffiliates}from'./affiliate-smartlinks';
 import{loadCampaignDirectoryFromCache}from'./campaign-snapshots';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
-import{campaignDirectoryForAccess,partnerAffiliateForSmartlink}from'./service-scopes';
+import{campaignAffiliateRowsForAccess,campaignDirectoryForAccess,partnerAffiliateForSmartlink}from'./service-scopes';
 
 const day=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const allCampaigns=unstable_cache(()=>loadCampaignDirectoryFromCache(),['campaign-directory-supabase-v2'],{revalidate:300,tags:['campaign-directory']});
+const allCampaigns=unstable_cache(()=>loadCampaignDirectoryFromCache(),['campaign-directory-supabase-v3'],{revalidate:300,tags:['campaign-directory']});
 
 export function getSmartlinkInsight(campaignId:number,access:AccessMetadata,bypass=false,requestedAffiliateId?:string){
  if(requestedAffiliateId!==undefined&&!/^\d+$/.test(requestedAffiliateId))throw new Error('400 · Ungültige Affiliate-ID');
@@ -28,15 +28,12 @@ export async function getCampaignDirectory(access:AccessMetadata){
 }
 
 const campaignAffiliateRows=(range?:{from:string;to:string})=>unstable_cache(()=>loadCampaignAffiliateRowsFromCache(range),['campaign-affiliate-cache',range?.from||'30d',range?.to||day()],{revalidate:300,tags:['campaign-affiliate-directory']})();
-const columnId=(row:{columns:Array<{column_type:string;id:string}>},type:string)=>row.columns.find(column=>column.column_type===type)?.id||'';
-
 export async function getCampaignAffiliateMappings(range:{from:string;to:string}|undefined,access:AccessMetadata){
  assertScopesSupported(access,['affiliate','campaign']);
  const fingerprint=scopeFingerprint(access);
  return unstable_cache(async()=>{
   const[raw,directory]=await Promise.all([campaignAffiliateRows(range),getCampaignDirectory(access)]);
-  const partnerHasScope=access.scopes.affiliate.length>0||access.scopes.campaign.length>0;
-  const rows=access.role==='partner'?(partnerHasScope?raw.filter(row=>(!access.scopes.affiliate.length||access.scopes.affiliate.includes(columnId(row,'affiliate')))&&(!access.scopes.campaign.length||access.scopes.campaign.includes(columnId(row,'campaign')))):[]):raw;
+  const rows=campaignAffiliateRowsForAccess(raw,access);
   return aggregateCampaignAffiliates(rows,directory);
  },['campaign-affiliate-directory-scoped-v2',range?.from||'30d',range?.to||day(),fingerprint],{revalidate:300,tags:['campaign-affiliate-directory']})();
 }
