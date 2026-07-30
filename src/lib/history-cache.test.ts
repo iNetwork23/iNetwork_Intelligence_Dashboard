@@ -41,6 +41,7 @@ describe('Everflow conversion mapping',()=>{
     const api={...base,source_id:'',sub1:'',adv1:'publisher-a',adv2:'placement-b',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES API'}}};
     expect(conversionToCacheRow(api)).toMatchObject({source_id:'publisher-a',sub_source:'placement-b',raw:{traffic_mode:'api',adv1:'publisher-a',adv2:'placement-b'}});
   });
+  it('uses one irreversible customer identity for API Sale and Rebill rows with the same ADV4 customer id',()=>{const sale={...base,conversion_id:'api-sale',transaction_id:'event-sale',is_event:true,event:'Sale',adv4:' Customer-4711 ',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES - API'}}}as EverflowConversion,rebill={...sale,conversion_id:'api-rebill',transaction_id:'event-rebill',event:'Rebill'};const saleRow=conversionToCacheRow(sale),rebillRow=conversionToCacheRow(rebill);expect(saleRow?.lead_id).toMatch(/^api-customer-sha256:/);expect(rebillRow?.lead_id).toBe(saleRow?.lead_id);expect(JSON.stringify(saleRow?.raw)).not.toContain('Customer-4711')});
 });
 
 describe('daily metric mapping',()=>{

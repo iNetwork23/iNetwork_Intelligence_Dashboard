@@ -3,10 +3,11 @@ export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;las
 export type SyncWindow={mode:SyncPhase;from:string;to:string};
 export type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
 import{isApiOffer}from'./affiliate-source-dimensions';
+import{createHash}from'node:crypto';
 
 export type EverflowConversion={
   conversion_id?:string;transaction_id:string;conversion_unix_timestamp:number;is_event:boolean;event:string;status?:string;
-  payout?:number;revenue?:number;cost?:number;source_id?:string;sub1?:string;adv1?:string;adv2?:string;is_scrub?:boolean;
+  payout?:number;revenue?:number;cost?:number;source_id?:string;sub1?:string;adv1?:string;adv2?:string;adv4?:string;email?:string;is_scrub?:boolean;
   relationship?:{
     affiliate?:{network_affiliate_id:number;name?:string};offer?:{network_offer_id:number;name?:string};
     offer_url?:{network_offer_url_id:number;name?:string};campaign?:{network_campaign_id:number;name?:string};
@@ -74,11 +75,12 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   const type=(!row.is_event&&(normalized==='soi'||normalized==='cpl soi'))?'soi':row.is_event&&normalized==='sale'?'first_sale':row.is_event&&normalized==='rebill'?'rebill':null;
   if(!type)return null;
   const relationship=row.relationship||{},trafficMode=isApiOffer(relationship.offer?.name||'')?'api':'tracked',sourceValue=trafficMode==='api'?row.adv1:row.source_id,subValue=trafficMode==='api'?row.adv2:row.sub1;
+  const apiCustomerIdentity=trafficMode==='api'?(row.adv4?.trim()||row.email?.trim().toLowerCase()||''):'',customerId=apiCustomerIdentity?`api-customer-sha256:${createHash('sha256').update(apiCustomerIdentity).digest('hex')}`:row.transaction_id;
   const fallback=[row.transaction_id,type,row.event,row.conversion_unix_timestamp].map(encodeURIComponent).join(':');
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),
     offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:text(sourceValue),sub_source:text(subValue),cost:amount(row.cost),
-    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,traffic_mode:trafficMode,adv1:text(row.adv1),adv2:text(row.adv2),relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
+    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:customerId,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,traffic_mode:trafficMode,adv1:text(row.adv1),adv2:text(row.adv2),relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
     affiliate_id:text(relationship.affiliate?.network_affiliate_id),affiliate_name:text(relationship.affiliate?.name),offer_id:text(relationship.offer?.network_offer_id),
     offer_name:text(relationship.offer?.name),offer_url_name:text(relationship.offer_url?.name),campaign_id:text(relationship.campaign?.network_campaign_id),
     campaign_name:text(relationship.campaign?.name),
