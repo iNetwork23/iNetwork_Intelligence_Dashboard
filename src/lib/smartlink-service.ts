@@ -8,9 +8,10 @@ import{campaignDirectoryForAccess,partnerAffiliateForSmartlink}from'./service-sc
 const day=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const allCampaigns=unstable_cache(()=>loadCampaignDirectoryFromCache(),['campaign-directory-supabase-v2'],{revalidate:300,tags:['campaign-directory']});
 
-export function getSmartlinkInsight(campaignId:number,access:AccessMetadata,bypass=false){
- if(foreignScopeRequested(access,{campaign:String(campaignId)}))throw new Error('403 · Fremde Campaign-ID');
- const affiliateId=partnerAffiliateForSmartlink(access),fingerprint=scopeFingerprint(access);
+export function getSmartlinkInsight(campaignId:number,access:AccessMetadata,bypass=false,requestedAffiliateId?:string){
+ if(requestedAffiliateId!==undefined&&!/^\d+$/.test(requestedAffiliateId))throw new Error('400 · Ungültige Affiliate-ID');
+ if(foreignScopeRequested(access,{campaign:String(campaignId),affiliate:requestedAffiliateId}))throw new Error('403 · Fremde Campaign- oder Affiliate-ID');
+ const scopedAffiliateId=partnerAffiliateForSmartlink(access),affiliateId=requestedAffiliateId||scopedAffiliateId,fingerprint=scopeFingerprint(access);
  const load=async()=>{
   if(!affiliateId)return loadSmartlinkInsightFromCache(campaignId);
   const insight=(await loadAffiliateSmartlinkInsightsFromCache(affiliateId,[campaignId],new Date()))[0];
@@ -18,7 +19,7 @@ export function getSmartlinkInsight(campaignId:number,access:AccessMetadata,bypa
   return insight;
  };
  if(bypass)return load();
- return unstable_cache(load,['smartlink-intelligence-cache-v3',String(campaignId),fingerprint,day()],{revalidate:300,tags:[`smartlink-${campaignId}`]})();
+ return unstable_cache(load,['smartlink-intelligence-cache-v4',String(campaignId),affiliateId||'unscoped',fingerprint,day()],{revalidate:300,tags:[`smartlink-${campaignId}`]})();
 }
 
 export async function getCampaignDirectory(access:AccessMetadata){
