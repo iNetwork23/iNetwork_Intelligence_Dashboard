@@ -13,6 +13,7 @@ type Props = {
   affiliateName: string;
   offerId: string;
   offerName: string;
+  campaignId?: string;
   trafficMode: SourceTrafficMode;
   level: SourceBlockLevel;
   mainValue: string | null;
@@ -114,13 +115,7 @@ export default function SourceBlockButton(props: Props) {
   const source = props.mainValue || "nicht übermittelt";
   const sub = props.subValue || "nicht übermittelt";
   const isSubSource = props.level === "sub_source";
-  const triggerLabel = active
-    ? isSubSource
-      ? "Unterquelle wieder aktivieren"
-      : "Quelle wieder aktivieren"
-    : isSubSource
-      ? "Unterquelle ausschalten"
-      : "Quelle ausschalten";
+  const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source} ${active ? "wieder aktivieren" : "ausschalten"}`;
 
   const activate = async () => {
     setBusy(true);
@@ -239,12 +234,18 @@ export default function SourceBlockButton(props: Props) {
               {isSubSource ? ` · ${fieldSub}: ${sub}` : ""}
             </dd>
           </div>
+          {props.campaignId && (
+            <div className="sourceBlockScopeWide">
+              <dt>Aus der Campaign-Ansicht</dt>
+              <dd>Campaign #{props.campaignId}</dd>
+            </div>
+          )}
         </dl>
 
         <p className="sourceBlockImpact">
           {active
-            ? "Payout und Partner-Postback gelten danach wieder normal."
-            : "Ab Bestätigung: Payout 0 und kein Partner-Postback – nur für diese Auswahl und dieses Offer."}
+            ? "Vergütung und Partner-Postback gelten danach wieder normal."
+            : "Ab Bestätigung werden Vergütung und Partner-Postback für diese Auswahl bei diesem Affiliate und Offer gesperrt – campaignübergreifend. Eingehenden Traffic kann nur der Partner selbst stoppen."}
         </p>
 
         {!active && (

@@ -6,6 +6,7 @@ describe('session and HTTP security',()=>{
  it('stores only a hash and enforces idle and absolute expiry',async()=>{
   const store=new MemorySecurityStore();const now=1_000_000;
   const made=await createOpaqueSession(store,{userId:'u',metadataVersion:2},now);
+  expect(made.record.securityVersion).toBe(2);
   expect(made.token).toMatch(/^[A-Za-z0-9_-]{40,}$/);expect(JSON.stringify([...store.values.values()])).not.toContain(made.token);
   expect(await validateOpaqueSession(store,made.token,now+1799)).not.toBeNull();
   expect(await validateOpaqueSession(store,made.token,now+3601)).toBeNull();
@@ -16,9 +17,19 @@ describe('session and HTTP security',()=>{
   const store=new MemorySecurityStore();const made=await createOpaqueSession(store,{userId:'u',metadataVersion:1},10);
   await revokeUserSessions(store,'u');expect(await validateOpaqueSession(store,made.token,11)).toBeNull();
  });
+ it('rejects sessions issued before the current security version',async()=>{
+  const store=new MemorySecurityStore();const made=await createOpaqueSession(store,{userId:'u',metadataVersion:1},10);
+  for(const [key,value] of store.values)if(key.startsWith('rbac:session:')&&typeof value==='object'&&value&&'userId' in value)store.values.set(key,{...(value as Record<string,unknown>),securityVersion:1});
+  expect(await validateOpaqueSession(store,made.token,11)).toBeNull();
+ });
  it('preserves a setup-only marker for privileged MFA enrollment sessions',async()=>{
   const store=new MemorySecurityStore();const made=await createOpaqueSession(store,{userId:'admin',metadataVersion:1,mfaSetupOnly:true},10);
   expect(await validateOpaqueSession(store,made.token,11)).toMatchObject({userId:'admin',mfaSetupOnly:true});
+ });
+ it('enforces a shorter server-side absolute lifetime for an MFA challenge session',async()=>{
+  const store=new MemorySecurityStore();const made=await createOpaqueSession(store,{userId:'admin',metadataVersion:1,mfaSetupOnly:true,absoluteSeconds:300},10);
+  expect(await validateOpaqueSession(store,made.token,309)).not.toBeNull();
+  expect(await validateOpaqueSession(store,made.token,311)).toBeNull();
  });
  it('does not resurrect a session when revocation races with last-seen refresh',async()=>{
   let release!:()=>void,started!:()=>void;const waiting=new Promise<void>(resolve=>release=resolve),refreshStarted=new Promise<void>(resolve=>started=resolve);

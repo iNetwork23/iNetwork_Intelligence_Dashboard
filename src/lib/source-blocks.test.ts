@@ -32,6 +32,12 @@ describe('source block contract',()=>{
     expect(()=>normalizeSourceBlockInput({affiliateId:'30',affiliateName:'Partner',offerId:'',offerName:'WhatsMeet',trafficMode:'api',level:'main_source',mainValue:'25022'})).toThrow('Offer');
   });
 
+  it('never sends the localized missing-value label as an exact Everflow matcher',()=>{
+    const block=normalizeSourceBlockInput({affiliateId:'30',affiliateName:'Partner',offerId:'25',offerName:'Offer',trafficMode:'tracked',level:'main_source',mainValue:'Nicht übermittelt'});
+    expect(block.mainValue).toBeNull();
+    expect(block.variables).toEqual([{variable:'source_id',variable_value:'',variable_secondary_value:'',comparison_method:'not_present'}]);
+  });
+
   it('keeps identities separate by affiliate, offer, main source and subsource',()=>{
     const make=(offerId:string,subValue:string)=>normalizeSourceBlockInput({affiliateId:'30',affiliateName:'Partner',offerId,offerName:'Offer',trafficMode:'api',level:'sub_source',mainValue:'25022',subValue});
     expect(sourceBlockIdentityKey(make('25','A1'))).not.toBe(sourceBlockIdentityKey(make('20','A1')));
