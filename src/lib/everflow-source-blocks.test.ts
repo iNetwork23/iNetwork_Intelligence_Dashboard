@@ -133,7 +133,7 @@ describe('Everflow source block writer',()=>{
    const path=String(url);
    if(path.includes('payoutrevenuetable')){tableReads++;return response({custom_payout_revenue_settings:tableReads===1?summaries:[...summaries,{network_custom_payout_revenue_setting_id:781,network_affiliate_ids:[30],network_offer_id:25}],paging:{total_count:tableReads===1?2:3}});}
    if(path.includes('/452?relationship=all'))return response({...summaries[0],network_offer_payout_revenue_id:0,relationship:{ruleset:dachRuleset,variables:{entries:[]}}});
-   if(path.includes('/453?relationship=all'))return response({...summaries[1],network_offer_payout_revenue_id:0,relationship:{ruleset:{...dachRuleset,countries:[...dachRuleset.countries].reverse()},variables:{entries:[]}}});
+   if(path.includes('/453?relationship=all'))return response({...summaries[1],network_offer_payout_revenue_id:0,relationship:{ruleset:{...dachRuleset,countries:[...dachRuleset.countries].reverse().map(({country_id,targeting_type,match_type})=>({match_type,targeting_type,country_id}))},variables:{entries:[]}}});
    if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:781});
    if(path.includes('/781?relationship=all')){const payload=JSON.parse(String(fetcher.mock.calls.find(call=>String(call[0]).endsWith('/networks/custom/payoutrevenue')&&call[1]?.method==='POST')?.[1]?.body));return response({...payload,network_custom_payout_revenue_setting_id:781,relationship:{ruleset:payload.ruleset,variables:{entries:block.variables}}});}
    throw new Error(`unexpected ${path}`);
@@ -203,6 +203,38 @@ describe('Everflow source block writer',()=>{
    if(path.includes('/791')&&init?.method==='DELETE'){deleted=true;return response({result:true});}
    if(path.includes('/791')&&deleted)return response({error:'not found'},404);
    if(path.includes('/791'))return response({...buildEverflowBlockPayload(block,'dashboard-id'),network_custom_payout_revenue_setting_id:791,payout_percentage:10,relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}});
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('Verifikation');
+  expect(deleted).toBe(true);
+ });
+
+ it.each([
+  ['all affiliates',{is_apply_all_affiliates:true}],
+  ['multiple affiliates',{network_affiliate_ids:[30,31]}],
+  ['specific offer URLs',{is_apply_specific_offer_urls:true,network_offer_url_ids:[999]}],
+  ['a future validity date',{date_valid_from:'2026-08-01'}],
+  ['an expiry date',{date_valid_to:'2026-08-31'}],
+ ] as const)('rejects an existing matching rule with broader or narrower scope: %s',async(_label,override)=>{
+  const existing={...buildEverflowBlockPayload(block,'dashboard-id'),...override,network_custom_payout_revenue_setting_id:799,relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}};
+  const fetcher=vi.fn(async(url:string|URL|Request)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable'))return response({custom_payout_revenue_settings:[{network_custom_payout_revenue_setting_id:799,network_affiliate_ids:[30],network_offer_id:25}],paging:{total_count:1}});
+   if(path.includes('/799?relationship=all'))return response(existing);
+   throw new Error(`unexpected ${path}`);
+  });
+  await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('widersprüchliche Everflow-Regel');
+ });
+
+ it('rejects and rolls back a newly created rule whose read-back is limited to specific offer URLs',async()=>{
+  let deleted=false;
+  const fetcher=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+   const path=String(url);
+   if(path.includes('payoutrevenuetable'))return response({custom_payout_revenue_settings:[]});
+   if(path.endsWith('/networks/custom/payoutrevenue')&&init?.method==='POST')return response({network_custom_payout_revenue_setting_id:800});
+   if(path.includes('/800')&&init?.method==='DELETE'){deleted=true;return response({result:true});}
+   if(path.includes('/800')&&deleted)return response({error:'not found'},404);
+   if(path.includes('/800'))return response({...buildEverflowBlockPayload(block,'dashboard-id'),network_custom_payout_revenue_setting_id:800,is_apply_specific_offer_urls:true,network_offer_url_ids:[999],relationship:{ruleset:{...dachRuleset,countries:[]},variables:{entries:block.variables}}});
    throw new Error(`unexpected ${path}`);
   });
   await expect(activateEverflowSourceBlock(block,'dashboard-id','secret',fetcher)).rejects.toThrow('Verifikation');
