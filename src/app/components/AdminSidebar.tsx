@@ -5,6 +5,7 @@ import {usePathname} from "next/navigation";
 import {useEffect,useState} from "react";
 import {moveSidebarItem,moveSidebarItemByVisibleOrder,parseSidebarOrder} from "@/lib/sidebar-order";
 import ThemeToggle from "./ThemeToggle";
+import LanguageToggle from "./LanguageToggle";
 
 type Props={
  email:string;
@@ -54,7 +55,7 @@ export default function AdminSidebar(props:Props){
  const secondary=[
   {href:"/admin/access",label:"Benutzer & Rechte",icon:"shield" as const,show:props.mayAdmin},
   {href:"/source-blocks",label:"Ausgeschaltete Quellen",icon:"rotation" as const,show:props.maySourceBlocks},
-  {href:"/settings/security",label:"Sicherheit & MFA",icon:"lock" as const,show:props.maySecurity},
+  {href:"/settings/security",label:"Sicherheit",icon:"lock" as const,show:props.maySecurity},
  ];
  const active=(href:string)=>href==="/"?pathname===href:pathname.startsWith(href);
  const orderedItems=[...items].sort((a,b)=>order.indexOf(a.href)-order.indexOf(b.href)),visibleItems=orderedItems.filter(item=>item.show),visibleRoutes=visibleItems.map(item=>item.href);
@@ -77,7 +78,7 @@ export default function AdminSidebar(props:Props){
    </nav>
    <span className="sidebarOrderAnnouncement" aria-live="polite">{announcement}</span>
    <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span></Link>)}</nav>
-   <div className="sidebarFooter"><div className="sidebarStatus"><i/><span>Read only</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><ThemeToggle/><form action="/api/auth/logout" method="post"><button type="submit" className="sidebarLogout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5m5 5H3m10-9h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg><span>Abmelden</span></button></form></div></div>
+   <div className="sidebarFooter"><div className="sidebarStatus"><i/><span>Read only</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><div className="sidebarPreferences"><div className="sidebarPreference"><span>Sprache</span><LanguageToggle compact/></div><div className="sidebarPreference"><span>Darstellung</span><ThemeToggle showLabel/></div></div><form action="/api/auth/logout" method="post"><button type="submit" className="sidebarLogout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5m5 5H3m10-9h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg><span>Abmelden</span></button></form></div></div>
   </aside>
  </>
 }

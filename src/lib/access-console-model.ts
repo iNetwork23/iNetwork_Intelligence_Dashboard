@@ -10,6 +10,7 @@ export type AccessMetadataSummary = {
 export type AccessUserSummary = {
   id: string;
   email: string;
+  username?: string;
   name?: string;
   mfaEnabled?: boolean;
   status: string;
@@ -83,7 +84,7 @@ export function filterAccessUsers(
   return users.filter(
     (user) =>
       (!query ||
-        `${user.name || ""} ${user.email}`
+        `${user.name || ""} ${user.username || ""} ${user.email}`
           .toLocaleLowerCase("de")
           .includes(query)) &&
       (filters.role === "all" || user.access.role === filters.role) &&
@@ -96,6 +97,7 @@ export function filterAccessUsers(
 export function auditDescription(event: AuditSummary, targetLabel?: string) {
   const target = targetLabel || event.targetId || "den betroffenen Benutzer";
   const messages: Record<string, string> = {
+    "user.create": `${event.actorId} hat das Benutzerkonto ${target} angelegt.`,
     "user.invite": `${event.actorId} hat ${target} eingeladen.`,
     "user.update": `${event.actorId} hat die Rechte von ${target} geändert.`,
     "user.block": `${event.actorId} hat ${target} gesperrt.`,
@@ -117,6 +119,7 @@ export function auditDescription(event: AuditSummary, targetLabel?: string) {
 }
 export const actionResultMessage = (action: string) =>
   ({
+    create_user: "Benutzerkonto wurde angelegt.",
     invite: "Einladung wurde gesendet.",
     update_user: "Benutzerrechte wurden gespeichert.",
     reset_password: "Passwort-Reset wurde gesendet.",

@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSupabaseAdmin, getSupabasePasswordAuth } from '@/lib/supabase';
 import { audit, listAudit, requestEvidence, securityStore } from '@/lib/access-store';
-import { currentUser } from '@/lib/session';
+import { currentUser, resolveCurrentUserUncached } from '@/lib/session';
 import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, STANDARD_ROLES, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
 import { assertRoleIsUnassigned, buildRoleOptions, type CustomRoleDefinition } from '@/lib/admin-access-policy';
+import { DuplicateProvisioningIdentityError, parseProvisionedUser, provisionDirectUser, ProvisioningUncertainError } from '@/lib/user-provisioning';
 export const dynamic = 'force-dynamic';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: securityHeaders });
 type CustomRole = CustomRoleDefinition;
@@ -84,6 +85,7 @@ export async function GET() {
         all.map(async (u) => ({
           id: u.id,
           email: u.email,
+          username: String(u.user_metadata?.username || '').trim() || undefined,
           name: String(u.user_metadata?.full_name || u.user_metadata?.name || '').trim() || undefined,
           status: parseAccessMetadata(u.app_metadata).status,
           access: parseAccessMetadata(u.app_metadata),
@@ -123,7 +125,7 @@ export async function POST(request: Request) {
     evidence = requestEvidence(request);
   try {
     return await withSecurityLock(securityStore(), 'admin-access-mutation', async () => {
-      const actor = await currentUser();
+      const actor = await resolveCurrentUserUncached();
       if (!actor || actor.id !== initialActor.id || actor.actorId !== initialActor.actorId)
         return json({ error: 'Berechtigung wurde zwischenzeitlich geändert. Bitte neu anmelden.' }, 403);
     if (action === 'exit_impersonation') {
@@ -176,12 +178,14 @@ export async function POST(request: Request) {
       });
       return json({ ok: true });
     }
-    if (action === 'invite') {
+    if (action === 'create_user') {
       if (!can(actor.access, 'users.manage')) return json({ error: 'Keine Berechtigung' }, 403);
-      const email = String(input.email || '')
-        .trim()
-        .toLowerCase();
-      if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Ungültige Anfrage' }, 400);
+      let account;
+      try {
+        account = parseProvisionedUser(input);
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : 'Ungültige Anfrage' }, 400);
+      }
       const metadata = await resolveAccess(input.access, 1),
         requested = parseAccessMetadata(metadata);
       assertMayManageUser({
@@ -191,18 +195,53 @@ export async function POST(request: Request) {
         target: parseAccessMetadata({ role: 'read_only' }),
         requested,
       });
-      const invited = await getSupabaseAdmin().auth.admin.inviteUserByEmail(email, { redirectTo: `${origin}/auth/callback` });
-      if (invited.error || !invited.data.user) throw new Error('invite');
-      const updated = await getSupabaseAdmin().auth.admin.updateUserById(invited.data.user.id, { app_metadata: metadata });
-      if (updated.error) throw new Error('metadata');
-      await audit({
-        actorId: actor.actorId,
-        action: 'user.invite',
-        targetId: invited.data.user.id,
-        after: metadata,
-        ...evidence,
-      });
-      return json({ ok: true, userId: invited.data.user.id }, 201);
+      try {
+        const supabase = getSupabaseAdmin(),
+          result = await provisionDirectUser({
+          account,
+          metadata,
+          actorId: actor.actorId,
+          evidence,
+          store: securityStore(),
+          auth: {
+            createBlocked: async (attributes) => {
+              const created = await supabase.auth.admin.createUser(attributes);
+              if (created.error || !created.data.user) {
+                if (/already|registered|exists/i.test(created.error?.message || ''))
+                  throw new DuplicateProvisioningIdentityError('Benutzername oder E-Mail ist bereits vergeben.');
+                throw new Error('Benutzerkonto konnte nicht angelegt werden.');
+              }
+              return { userId: created.data.user.id };
+            },
+            activate: async (userId, attributes) => {
+              const updated = await supabase.auth.admin.updateUserById(userId, attributes);
+              if (updated.error) throw new Error('Benutzerkonto konnte nicht aktiviert werden.');
+            },
+            block: async (userId, attributes) => {
+              const updated = await supabase.auth.admin.updateUserById(userId, attributes);
+              if (updated.error) throw updated.error;
+            },
+            remove: async (userId) => {
+              const removed = await supabase.auth.admin.deleteUser(userId);
+              if (removed.error) throw removed.error;
+            },
+            exists: async (userId) => {
+              const current = await supabase.auth.admin.getUserById(userId);
+              if (current.error && /not found/i.test(current.error.message)) return false;
+              if (current.error) throw current.error;
+              return Boolean(current.data.user);
+            },
+          },
+          writeAudit: audit,
+        });
+        return json({ ok: true, userId: result.userId }, 201);
+      } catch (error) {
+        if (error instanceof DuplicateProvisioningIdentityError)
+          return json({ error: error.message }, 409);
+        if (error instanceof ProvisioningUncertainError)
+          return json({ error: error.message }, 503);
+        throw error;
+      }
     }
     if (['reset_password', 'reset_mfa', 'revoke_sessions', 'update_user', 'block', 'reactivate', 'deactivate'].includes(action)) {
       if (!can(actor.access, 'users.manage') && !(action === 'revoke_sessions' && targetId === actor.id)) return json({ error: 'Keine Berechtigung' }, 403);

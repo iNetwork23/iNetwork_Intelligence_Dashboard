@@ -25,6 +25,20 @@ const rateGenerationKey=(id:string)=>`rbac:rate-generation:${hash(id)}`;
 const ratePrefix=async(store:SecurityStore,id:string,now:number,windowSeconds:number)=>{const generation=String(await store.get(rateGenerationKey(id))??'0'),bucket=Math.floor(now/windowSeconds);return {prefix:`rbac:rate-slot:${hash(id)}:${generation}:${bucket}:`,bucket};};
 /** Atomically reserves one of a small fixed number of slots before credential verification. A successful login resets the generation, so only failed attempts remain consumed. */
 export async function consumeRateLimit(store:SecurityStore,id:string,now:number,limit=5,windowSeconds=900){const {prefix,bucket}=await ratePrefix(store,id,now,windowSeconds);for(let slot=0;slot<limit;slot++)if(await store.setIfAbsent(`${prefix}${slot}`,{at:now}))return {allowed:true,retryAfter:0};return {allowed:false,retryAfter:Math.max(1,(bucket+1)*windowSeconds-now)};}
+export type RateLimitSpec={id:string;limit?:number;windowSeconds?:number};
+/** Reserves every bucket or compensates this request's partial reservations. */
+export async function consumeRateLimitsAtomically(store:SecurityStore,specs:RateLimitSpec[],now:number){
+ const owner=randomBytes(16).toString('hex'),reservations:string[]=[];
+ const rollback=async()=>{const keys=reservations.splice(0);let failed=false;for(const key of keys)if(!await store.deleteIfOwner(key,owner))failed=true;if(failed)throw new Error('Rate-Limit-Reservierung konnte nicht vollständig zurückgerollt werden')};
+ try{
+  for(const spec of specs){
+   const limit=spec.limit??5,windowSeconds=spec.windowSeconds??900,{prefix,bucket}=await ratePrefix(store,spec.id,now,windowSeconds);let reserved=false;
+   for(let slot=0;slot<limit;slot++){const key=`${prefix}${slot}`;if(await store.setIfAbsent(key,{at:now,owner})){reservations.push(key);reserved=true;break}}
+   if(!reserved){await rollback();return{allowed:false,retryAfter:Math.max(1,(bucket+1)*windowSeconds-now)}}
+  }
+  return{allowed:true,retryAfter:0};
+ }catch(error){if(reservations.length)await rollback();throw error}
+}
 export async function recordRateLimitFailure(store:SecurityStore,id:string,now:number,limit=5,windowSeconds=900){const {prefix}=await ratePrefix(store,id,now,windowSeconds);return Math.min((await store.list(prefix)).length,limit);}
 export async function resetRateLimit(store:SecurityStore,id:string){await store.set(rateGenerationKey(id),randomBytes(16).toString('hex'));}
 type SecurityLock={owner:string};

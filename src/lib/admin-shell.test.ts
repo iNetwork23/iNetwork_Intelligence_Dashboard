@@ -26,12 +26,22 @@ describe('responsive admin shell',()=>{
 
  it('provides permission-aware navigation, account controls and persistent collapse',()=>{
   const sidebar=read('components/AdminSidebar.tsx');
-  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Smartlink Intelligence','Benutzer & Rechte','Sicherheit & MFA','Abmelden','Read only'])expect(sidebar).toContain(marker);
+  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Smartlink Intelligence','Benutzer & Rechte','Sicherheit','Abmelden','Read only'])expect(sidebar).toContain(marker);
+  expect(sidebar).not.toContain('Sicherheit & MFA');
   expect(sidebar).toContain('aria-expanded={!collapsed}');
   expect(sidebar).toContain('wlx-sidebar-collapsed');
   expect(sidebar).toContain('data-sidebar-collapsed');
   expect(sidebar).toContain('aria-label="Navigation öffnen"');
   expect(sidebar).toContain('aria-label="Navigation schließen"');
+ });
+
+ it('groups language, appearance and logout as one legible sidebar action panel',()=>{
+  const sidebar=read('components/AdminSidebar.tsx'),theme=read('components/ThemeToggle.tsx'),css=read('globals.css');
+  for(const marker of['sidebarPreferences','sidebarPreference','Sprache','Darstellung','<LanguageToggle compact/>','<ThemeToggle showLabel/>'])expect(sidebar).toContain(marker);
+  expect(theme).toContain('showLabel=false');
+  expect(theme).toContain('themeToggleLabel');
+  for(const marker of['.sidebarPreferences{display:grid;grid-template-columns:1fr 1fr','.sidebarPreference>span','.sidebarActions>form','.sidebarLogout{display:flex'])expect(css).toContain(marker);
+  expect(css).toContain('min-height:44px');
  });
 
  it('defines desktop collapse and mobile drawer behavior without horizontal page overflow',()=>{

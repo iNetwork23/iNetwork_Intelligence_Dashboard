@@ -24,6 +24,7 @@ import { resolveSourcePeriod } from "@/lib/source-period";
 import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
 import { analyzeRebillConcentration, buildRebillCustomerIndex, firstSaleCustomerIdsFromIndex, rebillCustomerIdsFromIndex, type RebillConcentration, type RebillEvent } from "@/lib/rebill-concentration";
 import AffiliateSmartlinks from "./AffiliateSmartlinks";
+import AffiliateSmartlinkOverview from "./AffiliateSmartlinkOverview";
 import AffiliatePeriodControls from "./AffiliatePeriodControls";
 import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
 import DataReloadButton from'./DataReloadButton';
@@ -31,6 +32,7 @@ import InstantLink from "./InstantLink";
 import LazyDetails from "./LazyDetails";
 import SourceBreakdown, { sourceRebillKey } from "./SourceBreakdown";
 import DashboardPageHeader from "../components/DashboardPageHeader";
+import OptimizationFlow from "../components/OptimizationFlow";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
 export const dynamic = "force-dynamic";
@@ -486,6 +488,7 @@ export default async function AffiliateOptimizerPage({
         icon="affiliate"
         description="Direktlinks und Smartlinks pro Partner – getrennte KPIs und vollständige Landingpage-Sicht."
       />
+      <OptimizationFlow active="affiliate" />
       <section className="smartSearch affiliateSearch affiliatePickerBar">
         <AffiliatePartnerPicker
           partners={workspaces.map((item) => ({
@@ -592,7 +595,23 @@ export default async function AffiliateOptimizerPage({
               <small>{selectedWorkspace.campaigns.length} Campaigns</small>
             </InstantLink>
           </nav>
+          <AffiliateSmartlinkOverview
+            affiliateId={selectedWorkspace.affiliateId}
+            mappings={selectedWorkspace.campaigns}
+            insights={smartlinkInsights}
+            rangeLabel={period.label}
+            returnTo={`/affiliates?affiliate=${selectedWorkspace.affiliateId}&mode=smartlinks&${rangeParams}`}
+          />
+          <section className="sectionHead">
+            <div>
+              <span>ERGÄNZENDE PARTNERDATEN</span>
+              <h2>Campaign-Bilanzen und Nachlauf prüfen</h2>
+            </div>
+            <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
+          </section>
           <AffiliateSmartlinks
+            affiliateId={selectedWorkspace.affiliateId}
+            returnTo={`/affiliates?affiliate=${selectedWorkspace.affiliateId}&mode=smartlinks&${rangeParams}`}
             mappings={selectedWorkspace.campaigns}
             insights={smartlinkInsights}
             rangeLabel={period.label}

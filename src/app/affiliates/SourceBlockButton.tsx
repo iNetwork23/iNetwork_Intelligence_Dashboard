@@ -64,9 +64,13 @@ function CloseIcon() {
 export default function SourceBlockButton(props: Props) {
   const [blocks, setBlocks] = useState<SourceBlockRecord[]>([]);
   const [open, setOpen] = useState(false);
+  const [productWide, setProductWide] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [reason, setReason] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [requiredConfirmation, setRequiredConfirmation] = useState("");
+  const [affectedOffers, setAffectedOffers] = useState<Array<{offerId:string;offerName:string}>>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,6 +121,17 @@ export default function SourceBlockButton(props: Props) {
   const isSubSource = props.level === "sub_source";
   const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source} ${active ? "wieder aktivieren" : "ausschalten"}`;
 
+  const openProductWide = async () => {
+    setProductWide(true); setConfirmation(""); setAffectedOffers([]); setOpen(true); setBusy(true); setError("");
+    try {
+      const params = new URLSearchParams({action:"preview_across_offers",affiliateId:props.affiliateId,affiliateName:props.affiliateName,offerId:props.offerId,offerName:props.offerName,trafficMode:props.trafficMode,level:props.level,mainValue:props.mainValue||"",subValue:props.subValue||""});
+      const response=await fetch(`/api/source-blocks?${params}`,{cache:"no-store"}),body=await response.json();
+      if(!response.ok)throw new Error(body.error||"Produktübergreifende Sperre konnte nicht vorbereitet werden");
+      setAffectedOffers(body.offers||[]); setRequiredConfirmation(body.requiredConfirmation||"");
+    } catch(value) { setError(value instanceof Error?value.message:"Produktübergreifende Sperre konnte nicht vorbereitet werden"); }
+    finally { setBusy(false); }
+  };
+
   const activate = async () => {
     setBusy(true);
     setError("");
@@ -124,17 +139,15 @@ export default function SourceBlockButton(props: Props) {
       const response = await fetch("/api/source-blocks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "activate", ...props, reason }),
+        body: JSON.stringify({ action: productWide ? "activate_across_offers" : "activate", ...props, reason, confirmation }),
       });
       const body = await response.json();
       if (!response.ok) {
         throw new Error(body.error || "Sperre konnte nicht aktiviert werden");
       }
       sharedLoad = null;
-      setBlocks((current) => [
-        body.block,
-        ...current.filter((item) => item.id !== body.block.id),
-      ]);
+      const changed:SourceBlockRecord[]=body.blocks||[body.block];
+      setBlocks((current) => [...changed,...current.filter((item)=>!changed.some(block=>block.id===item.id))]);
       setOpen(false);
     } catch (value) {
       setError(
@@ -204,7 +217,7 @@ export default function SourceBlockButton(props: Props) {
           <span>
             <small>{isSubSource ? "Unterquelle" : "Hauptquelle"}</small>
             <b id="source-block-title">
-              {active ? "Wieder aktivieren" : "Ausschalten"}
+              {active&&!productWide ? "Wieder aktivieren" : productWide ? "Alle Produkte sperren" : "Ausschalten"}
             </b>
           </span>
           <button
@@ -224,8 +237,8 @@ export default function SourceBlockButton(props: Props) {
             <dd>{props.affiliateName}</dd>
           </div>
           <div>
-            <dt>Offer</dt>
-            <dd>{props.offerName}</dd>
+            <dt>{productWide ? "Betroffene Offers" : "Offer"}</dt>
+            <dd>{productWide ? (busy ? "Wird serverseitig ermittelt …" : affectedOffers.map(item=>`${item.offerName} (#${item.offerId})`).join(", ")||"Nicht verfügbar") : props.offerName}</dd>
           </div>
           <div className="sourceBlockScopeWide">
             <dt>Auswahl</dt>
@@ -243,10 +256,19 @@ export default function SourceBlockButton(props: Props) {
         </dl>
 
         <p className="sourceBlockImpact">
-          {active
+          {active&&!productWide
             ? "Vergütung und Partner-Postback gelten danach wieder normal."
-            : "Ab Bestätigung werden Vergütung und Partner-Postback für diese Auswahl bei diesem Affiliate und Offer gesperrt – campaignübergreifend. Eingehenden Traffic kann nur der Partner selbst stoppen."}
+            : productWide
+              ? "Diese besonders geschützte Aktion setzt Payout und SOI-/Lead-Postback für die Quelle in allen serverseitig gefundenen Offers dieses Affiliates auf aus. Bei einem Teilfehler werden neu angelegte Regeln zurückgerollt."
+              : "Ab Bestätigung werden Vergütung und Partner-Postback für diese Auswahl bei diesem Affiliate und Offer gesperrt – campaignübergreifend. Eingehenden Traffic kann nur der Partner selbst stoppen."}
         </p>
+
+        {productWide && (
+          <label className="sourceBlockReason sourceBlockConfirmation">
+            Zur Bestätigung Quellenwert <b>{requiredConfirmation||"…"}</b> eingeben
+            <input value={confirmation} onChange={(event)=>setConfirmation(event.target.value)} autoComplete="off" spellCheck={false}/>
+          </label>
+        )}
 
         {!active && (
           <label className="sourceBlockReason">
@@ -271,15 +293,15 @@ export default function SourceBlockButton(props: Props) {
           </button>
           <button
             type="button"
-            className={active ? "sourceReactivate" : "sourceConfirmBlock"}
-            onClick={active ? deactivate : activate}
-            disabled={busy}
+            className={active&&!productWide ? "sourceReactivate" : "sourceConfirmBlock"}
+            onClick={active&&!productWide ? deactivate : activate}
+            disabled={busy || (productWide && confirmation !== requiredConfirmation)}
           >
             {busy
               ? "Wird verifiziert …"
-              : active
+              : active&&!productWide
                 ? "Aktivieren"
-                : "Jetzt ausschalten"}
+                : productWide ? "Alle gefundenen Produkte sperren" : "Jetzt ausschalten"}
           </button>
         </footer>
       </div>
@@ -291,7 +313,7 @@ export default function SourceBlockButton(props: Props) {
       <button
         type="button"
         className={`sourceBlockIconButton${active ? " blocked" : ""}`}
-        onClick={() => setOpen(true)}
+        onClick={() => {setProductWide(false);setOpen(true)}}
         aria-label={triggerLabel}
         title={triggerLabel}
         aria-pressed={Boolean(active)}
@@ -299,6 +321,7 @@ export default function SourceBlockButton(props: Props) {
         <PowerIcon />
         <span>{active ? "Ausgeschaltet" : "Ausschalten"}</span>
       </button>
+      <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>Alle Produkte sperren</button>
       {error && (
         <small className="sourceBlockError" role="alert">
           {error}

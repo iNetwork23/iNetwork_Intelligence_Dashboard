@@ -21,6 +21,8 @@ import type { SnapshotFreshness } from "../../lib/snapshot-generation";
 import type { RebillConcentration } from "../../lib/rebill-concentration";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 export const sourceRebillKey=(sourceId:string,subSource:string|null)=>`${sourceId}\u001f${!subSource||subSource===NO_SUB_SOURCE?'':subSource}`;
+import { rankNestedSourceMatches } from "../../lib/source-search";
+import SourceSearchField from "../components/SourceSearchField";
 const num = (n: number) => new Intl.NumberFormat("de-DE").format(n),
   pct = (n: number) => `${n.toFixed(1).replace(".", ",")} %`,
   eur = (n: number) =>
@@ -87,10 +89,20 @@ export default function SourceBreakdown({
 }) {
   const reportWindow: BreakdownWindow = "days30",
     [sort, setSort] = useState<BreakdownSort>(initialSort),
+    [query, setQuery] = useState(""),
     deferredSort = useDeferredValue(sort),
-    groups = useMemo(
+    allGroups = useMemo(
       () => groupSources(rows, reportWindow, deferredSort),
       [rows, deferredSort],
+    ),
+    groups = useMemo(
+      () => rankNestedSourceMatches(
+        allGroups,
+        query,
+        group => group.sourceId,
+        leaf => leaf.subSource,
+      ),
+      [allGroups, query],
     ),
     refreshing = sort !== deferredSort,
     chooseSort = (next: BreakdownSort) => {
@@ -143,6 +155,12 @@ export default function SourceBreakdown({
           )}
         </div>
         <div className="breakdownControls">
+          <SourceSearchField
+            value={query}
+            onChange={setQuery}
+            placeholder={apiMode ? "ADV1 oder ADV2 suchen" : "Source oder Sub1 suchen"}
+            scopeId={`source-breakdown-${apiMode ? "api" : "tracked"}-${rows[0]?.offerUrlId || disclosureScope}`}
+          />
           {sourcePeriod ? (
             <SourcePeriodControls period={sourcePeriod} />
           ) : (
@@ -336,6 +354,8 @@ export default function SourceBreakdown({
             );
           })}
         </div>
+      ) : query.trim() ? (
+        <p className="noSourceData">Keine Quelle passt zu „{query.trim()}“.</p>
       ) : (
         <p className="noSourceData">
           Für diese Offer-URL liegen im gewählten Fenster keine

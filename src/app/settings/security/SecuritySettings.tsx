@@ -1,4 +1,10 @@
-'use client';
-import {useEffect,useState} from 'react';
-type Status={enabled:boolean};type Enrollment={secret:string;otpauth:string};
-export default function SecuritySettings(){const[status,setStatus]=useState<Status|null>(null),[enrollment,setEnrollment]=useState<Enrollment|null>(null),[message,setMessage]=useState('');useEffect(()=>{void fetch('/api/auth/mfa',{cache:'no-store'}).then(async response=>{if(response.ok)setStatus(await response.json());else setMessage('MFA-Status konnte nicht geladen werden.')})},[]);async function submit(action:string,code=''){setMessage('');const response=await fetch('/api/auth/mfa',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,code})}),body=await response.json();if(!response.ok){setMessage(String(body.error||'MFA-Aktion fehlgeschlagen.'));return}if(action==='enroll'){setEnrollment(body);setMessage('Secret in der Authenticator-App hinterlegen und anschließend bestätigen.');return}if(action==='confirm'||action==='disable'){window.location.assign('/login');return}}if(!status)return <p role="status">{message||'MFA-Status wird geladen …'}</p>;return <section className="securityCard"><div className="securityState"><span>MFA-STATUS</span><strong>{status.enabled?'Aktiv':'Nicht aktiviert'}</strong><p>TOTP schützt die Anmeldung zusätzlich zum Passwort. Änderungen widerrufen alle App-Sitzungen.</p></div>{!status.enabled&&!enrollment&&<button onClick={()=>submit('enroll')}>Authenticator einrichten</button>}{enrollment&&<div className="mfaEnrollment"><h2>Authenticator verbinden</h2><p>Secret manuell in 1Password, Bitwarden, Google Authenticator oder einer kompatiblen App eintragen:</p><code>{enrollment.secret}</code><a href={enrollment.otpauth}>In Authenticator öffnen</a><form action={form=>submit('confirm',String(form.get('code')||''))}><label>6-stelliger Bestätigungscode<input name="code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required autoComplete="one-time-code"/></label><button>MFA aktivieren</button></form></div>}{status.enabled&&<form className="mfaDisable" action={form=>submit('disable',String(form.get('code')||''))}><h2>MFA deaktivieren</h2><p>Zur Bestätigung einen aktuellen TOTP-Code eingeben.</p><label>6-stelliger Code<input name="code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required autoComplete="one-time-code"/></label><button className="danger">MFA deaktivieren</button></form>}<p role="status">{message}</p></section>}
+export default function SecuritySettings(){
+ return <section className="securityCard">
+  <div className="securityState">
+   <span>ANMELDESICHERHEIT</span>
+   <strong>Passwort-Login aktiv</strong>
+   <p>Für dieses Dashboard ist kein Authenticator-Code vorgesehen. MFA kann hier nicht aktiviert werden.</p>
+  </div>
+  <p>Konten, Rollen und Sitzungen werden weiterhin serverseitig geprüft; sicherheitskritische Änderungen werden auditiert.</p>
+ </section>
+}

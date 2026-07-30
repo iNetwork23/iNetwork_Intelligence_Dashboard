@@ -24,10 +24,17 @@ describe("professional access console contract", () => {
     expect(s).toContain("Benutzer durchsuchen");
     expect(s).toContain("Nach Rolle filtern");
     expect(s).toContain("Nach Status filtern");
-    expect(s).toContain("Nach MFA filtern");
-    expect(s).toContain("Benutzer einladen");
+    expect(s).not.toContain("Nach MFA filtern");
+    expect(s).not.toContain("Administrator ohne MFA");
+    expect(s).toContain("Benutzer anlegen");
+    expect(s).toContain('name="username"');
+    expect(s).toContain('name="email"');
+    expect(s).toContain('name="password"');
+    expect(s).toContain('name="passwordConfirm"');
+    expect(s).toContain('autoComplete="new-password"');
+    expect(s).toContain('action: "create_user"');
   });
-  it("loads names and MFA state from the protected admin API", () => {
+  it("loads names and legacy MFA cleanup state from the protected admin API", () => {
     const route = readFileSync(
       new URL("../app/api/admin/access/route.ts", import.meta.url),
       "utf8",
@@ -35,6 +42,26 @@ describe("professional access console contract", () => {
     expect(route).toContain("hasMfa");
     expect(route).toContain("mfaEnabled");
     expect(route).toContain("user_metadata");
+    expect(route).toContain("username:");
+  });
+  it("creates a confirmed, initially blocked Supabase user without leaking the password", () => {
+    const route = readFileSync(
+        new URL("../app/api/admin/access/route.ts", import.meta.url),
+        "utf8",
+      ),
+      provisioning = readFileSync(new URL("./user-provisioning.ts", import.meta.url), "utf8");
+    expect(route).toContain("auth.admin.createUser");
+    expect(route).toContain("provisionDirectUser");
+    expect(provisioning).toContain("email_confirm: true");
+    expect(provisioning).toContain('ban_duration: "876000h"');
+    expect(provisioning).toContain("user_metadata: { username: account.username }");
+    expect(provisioning).toContain("await auth.activate");
+    expect(route).toContain("deleteUser");
+    expect(route).not.toContain("inviteUserByEmail");
+    const auditStart = provisioning.indexOf('action: "user.create"'),
+      auditEnd = provisioning.indexOf("await auth.activate", auditStart);
+    expect(auditStart).toBeGreaterThan(-1);
+    expect(provisioning.slice(auditStart, auditEnd)).not.toContain("password");
   });
   it("guards stale writes, keeps failed form input and reactivates every inactive account", () => {
     const s = source();

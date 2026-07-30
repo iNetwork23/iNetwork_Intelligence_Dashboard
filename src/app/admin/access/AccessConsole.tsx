@@ -151,10 +151,9 @@ export default function AccessConsole() {
     [query, setQuery] = useState(""),
     [roleFilter, setRoleFilter] = useState("all"),
     [statusFilter, setStatusFilter] = useState("all"),
-    [mfaFilter, setMfaFilter] = useState("all"),
     [auditQuery, setAuditQuery] = useState(""),
     [auditAction, setAuditAction] = useState("all");
-  const inviteDialog = useRef<HTMLDialogElement>(null);
+  const createUserDialog = useRef<HTMLDialogElement>(null);
   const load = useCallback(async () => {
     setLoadError(false);
     try {
@@ -268,7 +267,7 @@ export default function AccessConsole() {
     query,
     role: roleFilter,
     status: statusFilter,
-    mfa: mfaFilter,
+    mfa: "all",
   });
   const userById = new Map(users.map((user) => [user.id, user.email]));
   const filteredAudit = (data.audit || []).filter(
@@ -289,21 +288,9 @@ export default function AccessConsole() {
         .length,
     ],
     ["Partner", users.filter((u) => u.access.role === "partner").length],
-    ["MFA aktiviert", users.filter((u) => u.mfaEnabled).length],
     ["Noch nie angemeldet", users.filter((u) => !u.lastLogin).length],
   ];
   const attention = [
-    ...users
-      .filter(
-        (u) =>
-          ["admin", "super_admin"].includes(u.access.role) && !u.mfaEnabled,
-      )
-      .map((u) => ({
-        level: "danger",
-        title: "Administrator ohne MFA",
-        text: `${u.email} hat keine Zwei-Faktor-Anmeldung aktiviert.`,
-        target: "users" as View,
-      })),
     ...users
       .filter((u) => !u.lastLogin)
       .map((u) => ({
@@ -355,9 +342,9 @@ export default function AccessConsole() {
         {data.users && (
           <button
             className="accessPrimary"
-            onClick={() => inviteDialog.current?.showModal()}
+            onClick={() => createUserDialog.current?.showModal()}
           >
-            Benutzer einladen
+            Benutzer anlegen
           </button>
         )}
       </div>
@@ -469,28 +456,18 @@ export default function AccessConsole() {
                 <option value="deactivated">Deaktiviert</option>
               </select>
             </label>
-            <label>
-              <span>Nach MFA filtern</span>
-              <select
-                value={mfaFilter}
-                onChange={(e) => setMfaFilter(e.target.value)}
-              >
-                <option value="all">Alle MFA-Zustände</option>
-                <option value="enabled">MFA aktiviert</option>
-                <option value="disabled">MFA nicht aktiviert</option>
-              </select>
-            </label>
+
           </div>
           <div className="accessUsers">
             {filteredUsers.map((user) => (
               <details key={user.id} className="userCard">
                 <summary>
                   <span className="avatar" aria-hidden="true">
-                    {(user.name || user.email).slice(0, 2).toUpperCase()}
+                    {(user.name || user.username || user.email).slice(0, 2).toUpperCase()}
                   </span>
                   <span className="userIdentity">
-                    <b>{user.name || user.email}</b>
-                    {user.name && <small>{user.email}</small>}
+                    <b>{user.name || user.username || user.email}</b>
+                    {(user.name || user.username) && <small>{user.email}</small>}
                     <small>
                       Letzte Anmeldung:{" "}
                       {user.lastLogin
@@ -506,11 +483,7 @@ export default function AccessConsole() {
                       (role) => role.id === user.access.customRoleId,
                     )?.name || roleLabel(user.access.role)}
                   </strong>
-                  <span
-                    className={`mfaBadge ${user.mfaEnabled ? "enabled" : "disabled"}`}
-                  >
-                    {user.mfaEnabled ? "MFA aktiv" : "MFA fehlt"}
-                  </span>
+
                   <span className="summaryChevron" aria-hidden="true">
                     ›
                   </span>
@@ -675,17 +648,17 @@ export default function AccessConsole() {
                       >
                         Ansicht übernehmen
                       </button>
-                      <button
+                      {user.mfaEnabled && <button
                         className="danger"
                         onClick={() =>
                           void act(
                             { action: "reset_mfa", userId: user.id },
-                            `Zwei-Faktor-Anmeldung von ${user.email} wirklich zurücksetzen? Der Faktor wird gelöscht und alle Sitzungen werden beendet.`,
+                            `Legacy-MFA-Daten von ${user.email} wirklich löschen? Der alte Faktor wird entfernt und alle Sitzungen werden beendet.`,
                           )
                         }
                       >
-                        MFA zurücksetzen
-                      </button>
+                        Legacy-MFA-Daten löschen
+                      </button>}
                       <button
                         className="danger"
                         onClick={() =>
@@ -985,29 +958,38 @@ export default function AccessConsole() {
         </section>
       )}
       <dialog
-        ref={inviteDialog}
+        ref={createUserDialog}
         className="accessDialog"
-        aria-labelledby="invite-title"
+        aria-labelledby="create-user-title"
       >
         <form method="dialog" className="dialogClose">
           <button aria-label="Dialog schließen">×</button>
         </form>
         <div className="dialogHeading">
           <span className="sectionKicker">NEUER ZUGANG</span>
-          <h2 id="invite-title">Benutzer einladen</h2>
+          <h2 id="create-user-title">Benutzer anlegen</h2>
           <p>
-            Die eingeladene Person erhält eine E-Mail zur sicheren
-            Passwort-Einrichtung.
+            Lege die Zugangsdaten direkt fest. Danach kann sich die Person mit
+            Benutzername oder E-Mail über den normalen Login anmelden.
           </p>
         </div>
         <form
           className="inviteForm"
           onSubmit={async (event) => {
             event.preventDefault();
-            const fd = new FormData(event.currentTarget);
+            const form = event.currentTarget,
+              fd = new FormData(form),
+              password = String(fd.get("password") || ""),
+              passwordConfirm = String(fd.get("passwordConfirm") || "");
+            if (password !== passwordConfirm) {
+              setMessage("Die beiden Passwörter stimmen nicht überein.");
+              return;
+            }
             const ok = await act({
-              action: "invite",
+              action: "create_user",
+              username: fd.get("username"),
               email: fd.get("email"),
+              password,
               access: {
                 ...roleAccess(fd.get("role")),
                 status: "active",
@@ -1016,13 +998,32 @@ export default function AccessConsole() {
                 scopes: {},
               },
             });
-            if (ok) inviteDialog.current?.close();
+            if (ok) {
+              form.reset();
+              createUserDialog.current?.close();
+            }
           }}
         >
-          <label htmlFor="invite-email">
+          <label htmlFor="create-username">
+            Benutzername
+            <input
+              id="create-username"
+              name="username"
+              type="text"
+              placeholder="vorname.nachname"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              minLength={3}
+              maxLength={40}
+              pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,39}"
+              required
+            />
+          </label>
+          <label htmlFor="create-email">
             E-Mail-Adresse
             <input
-              id="invite-email"
+              id="create-email"
               name="email"
               type="email"
               placeholder="name@firma.de"
@@ -1030,22 +1031,47 @@ export default function AccessConsole() {
               required
             />
           </label>
-          <label htmlFor="invite-role">
+          <label htmlFor="create-password">
+            Startpasswort
+            <input
+              id="create-password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+            />
+          </label>
+          <label htmlFor="create-password-confirm">
+            Startpasswort wiederholen
+            <input
+              id="create-password-confirm"
+              name="passwordConfirm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+            />
+          </label>
+          <label htmlFor="create-role">
             Rolle
-            <select id="invite-role" name="role" defaultValue="employee">
+            <select id="create-role" name="role" defaultValue="employee">
               {roleChoices()}
             </select>
           </label>
           <div className="inviteSummary">
-            Die Rolle bestimmt die grundlegenden Funktionen. Datenfreigaben
-            können anschließend im Benutzerprofil ergänzt werden.
+            Das Passwort wird nicht gespeichert oder später angezeigt. Teile
+            Login-Link und Startpasswort über einen sicheren Kanal. Die Rolle
+            und Datenfreigaben können anschließend angepasst werden.
           </div>
           <div className="dialogActions">
-            <button type="button" onClick={() => inviteDialog.current?.close()}>
+            <button type="button" onClick={() => createUserDialog.current?.close()}>
               Abbrechen
             </button>
             <button className="accessPrimary" disabled={Boolean(pendingAction)}>
-              {pendingAction === "invite" ? "Sendet …" : "Einladung senden"}
+              {pendingAction === "create_user" ? "Legt an …" : "Benutzer anlegen"}
             </button>
           </div>
         </form>

@@ -6,7 +6,7 @@ import {securityStore} from './access-store';
 import {COOKIE_NAME,validateOpaqueSession,revokeSession} from './security';
 import {can,parseAccessMetadata,type AccessMetadata,type Permission} from './rbac';
 export type CurrentUser={id:string;email:string;access:AccessMetadata;actorId:string;impersonating:boolean};
-async function resolveCurrentUser():Promise<CurrentUser|null>{
+export async function resolveCurrentUserUncached():Promise<CurrentUser|null>{
  const token=(await cookies()).get(COOKIE_NAME)?.value;let session;
  try{session=await validateOpaqueSession(securityStore(),token)}catch{return null}
  if(!session)return null;
@@ -20,5 +20,5 @@ async function resolveCurrentUser():Promise<CurrentUser|null>{
  if(access.status!=='active'||access.version!==session.metadataVersion){await revokeSession(securityStore(),token);return null}
  return{id:data.user.id,email:data.user.email||'',access,actorId:session.actorId||data.user.id,impersonating:Boolean(session.actorId)};
 }
-export const currentUser=cache(resolveCurrentUser);
+export const currentUser=cache(resolveCurrentUserUncached);
 export async function requirePermission(permission:Permission){const user=await currentUser();if(!user)return {ok:false as const,status:401 as const,user:null};if(!can(user.access,permission))return {ok:false as const,status:403 as const,user};return {ok:true as const,status:200 as const,user};}
