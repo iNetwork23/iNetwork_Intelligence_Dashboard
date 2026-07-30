@@ -3,7 +3,7 @@ import {loadAutomationOfferLandingpages,searchAutomationOffers} from './automati
 const response=(body:unknown)=>new Response(JSON.stringify(body),{status:200,headers:{'content-type':'application/json'}});
 describe('automation inventory',()=>{
  it('searches offers by canonical ID or name and keeps status visible',async()=>{
-  const fetcher=vi.fn().mockImplementation(()=>Promise.resolve(response({offers:[{network_offer_id:57,name:'Singles69',offer_status:'active'},{network_offer_id:50,name:'Sex69',offer_status:'paused'}]})));
+  const fetcher=vi.fn().mockImplementation((url:string|URL|Request)=>Promise.resolve(response(String(url).endsWith('/offers/50')?{network_offer_id:50,name:'Sex69',offer_status:'paused'}:{offers:[{network_offer_id:57,name:'Singles69',offer_status:'active'},{network_offer_id:50,name:'Sex69',offer_status:'paused'}]})));
   expect(await searchAutomationOffers('sing', 'key',fetcher)).toEqual([{offerId:57,name:'Singles69',status:'active'}]);
   expect((await searchAutomationOffers('50','key',fetcher))[0]).toMatchObject({offerId:50,status:'paused'});
  });
