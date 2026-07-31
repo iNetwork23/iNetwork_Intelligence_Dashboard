@@ -16,19 +16,26 @@ export type AccessMetadata={role:StandardRole;status:AccountStatus;grants:Permis
 const emptyScopes=():AccessMetadata['scopes']=>({affiliate:[],offer:[],campaign:[],account:[],source:[],sub_source:[]});
 const fallback=():AccessMetadata=>({role:'read_only',status:'blocked',grants:[],denials:[],scopes:emptyScopes(),version:0});
 const own=(v:unknown):v is Record<string,unknown>=>Boolean(v)&&typeof v==='object'&&!Array.isArray(v);
+const hasOwn=(value:object,key:PropertyKey)=>Object.prototype.hasOwnProperty.call(value,key);
 const strings=(v:unknown,max=100)=>Array.isArray(v)?[...new Set(v.filter((x):x is string=>typeof x==='string'&&x.length>0&&x.length<=200).slice(0,max))]:[];
 const validPermissions=(v:unknown)=>strings(v).filter((p):p is Permission=>(ALL_PERMISSIONS as readonly string[]).includes(p));
-const validRole=(value:unknown):value is StandardRole=>typeof value==='string'&&value in STANDARD_ROLES;
+const exactPermissions=(v:unknown):v is Permission[]=>Array.isArray(v)&&v.length<=ALL_PERMISSIONS.length&&new Set(v).size===v.length&&v.every(p=>typeof p==='string'&&(ALL_PERMISSIONS as readonly string[]).includes(p));
+const validRole=(value:unknown):value is StandardRole=>typeof value==='string'&&hasOwn(STANDARD_ROLES,value);
+const validCustomRoleId=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(value)&&!['constructor','prototype','__proto__'].includes(value);
+export function customRoleReferenceId(value:unknown):string|null|undefined{if(!own(value)||!hasOwn(value,'custom_role'))return undefined;const role=value.custom_role;if(!own(role)||!hasOwn(role,'id')||!validCustomRoleId(role.id)||!hasOwn(role,'baseRole')||!validRole(role.baseRole)||!hasOwn(role,'grants')||!exactPermissions(role.grants)||!hasOwn(role,'denials')||!exactPermissions(role.denials)||!hasOwn(role,'version')||!Number.isSafeInteger(role.version)||Number(role.version)<0)return null;return role.id}
 /** Parse only the value explicitly supplied from Supabase user.app_metadata. Never pass user_metadata here. */
 export function parseAccessMetadata(value:unknown):AccessMetadata{
- if(!own(value)||!validRole(value.role))return fallback();
+ if(!own(value)||!hasOwn(value,'role')||!validRole(value.role))return fallback();
+ const roleId=customRoleReferenceId(value);if(roleId===null)return fallback();
  const rawScopes=own(value.scopes)?value.scopes:{};
  const scopes=emptyScopes();
  for(const key of SCOPE_KEYS){const legacy=`${key}_ids`;scopes[key]=strings(rawScopes[key]??rawScopes[legacy]);}
  let customRole:MaterializedCustomRole|undefined;
- if(own(value.custom_role)&&typeof value.custom_role.id==='string'&&validRole(value.custom_role.baseRole))customRole={id:value.custom_role.id.slice(0,100),baseRole:value.custom_role.baseRole,grants:validPermissions(value.custom_role.grants),denials:validPermissions(value.custom_role.denials),version:Number.isSafeInteger(value.custom_role.version)?Number(value.custom_role.version):0};
+ if(roleId!==undefined){const role=value.custom_role as Record<string,unknown>;customRole={id:roleId,baseRole:role.baseRole as StandardRole,grants:role.grants as Permission[],denials:role.denials as Permission[],version:Number(role.version)}}
  return {role:value.role,status:value.status==='blocked'||value.status==='deactivated'?value.status:'active',grants:validPermissions(value.grants),denials:validPermissions(value.denials),scopes,version:Number.isSafeInteger(value.version)&&Number(value.version)>=0?Number(value.version):0,...(customRole?{customRoleId:customRole.id,customRole}:{})};
 }
+export function resolveStoredAccessMetadata(appMetadata:unknown,saved:unknown):AccessMetadata|null{const reference=customRoleReferenceId(appMetadata);if(reference===null)return null;const parsed=parseAccessMetadata(appMetadata);if(reference===undefined)return parsed;if(!own(saved)||!hasOwn(saved,'id')||saved.id!==reference||!hasOwn(saved,'baseRole')||!validRole(saved.baseRole)||!hasOwn(saved,'grants')||!exactPermissions(saved.grants)||!hasOwn(saved,'denials')||!exactPermissions(saved.denials)||!hasOwn(saved,'version')||!Number.isSafeInteger(saved.version)||Number(saved.version)<0)return null;return parseAccessMetadata({...appMetadata as Record<string,unknown>,role:saved.baseRole,custom_role:{id:reference,baseRole:saved.baseRole,grants:saved.grants,denials:saved.denials,version:saved.version}})}
+export async function resolveStoredAccessFromStore(appMetadata:unknown,store:{get:(key:string)=>Promise<unknown>}):Promise<AccessMetadata|null>{const reference=customRoleReferenceId(appMetadata);if(reference===null)return null;const saved=reference===undefined?undefined:await store.get(`rbac:role:${reference}`);return resolveStoredAccessMetadata(appMetadata,saved)}
 export function effectivePermissions(access:AccessMetadata){const source=access.customRole;const set=new Set<Permission>(STANDARD_ROLES[source?.baseRole??access.role]);for(const p of source?.grants??[])set.add(p);for(const p of access.grants)set.add(p);for(const p of source?.denials??[])set.delete(p);for(const p of access.denials)set.delete(p);return set;}
 export const can=(access:AccessMetadata,permission:Permission)=>access.status==='active'&&effectivePermissions(access).has(permission);
 const ROW_ALIASES:Record<ScopeKey,string[]>={affiliate:['affiliate','affiliate_id','network_affiliate_id'],offer:['offer','offer_id','network_offer_id'],campaign:['campaign','campaign_id','network_campaign_id'],account:['account','account_id','advertiser_id'],source:['source','source_id','source_value'],sub_source:['sub_source','sub_source_id','sub1','sub_source_value']};
@@ -46,15 +53,14 @@ const rank:Record<StandardRole,number>={read_only:0,partner:1,employee:2,admin:3
 export const mayImpersonate=(actor:StandardRole,target:StandardRole)=>rank[actor]>rank[target];
 const SENSITIVE_ADMIN_PERMISSIONS=new Set<Permission>(['users.manage','roles.manage','settings.manage','api.manage','audit.view','automations.live']);
 export function assertMayDelegatePermissions(actor:AccessMetadata,requested:AccessMetadata){
- if(actor.role==='super_admin')return;
  const actorPermissions=effectivePermissions(actor);
  for(const permission of effectivePermissions(requested)){
   if(!actorPermissions.has(permission))throw new Error(`Berechtigung darf nicht delegiert werden: ${permission}`);
-  if(SENSITIVE_ADMIN_PERMISSIONS.has(permission))throw new Error(`Sensitive Admin-Berechtigung darf nicht delegiert werden: ${permission}`);
+  if(actor.role!=='super_admin'&&SENSITIVE_ADMIN_PERMISSIONS.has(permission))throw new Error(`Sensitive Admin-Berechtigung darf nicht delegiert werden: ${permission}`);
  }
 }
 export function assertMayManageUser(input:{actorId:string;actor:AccessMetadata;targetId:string;target:AccessMetadata;requested:AccessMetadata}){
- if(input.actor.role==='super_admin')return;
+ if(input.actor.role==='super_admin'){assertMayDelegatePermissions(input.actor,input.requested);return;}
  if(input.targetId===input.actorId)throw new Error('Administratoren dürfen sich nicht selbst ändern.');
  if(input.target.role==='super_admin'||input.requested.role==='super_admin')throw new Error('Nur Super-Admins dürfen Super-Admins verwalten.');
  if(rank[input.target.role]>=rank[input.actor.role])throw new Error('Gleichrangige oder höher privilegierte Benutzer dürfen nicht geändert werden.');

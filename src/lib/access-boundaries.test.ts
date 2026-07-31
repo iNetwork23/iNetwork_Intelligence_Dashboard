@@ -3,6 +3,13 @@ import {describe,expect,it} from 'vitest';
 const read=(path:string)=>readFileSync(new URL(`../app/${path}`,import.meta.url),'utf8');
 describe('wired server authorization boundaries',()=>{
  it('uses an uncached actor resolver inside the admin mutation lock',()=>{const session=readFileSync(new URL('./session.ts',import.meta.url),'utf8'),route=read('api/admin/access/route.ts');expect(session).toContain('export async function resolveCurrentUserUncached');expect(route).toContain('resolveCurrentUserUncached()');expect(route).not.toMatch(/withSecurityLock[\s\S]{0,300}const actor = await currentUser\(\)/)});
+ it('fails closed when logout receives a cookie without a retained cleanup identity',()=>{
+  const session=readFileSync(new URL('./session.ts',import.meta.url),'utf8'),logout=read('api/auth/logout/route.ts');
+  expect(session).toContain('resolveSessionCleanupIdentity');
+  expect(session).toContain("throw new Error('Session-Cleanup-Identität nicht verfügbar')");
+  expect(logout).toContain('forgetSessionCleanupIdentity');
+  expect(logout).toContain("status:503");
+ });
  it('does not require MFA during dashboard login or session validation',()=>{
   const login=read('api/auth/login/route.ts'),session=readFileSync(new URL('./session.ts',import.meta.url),'utf8');
   const page=read('login/page.tsx');
@@ -43,6 +50,7 @@ describe('wired server authorization boundaries',()=>{
   const session=readFileSync(new URL('./session.ts',import.meta.url),'utf8');expect(session).toMatch(/ALLOW_LEGACY_ADMIN.*false/);
   const config=readFileSync(new URL('../../next.config.ts',import.meta.url),'utf8');expect(config).toContain('headers()');expect(config).toContain('Content-Security-Policy');
  });
+ it('uses authoritative stored-role resolution for every existing administrative identity',()=>{const admin=read('api/admin/access/route.ts');expect((admin.match(/authoritativeUserAccess/g)||[]).length).toBeGreaterThanOrEqual(7);for(const stale of ['parseAccessMetadata(u.app_metadata)','parseAccessMetadata(data.user.app_metadata)','parseAccessMetadata(oldResult.data.user.app_metadata)','parseAccessMetadata(freshResult.data.user.app_metadata)'])expect(admin).not.toContain(stale);expect(admin).toContain('resolveStoredAccessFromStore');const exit=read('api/auth/impersonation/exit/route.ts');expect(exit).toContain('resolveStoredAccessFromStore');expect(exit).not.toContain('parseAccessMetadata(data.user.app_metadata)')});
  it('wires hierarchy guards, custom-role assignment, and isolated resets into user management',()=>{
   const admin=read('api/admin/access/route.ts');expect(admin).toContain('assertMayManageUser');expect(admin).toContain('custom_role');expect(admin).toContain('customRoleId');expect(admin).toContain('getSupabasePasswordAuth');
  });
@@ -58,7 +66,7 @@ describe('wired server authorization boundaries',()=>{
  it('partitions admin GET data and preserves custom role assignment in the console',()=>{
   const route=read('api/admin/access/route.ts'),console=read('admin/access/AccessConsole.tsx');
   expect(route).toMatch(/can\(actor\.access,\s*["']users\.manage["']\)/);expect(route).toMatch(/can\(actor\.access,\s*["']roles\.manage["']\)/);expect(route).toMatch(/can\(actor\.access,\s*["']audit\.view["']\)/);
-  expect(route).toContain('roleOptions');expect(route).toMatch(/if\s*\(mayRoles\)\s*response\.roles\s*=/);expect(route).toMatch(/if\s*\(mayRoles\)\s*response\.standardRoles\s*=/);expect(console).toContain('data.roleOptions');
+  expect(route).toContain('roleOptions');expect(route).toMatch(/if\s*\(mayUsers\s*\|\|\s*mayRoles\)\s*response\.standardRoles\s*=/);expect(route).toMatch(/if\s*\(mayRoles\)\s*response\.roles\s*=/);expect(console).toContain('data.roleOptions');
   expect(console).toContain('customRoleId');expect(console).toContain("action:'delete_role'");expect(console).toContain('Benutzerdefinierte Rolle');
  });
  it('wires assigned-role protection and audited cleanup of legacy MFA data',()=>{

@@ -3,10 +3,10 @@ import { cookies } from 'next/headers';
 import { getSupabaseAdmin, getSupabasePasswordAuth } from '@/lib/supabase';
 import { audit, listAudit, requestEvidence, securityStore } from '@/lib/access-store';
 import { currentUser, resolveCurrentUserUncached } from '@/lib/session';
-import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, STANDARD_ROLES, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
+import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, resolveStoredAccessFromStore, resolveStoredAccessMetadata, STANDARD_ROLES, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
-import { assertRoleIsUnassigned, buildRoleOptions, type CustomRoleDefinition } from '@/lib/admin-access-policy';
+import { assertRoleIsUnassigned, buildRoleOptions, customRoleBaseRoles, type CustomRoleDefinition } from '@/lib/admin-access-policy';
 import { DuplicateProvisioningIdentityError, parseProvisionedUser, provisionDirectUser, ProvisioningUncertainError } from '@/lib/user-provisioning';
 export const dynamic = 'force-dynamic';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: securityHeaders });
@@ -35,21 +35,15 @@ async function resolveAccess(raw: unknown, version: number) {
   const parsed = parseAccessMetadata(raw),
     customRoleId = object(raw) && typeof raw.customRoleId === 'string' ? raw.customRoleId.slice(0, 100) : undefined;
   if (!customRoleId) return serializeAccess({ ...parsed, version });
-  const saved = (await securityStore().get(`rbac:role:${customRoleId}`)) as CustomRole | null;
-  if (!saved || !saved.id || !(saved.baseRole in STANDARD_ROLES)) throw new Error('Unbekannte benutzerdefinierte Rolle');
-  return serializeAccess({
-    ...parsed,
-    role: saved.baseRole,
-    version,
-    customRoleId: saved.id,
-    customRole: {
-      id: saved.id,
-      baseRole: saved.baseRole,
-      grants: saved.grants,
-      denials: saved.denials,
-      version: saved.version || 1,
-    },
-  });
+  const saved = await securityStore().get(`rbac:role:${customRoleId}`);
+  const materialized=resolveStoredAccessMetadata({...(object(raw)?raw:{}),custom_role:object(saved)?{...saved,id:customRoleId}:null},saved);
+  if(!materialized)throw new Error('Unbekannte benutzerdefinierte Rolle');
+  return serializeAccess({...materialized,version});
+}
+async function authoritativeUserAccess(raw:unknown):Promise<AccessMetadata>{
+ const access=await resolveStoredAccessFromStore(raw,securityStore());
+ if(!access)throw new Error('Ungültige benutzerdefinierte Rolle');
+ return access;
 }
 async function users() {
   const all = [];
@@ -82,21 +76,21 @@ export async function GET() {
       const all = await users(),
         store = securityStore();
       response.users = await Promise.all(
-        all.map(async (u) => ({
+        all.map(async (u) => {const access=await authoritativeUserAccess(u.app_metadata);return({
           id: u.id,
           email: u.email,
           username: String(u.user_metadata?.username || '').trim() || undefined,
           name: String(u.user_metadata?.full_name || u.user_metadata?.name || '').trim() || undefined,
-          status: parseAccessMetadata(u.app_metadata).status,
-          access: parseAccessMetadata(u.app_metadata),
+          status: access.status,
+          access,
           mfaEnabled: await hasMfa(store, u.id),
           lastLogin: u.last_sign_in_at || null,
           createdAt: u.created_at,
-        })),
+        })}),
       );
       response.roleOptions = buildRoleOptions(roleDefinitions);
     }
-    if (mayRoles) response.standardRoles = STANDARD_ROLES;
+    if (mayUsers || mayRoles) response.standardRoles = customRoleBaseRoles(actor.access);
     if (mayRoles) response.roles = roleDefinitions;
     if (mayAudit) response.audit = await listAudit();
     return json(response);
@@ -132,7 +126,7 @@ export async function POST(request: Request) {
       if (!actor.impersonating) return json({ error: 'Keine aktive Impersonation' }, 400);
       const { data, error } = await getSupabaseAdmin().auth.admin.getUserById(actor.actorId);
       if (error || !data.user) return json({ error: 'Akteur nicht verfügbar' }, 403);
-      const access = parseAccessMetadata(data.user.app_metadata);
+      const access = await authoritativeUserAccess(data.user.app_metadata);
       const made = await createOpaqueSession(securityStore(), {
         userId: data.user.id,
         metadataVersion: access.version,
@@ -156,7 +150,7 @@ export async function POST(request: Request) {
       if (!can(actor.access, 'users.manage')) return json({ error: 'Keine Berechtigung' }, 403);
       const { data, error } = await getSupabaseAdmin().auth.admin.getUserById(targetId);
       if (error || !data.user) return json({ error: 'Benutzer nicht gefunden' }, 404);
-      const target = parseAccessMetadata(data.user.app_metadata);
+      const target = await authoritativeUserAccess(data.user.app_metadata);
       if (target.status !== 'active' || !mayImpersonate(actor.access.role, target.role)) return json({ error: 'Impersonation nicht erlaubt' }, 403);
       const made = await createOpaqueSession(securityStore(), {
         userId: data.user.id,
@@ -248,7 +242,7 @@ export async function POST(request: Request) {
       const supabase = getSupabaseAdmin(),
         oldResult = await supabase.auth.admin.getUserById(targetId);
       if (oldResult.error || !oldResult.data.user) return json({ error: 'Benutzer nicht gefunden' }, 404);
-      const before = parseAccessMetadata(oldResult.data.user.app_metadata);
+      const before = await authoritativeUserAccess(oldResult.data.user.app_metadata);
       if (action === 'revoke_sessions' && targetId === actor.id) {
         await revokeUserSessions(securityStore(), targetId);
         await audit({
@@ -296,7 +290,7 @@ export async function POST(request: Request) {
       }
       const freshResult = await supabase.auth.admin.getUserById(targetId);
         if (freshResult.error || !freshResult.data.user) return json({ error: 'Benutzer nicht gefunden' }, 404);
-        const current = parseAccessMetadata(freshResult.data.user.app_metadata);
+        const current = await authoritativeUserAccess(freshResult.data.user.app_metadata);
         if (['update_user', 'block', 'reactivate', 'deactivate'].includes(action) && Number(input.expectedVersion) !== current.version)
           return json({ error: 'Der Benutzer wurde zwischenzeitlich geändert. Bitte neu laden.' }, 409);
         const requestedRaw =
@@ -310,10 +304,8 @@ export async function POST(request: Request) {
           requested = parseAccessMetadata(requestedRaw);
         assertMayManageUser({ actorId: actor.id, actor: actor.access, targetId, target: current, requested });
         const all = await users(),
-          activeSupers = all.filter((u) => {
-            const a = parseAccessMetadata(u.app_metadata);
-            return a.role === 'super_admin' && a.status === 'active';
-          }).length;
+          resolvedUsers=await Promise.all(all.map(u=>authoritativeUserAccess(u.app_metadata))),
+          activeSupers = resolvedUsers.filter((a) => a.role === 'super_admin' && a.status === 'active').length;
         assertMayRemoveSuperAdmin({
           targetIsSuperAdmin: current.role === 'super_admin' && current.status === 'active',
           activeSuperAdminCount: activeSupers,

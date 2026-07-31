@@ -20,7 +20,7 @@ import type { ResolvedSourcePeriod } from "../../lib/source-period";
 import type { SnapshotFreshness } from "../../lib/snapshot-generation";
 import type { RebillConcentration } from "../../lib/rebill-concentration";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
-export const sourceRebillKey=(sourceId:string,subSource:string|null)=>`${sourceId}\u001f${!subSource||subSource===NO_SUB_SOURCE?'':subSource}`;
+import { sourceRebillKey } from "../../lib/source-rebill-key";
 import { rankNestedSourceMatches } from "../../lib/source-search";
 import SourceSearchField from "../components/SourceSearchField";
 const num = (n: number) => new Intl.NumberFormat("de-DE").format(n),

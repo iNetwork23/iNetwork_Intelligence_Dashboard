@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {ALL_PERMISSIONS,can,parseAccessMetadata,filterPartnerRows,foreignScopeRequested,assertMayRemoveSuperAdmin,mayImpersonate,stripFinance,assertMayManageUser,assertScopesSupported,scopeFingerprint} from './rbac';
+import {ALL_PERMISSIONS,can,parseAccessMetadata,filterPartnerRows,foreignScopeRequested,assertMayRemoveSuperAdmin,mayImpersonate,stripFinance,assertMayManageUser,assertMayDelegatePermissions,assertScopesSupported,scopeFingerprint,resolveStoredAccessMetadata} from './rbac';
 
 describe('central RBAC',()=>{
  it('is deny-by-default and exposes the complete permission registry',()=>{
@@ -23,6 +23,23 @@ describe('central RBAC',()=>{
  it('rejects malformed metadata and ignores user metadata by API design',()=>{
   expect(parseAccessMetadata({role:'root',grants:['not.real'],status:'active'})).toEqual(parseAccessMetadata({}));
   expect(parseAccessMetadata({role:'partner',scopes:{affiliate_ids:['1'],source:['google'],sub_source:['x']}}).scopes.affiliate).toEqual(['1']);
+ });
+ it('rejects inherited top-level roles and mismatched stored custom-role identities',()=>{
+  const inherited=Object.create({role:'admin'});
+  expect(parseAccessMetadata(inherited)).toMatchObject({role:'read_only',status:'blocked'});
+  expect(can(parseAccessMetadata(inherited),'settings.manage')).toBe(false);
+  const metadata={role:'admin',custom_role:{id:'role-1',baseRole:'admin',grants:[],denials:[],version:1}};
+  expect(resolveStoredAccessMetadata(metadata,{id:'different-role',baseRole:'admin',grants:[],denials:[],version:1})).toBeNull();
+  expect(resolveStoredAccessMetadata(metadata,{id:'role-1',baseRole:'read_only',grants:[],denials:[],version:2})).toMatchObject({role:'read_only',customRoleId:'role-1',customRole:{baseRole:'read_only',version:2}});
+  const scoped={...metadata,scopes:{affiliate:['tenant-a']}};
+  const partner=resolveStoredAccessMetadata(scoped,{id:'role-1',baseRole:'partner',grants:[],denials:[],version:3})!;
+  expect(partner.role).toBe('partner');
+  expect(filterPartnerRows([{affiliate_id:'tenant-a'},{affiliate_id:'tenant-b'}],partner)).toEqual([{affiliate_id:'tenant-a'}]);
+ });
+ it('applies explicit super-admin denials through ordinary user management',()=>{
+  const actor=parseAccessMetadata({role:'super_admin',denials:['finance.view']});
+  const requested=parseAccessMetadata({role:'employee',grants:['finance.view']});
+  expect(()=>assertMayManageUser({actorId:'super',actor,targetId:'user',target:parseAccessMetadata({role:'employee'}),requested})).toThrow(/Berechtigung/);
  });
  it('filters partner rows before totals, rejects direct foreign IDs, and fails closed without scopes',()=>{
   const access=parseAccessMetadata({role:'partner',scopes:{affiliate:['a'],offer:['o1'],campaign:['c1'],account:['ac'],source:['s'],sub_source:['ss']}});
@@ -52,6 +69,11 @@ describe('central RBAC',()=>{
   expect(()=>assertMayManageUser({actorId:'a',actor:admin,targetId:'b',target:admin,requested:admin})).toThrow(/gleichrangig/i);
   expect(()=>assertMayManageUser({actorId:'a',actor:admin,targetId:'s',target:parseAccessMetadata({role:'super_admin'}),requested:admin})).toThrow(/Super-Admin/i);
   expect(()=>assertMayManageUser({actorId:'a',actor:admin,targetId:'u',target:parseAccessMetadata({role:'employee'}),requested:parseAccessMetadata({role:'super_admin'})})).toThrow(/Super-Admin/i);
+ });
+ it('respects explicit denials even for super-admin delegation while allowing all remaining sensitive permissions',()=>{
+  const restricted=parseAccessMetadata({role:'super_admin',denials:['finance.view']});
+  expect(()=>assertMayDelegatePermissions(restricted,parseAccessMetadata({role:'employee',grants:['finance.view']}))).toThrow(/Berechtigung/);
+  expect(()=>assertMayDelegatePermissions(restricted,parseAccessMetadata({role:'admin',denials:['finance.view']}))).not.toThrow();
  });
  it('evaluates a materialized custom role and denies invalid custom permissions',()=>{
   const access=parseAccessMetadata({role:'employee',custom_role:{id:'analyst',baseRole:'read_only',grants:['exports.download','finance.view'],denials:['finance.view'],version:3}});

@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-import {acquireSecurityLease,createOpaqueSession,validateOpaqueSession,revokeSession,revokeUserSessions,checkCsrf,consumeRateLimit,recordRateLimitFailure,resetRateLimit,parseBoundedJson,MemorySecurityStore,canonicalOrigin,MAX_ACTIVE_SESSIONS,withSecurityLock} from './security';
+import {acquireSecurityLease,createOpaqueSession,validateOpaqueSession,revokeSession,revokeUserSessions,checkCsrf,consumeRateLimit,recordRateLimitFailure,resetRateLimit,parseBoundedJson,MemorySecurityStore,canonicalOrigin,MAX_ACTIVE_SESSIONS,withSecurityLock,resolveSessionCleanupIdentity,forgetSessionCleanupIdentity,pruneExpiredSessionCleanupIdentities} from './security';
 import {parseAccessMetadata} from './rbac';
 
 describe('session and HTTP security',()=>{
@@ -13,8 +13,62 @@ describe('session and HTTP security',()=>{
   const absolute=await createOpaqueSession(store,{userId:'u',metadataVersion:2},now);
   expect(await validateOpaqueSession(store,absolute.token,now+43_201)).toBeNull();
  });
+ it('retains a server-authenticated cleanup identity after session expiry or revocation until explicit logout cleanup completes',async()=>{
+  const store=new MemorySecurityStore(),made=await createOpaqueSession(store,{userId:'target',actorId:'actor',metadataVersion:1},10);
+  expect(await validateOpaqueSession(store,made.token,50_000)).toBeNull();
+  expect(await resolveSessionCleanupIdentity(store,made.token,50_000)).toMatchObject({userId:'target',actorId:'actor'});
+  await revokeSession(store,made.token);
+  expect(await resolveSessionCleanupIdentity(store,made.token,50_000)).toMatchObject({userId:'target',actorId:'actor'});
+  await forgetSessionCleanupIdentity(store,made.token);
+  expect(await resolveSessionCleanupIdentity(store,made.token)).toBeNull();
+ });
+ it('keeps cleanup identity retryable when identity deletion fails after index deletion',async()=>{
+  class FailIdentityDeleteOnce extends MemorySecurityStore{failed=false;override async delete(key:string){if(!this.failed&&key.startsWith('rbac:session-cleanup:')){this.failed=true;throw new Error('injected identity delete failure')}return super.delete(key)}}
+  const store=new FailIdentityDeleteOnce(),made=await createOpaqueSession(store,{userId:'retry-user',metadataVersion:1},10);
+  await expect(forgetSessionCleanupIdentity(store,made.token)).rejects.toThrow(/injected/);
+  expect(await resolveSessionCleanupIdentity(store,made.token,11)).toMatchObject({userId:'retry-user'});
+  await forgetSessionCleanupIdentity(store,made.token);
+  expect(await resolveSessionCleanupIdentity(store,made.token,11)).toBeNull();
+ });
+ it('physically deletes expired cleanup identities and sweeps abandoned identities on later session creation',async()=>{
+  const store=new MemorySecurityStore();
+  const expired=await createOpaqueSession(store,{userId:'expired',metadataVersion:1,absoluteSeconds:60},10);
+  const cleanupKey=[...store.values].find(([,v])=>(v as {userId?:string})?.userId==='expired')?.[0];
+  expect(cleanupKey).toBeTruthy();
+  expect(await resolveSessionCleanupIdentity(store,expired.token,2_592_071)).toBeNull();
+  expect(store.values.has(cleanupKey!)).toBe(false);
+  const abandoned=await createOpaqueSession(store,{userId:'abandoned',metadataVersion:1,absoluteSeconds:60},10);
+  const abandonedKey=[...store.values].find(([,v])=>(v as {userId?:string})?.userId==='abandoned')?.[0];
+  expect(abandonedKey).toBeTruthy();
+  await createOpaqueSession(store,{userId:'new',metadataVersion:1},2_592_071);
+  expect(store.values.has(abandonedKey!)).toBe(false);
+  expect(await resolveSessionCleanupIdentity(store,abandoned.token,2_592_071)).toBeNull();
+ });
+ it('deletes the indexed cleanup identity even when the expiry-index value is corrupted',async()=>{
+  const store=new MemorySecurityStore();
+  await createOpaqueSession(store,{userId:'corrupt',metadataVersion:1,absoluteSeconds:60},10);
+  const identity=[...store.values].find(([key])=>key.startsWith('rbac:session-cleanup:'))?.[0];
+  const index=[...store.values].find(([key])=>key.startsWith('rbac:session-cleanup-expiry:'))?.[0];
+  expect(identity).toBeTruthy();expect(index).toBeTruthy();
+  store.values.set(index!,{malformed:true});
+  await pruneExpiredSessionCleanupIdentities(store,2_592_071);
+  expect(store.values.has(identity!)).toBe(false);
+  expect(store.values.has(index!)).toBe(false);
+ });
+ it('retains malformed cleanup indexes as durable retry markers instead of orphaning identities',async()=>{
+  const store=new MemorySecurityStore();
+  await createOpaqueSession(store,{userId:'malformed-key',metadataVersion:1,absoluteSeconds:60},10);
+  const identity=[...store.values].find(([key])=>key.startsWith('rbac:session-cleanup:'))?.[0];
+  const index=[...store.values].find(([key])=>key.startsWith('rbac:session-cleanup-expiry:'))!;
+  const malformed=index[0].replace(/\d{12}:/,'000000000000-');
+  store.values.delete(index[0]);store.values.set(malformed,index[1]);
+  await pruneExpiredSessionCleanupIdentities(store,2_592_071);
+  expect(store.values.has(identity!)).toBe(true);
+  expect(store.values.has(malformed)).toBe(true);
+ });
  it('revokes all sessions for a user immediately',async()=>{
-  const store=new MemorySecurityStore();const made=await createOpaqueSession(store,{userId:'u',metadataVersion:1},10);
+  const store=new MemorySecurityStore();
+  const made=await createOpaqueSession(store,{userId:'u',metadataVersion:1},10);
   await revokeUserSessions(store,'u');expect(await validateOpaqueSession(store,made.token,11)).toBeNull();
  });
  it('rejects sessions issued before the current security version',async()=>{
@@ -86,6 +140,8 @@ describe('session and HTTP security',()=>{
  it('bounds and validates malformed bodies',async()=>{
   await expect(parseBoundedJson(new Request('https://x',{method:'POST',body:'{'}),100)).rejects.toThrow(/JSON/);
   await expect(parseBoundedJson(new Request('https://x',{method:'POST',body:'x'.repeat(101)}),100)).rejects.toThrow(/groß/);
+  await expect(parseBoundedJson(new Request('https://x',{method:'POST',body:JSON.stringify({x:'€'.repeat(40)})}),100)).rejects.toThrow(/groß/);
+  await expect(parseBoundedJson(new Request('https://x',{method:'POST',headers:{'content-length':'invalid'},body:'{}'}),100)).rejects.toThrow(/groß/);
   expect(await parseBoundedJson(new Request('https://x',{method:'POST',body:'{"ok":true}'}),100)).toEqual({ok:true});
  });
  it('rejects sessions when fresh user status or metadata version changes',async()=>{

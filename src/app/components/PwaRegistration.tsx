@@ -1,0 +1,3 @@
+'use client';
+import{useEffect}from'react';
+export default function PwaRegistration(){useEffect(()=>{if(!('serviceWorker'in navigator))return;void(async()=>{let subscription:PushSubscription|null=null;try{const existing=await navigator.serviceWorker.getRegistration(),registration=existing??await navigator.serviceWorker.register('/sw.js');subscription=await registration.pushManager?.getSubscription()??null;if(!subscription)return;const response=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'reconcile',subscription:subscription.toJSON()})});if(!response.ok)await subscription.unsubscribe()}catch{if(subscription)await subscription.unsubscribe()}})()},[]);return null}

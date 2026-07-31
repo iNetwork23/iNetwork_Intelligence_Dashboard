@@ -33,6 +33,8 @@ describe("professional access console contract", () => {
     expect(s).toContain('name="passwordConfirm"');
     expect(s).toContain('autoComplete="new-password"');
     expect(s).toContain('action: "create_user"');
+    expect(s).toContain('data.standardRoles');
+    expect(s).toContain('defaultValue="read_only"');
   });
   it("loads names and legacy MFA cleanup state from the protected admin API", () => {
     const route = readFileSync(

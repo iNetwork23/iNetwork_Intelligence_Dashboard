@@ -27,6 +27,7 @@ type Audit = {
   targetId?: string;
 };
 type Data = {
+  standardRoles?: string[];
   permissions?: Permission[];
   users?: User[];
   roleOptions?: RoleOption[];
@@ -48,9 +49,7 @@ const scopeKeys = [
   ["source", "Sources"],
   ["sub_source", "Sub-Sources"],
 ] as const;
-const standardRoles = [
-  "super_admin",
-  "admin",
+const fallbackStandardRoles = [
   "employee",
   "partner",
   "read_only",
@@ -241,6 +240,7 @@ export default function AccessConsole() {
     );
   }
   const permissions = data.permissions || [],
+    standardRoles = data.standardRoles || fallbackStandardRoles,
     users = data.users || [],
     roles = data.roles || [],
     roleOptions = data.roleOptions || roles;
@@ -753,7 +753,7 @@ export default function AccessConsole() {
               </label>
               <label htmlFor="custom-role-base">
                 Basisrolle
-                <select id="custom-role-base" name="baseRole">
+                <select id="custom-role-base" name="baseRole" defaultValue="read_only">
                   {standardRoles.map((role) => (
                     <option key={role} value={role}>
                       {roleLabel(role)}

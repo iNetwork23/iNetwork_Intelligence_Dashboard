@@ -10,6 +10,7 @@ export class SyncStateSecurityStore implements SecurityStore{
  async deleteIfOwner(key:string,owner:string){const {data,error}=await getSupabaseAdmin().from('sync_state').delete().eq('key',key).eq('value->>owner',owner).select('key').maybeSingle();if(error)throw new Error('Sicherheitsstatus nicht verfügbar');return Boolean(data)}
  async delete(key:string){const {error}=await getSupabaseAdmin().from('sync_state').delete().eq('key',key);if(error)throw new Error('Sicherheitsstatus nicht verfügbar')}
  async list(prefix:string){const {data,error}=await getSupabaseAdmin().from('sync_state').select('key,value').like('key',`${prefix.replace(/[%_]/g,'\\$&')}%`).limit(1000);if(error)throw new Error('Sicherheitsstatus nicht verfügbar');return (data||[]) as Array<{key:string;value:unknown}>}
+ async listBefore(prefix:string,beforeKey:string,limit:number){const safePrefix=prefix.replace(/[%_]/g,'\\$&');const {data,error}=await getSupabaseAdmin().from('sync_state').select('key,value').like('key',`${safePrefix}%`).lt('key',beforeKey).order('key').limit(Math.max(1,Math.min(100,limit)));if(error)throw new Error('Sicherheitsstatus nicht verfügbar');return(data||[])as Array<{key:string;value:unknown}>}
 }
 let singleton:SyncStateSecurityStore|undefined;
 export const securityStore=()=>singleton??(singleton=new SyncStateSecurityStore());

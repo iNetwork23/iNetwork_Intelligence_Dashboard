@@ -16,6 +16,18 @@ EVERFLOW_API_KEY=<everflow-api-key>
 
 Der Service-Role-Key darf niemals mit `NEXT_PUBLIC_` beginnen oder im Browser-Code verwendet werden. Die Tabellen haben RLS ohne Client-Policies; Zugriffe erfolgen ausschließlich serverseitig. Optional kann `CRON_SECRET` gesetzt werden. Vercel sendet diesen Wert dann automatisch als Bearer-Token an Cron-Routen.
 
+### OneSignal später verbinden
+
+Der serverseitige OneSignal-Adapter ist vorbereitet. Für die Aktivierung in Vercel werden ausschließlich diese geschützten Variablen gesetzt:
+
+```text
+ONESIGNAL_APP_ID=<onesignal-app-id>
+ONESIGNAL_REST_API_KEY=<onesignal-rest-api-key>
+APP_ORIGIN=https://<dashboard-domain>
+```
+
+`ONESIGNAL_REST_API_KEY` darf niemals mit `NEXT_PUBLIC_` beginnen. OneSignal-Geräte werden später mit der serverseitig authentifizierten Dashboard-User-ID als OneSignal-`external_id` verbunden; eine vom Browser gelieferte User-ID wird nicht als Autorisierung verwendet. Unter **App & Hinweise** wird nur der Konfigurationsstatus angezeigt. Sobald das Gerät in OneSignal mit dieser `external_id` verbunden ist, kann dort eine rate-limitierte Testnachricht ausgelöst werden.
+
 4. Neu deployen. `vercel.json` startet `/api/sync` auf Vercel Pro stündlich zur vollen Stunde.
 
 ## Tabellen

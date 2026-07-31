@@ -55,6 +55,7 @@ export default function AdminSidebar(props:Props){
  const secondary=[
   {href:"/admin/access",label:"Benutzer & Rechte",icon:"shield" as const,show:props.mayAdmin},
   {href:"/source-blocks",label:"Ausgeschaltete Quellen",icon:"rotation" as const,show:props.maySourceBlocks},
+  {href:"/settings/app",label:"App & Hinweise",icon:"monitor" as const,show:!props.impersonating},
   {href:"/settings/security",label:"Sicherheit",icon:"lock" as const,show:props.maySecurity},
  ];
  const active=(href:string)=>href==="/"?pathname===href:pathname.startsWith(href);

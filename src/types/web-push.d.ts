@@ -1,0 +1,1 @@
+declare module'web-push'{const value:{setVapidDetails(subject:string,publicKey:string,privateKey:string):void;sendNotification(subscription:{endpoint:string;expirationTime?:number|null;keys:{p256dh:string;auth:string}},payload:string,options?:{TTL?:number;urgency?:'very-low'|'low'|'normal'|'high';timeout?:number}):Promise<unknown>};export default value}

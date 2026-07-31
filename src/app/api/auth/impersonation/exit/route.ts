@@ -4,7 +4,7 @@ import {currentUser} from '@/lib/session';
 import {getSupabaseAdmin} from '@/lib/supabase';
 import {audit,requestEvidence,securityStore} from '@/lib/access-store';
 import {checkCsrf,createOpaqueSession,COOKIE_NAME,securityHeaders} from '@/lib/security';
-import {parseAccessMetadata} from '@/lib/rbac';
+import {resolveStoredAccessFromStore} from '@/lib/rbac';
 
 export async function POST(request:Request){
  const current=await currentUser();
@@ -19,8 +19,8 @@ export async function POST(request:Request){
  }else{
   const {data,error}=await getSupabaseAdmin().auth.admin.getUserById(current.actorId);
   if(error||!data.user)return NextResponse.json({error:'Akteur nicht verfügbar'},{status:403,headers:securityHeaders});
-  const access=parseAccessMetadata(data.user.app_metadata);
-  if(access.status!=='active')return NextResponse.json({error:'Akteur nicht aktiv'},{status:403,headers:securityHeaders});
+  const access=await resolveStoredAccessFromStore(data.user.app_metadata,securityStore());
+  if(!access||access.status!=='active')return NextResponse.json({error:'Akteur nicht aktiv'},{status:403,headers:securityHeaders});
   made=await createOpaqueSession(securityStore(),{userId:data.user.id,metadataVersion:access.version});
  }
  (await cookies()).set(COOKIE_NAME,made.token,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:43_200});
