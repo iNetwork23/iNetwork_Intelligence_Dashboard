@@ -31,10 +31,11 @@ describe('ThemeToggle',()=>{
   expect(layout).toContain('dangerouslySetInnerHTML');
   expect(layout).not.toContain('<ThemeToggle/>');
   expect(sidebar).toContain('<ThemeToggle showLabel/>');
-  for(const route of['page.tsx','affiliates/page.tsx','automation/page.tsx','smartlinks/page.tsx','cohorts/page.tsx']){
+  for(const route of['page.tsx','affiliates/page.tsx','automation/page.tsx','cohorts/page.tsx']){
    const source=readFileSync(join(process.cwd(),'src/app',route),'utf8');
    expect(source).toContain('<DashboardPageHeader');
    expect(source).not.toContain('<ThemeToggle/>');
   }
+  expect(readFileSync(join(process.cwd(),'src/app/smartlinks/page.tsx'),'utf8')).toContain('legacySmartlinkRedirectHref');
  });
 });

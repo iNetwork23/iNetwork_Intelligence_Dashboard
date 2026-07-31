@@ -16,27 +16,26 @@ describe('gemeinsame Optimierungsoberfläche',()=>{
     expect(html).toContain('Campaign-Tiefenanalyse');
   });
 
-  it('wird von Affiliate Optimizer, Smartlink Intelligence und Auto-Rotation gemeinsam verwendet',()=>{
-    for(const path of ['../app/affiliates/page.tsx','../app/smartlinks/page.tsx','../app/automation/page.tsx']){
+  it('wird vom zentralen Affiliate Optimizer und der getrennten Ausführung gemeinsam verwendet',()=>{
+    for(const path of ['../app/affiliates/page.tsx','../app/automation/page.tsx']){
       expect(source(path)).toContain("components/OptimizationFlow");
       expect(source(path)).toContain('<OptimizationFlow');
     }
+    expect(source('../app/smartlinks/page.tsx')).toContain('legacySmartlinkRedirectHref');
   });
 
   it('verwendet in Affiliate- und Campaign-Ansicht dieselbe Priorisierungsfunktion',()=>{
     expect(source('../app/affiliates/AffiliateSmartlinks.tsx')).toContain('primarySmartlinkRecommendation');
-    expect(source('../app/smartlinks/page.tsx')).toContain('primarySmartlinkRecommendation');
+    expect(source('../app/affiliates/AffiliateSmartlinkOverview.tsx')).toContain('primarySmartlinkRecommendation');
   });
 
-  it('bewahrt den Affiliate-Rücksprung beim Campaign-Wechsel und Refresh',()=>{
-    const picker=source('../app/smartlinks/CampaignPicker.tsx'),page=source('../app/smartlinks/page.tsx');
-    expect(picker).toContain('smartlinkDeepDiveHref');
+  it('bewahrt den Affiliate- und Zeitraumkontext beim Campaign-Wechsel',()=>{
+    const picker=source('../app/smartlinks/CampaignPicker.tsx'),page=source('../app/affiliates/page.tsx');
+    expect(picker).toContain('affiliateCampaignStateHref');
     expect(picker).toContain('returnTo');
-    expect(page).toContain('smartlinkRefreshHref');
+    expect(page).toContain('<CampaignPicker');
     expect(page).toContain('returnTo={');
-    expect(page).toContain('affiliateContextReturnHref');
-    expect(page).toContain('{affiliateBackHref&&');
-    expect(page).not.toContain('affiliateReturnHref(query.returnTo');
+    expect(page).toContain('rangeParams');
   });
 
   it('verwendet ausschließlich die vorhandenen Dashboard-Farbrollen',()=>{

@@ -21,11 +21,13 @@ const insight={
 } as unknown as SmartlinkInsight;
 
 describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
-  it('führt mit Handlung und verlinkt in die Campaign-Tiefenanalyse statt Details zu duplizieren',()=>{
+  it('führt mit Handlung und öffnet die Campaign-Tiefenanalyse im Affiliate Optimizer',()=>{
     const html=renderToStaticMarkup(<AffiliateSmartlinkOverview affiliateId="436" mappings={[mapping]} insights={[insight]} rangeLabel="30 Tage" returnTo="/affiliates?affiliate=436&mode=smartlinks&period=30d"/>).replaceAll('\u00a0',' ');
     expect(html).toContain('Was heute geprüft werden muss');
     expect(html).toContain('Austausch prüfen');
     expect(html).toContain('Campaign-Tiefenanalyse öffnen');
+    expect(html).toContain('/affiliates?affiliate=436');
+    expect(html).toContain('mode=smartlinks');
     expect(html).toContain('campaign=135');
     expect(html).toContain('affiliate=436');
     expect(html).toContain('Frühere LPs');

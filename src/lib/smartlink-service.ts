@@ -38,13 +38,14 @@ export async function getCampaignAffiliateMappings(range:{from:string;to:string}
  },['campaign-affiliate-directory-scoped-v2',range?.from||'30d',range?.to||day(),fingerprint],{revalidate:300,tags:['campaign-affiliate-directory']})();
 }
 
-export async function getAffiliateSmartlinks(affiliateId:string,campaignIds:number[],range:{from:string;to:string}|undefined,access:AccessMetadata){
+export async function getAffiliateSmartlinks(affiliateId:string,campaignIds:number[],range:{from:string;to:string}|undefined,access:AccessMetadata,bypass=false){
  assertScopesSupported(access,['affiliate','campaign']);
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
  const ids=Array.from(new Set(campaignIds)).sort((a,b)=>a-b);
  if(ids.some(id=>foreignScopeRequested(access,{campaign:String(id)})))throw new Error('403 · Fremde Campaign-ID');
- const selected=range||{from:'',to:''},fingerprint=scopeFingerprint(access);
- return unstable_cache(()=>loadAffiliateSmartlinkInsightsFromCache(affiliateId,ids,new Date(),range),['affiliate-smartlinks-cache-v5',affiliateId,ids.join(','),selected.from,selected.to,fingerprint,day()],{revalidate:300,tags:[`affiliate-smartlinks-${affiliateId}`]})();
+ const selected=range||{from:'',to:''},fingerprint=scopeFingerprint(access),load=()=>loadAffiliateSmartlinkInsightsFromCache(affiliateId,ids,new Date(),range);
+ if(bypass)return load();
+ return unstable_cache(load,['affiliate-smartlinks-cache-v5',affiliateId,ids.join(','),selected.from,selected.to,fingerprint,day()],{revalidate:300,tags:[`affiliate-smartlinks-${affiliateId}`]})();
 }
 
 export async function findCampaigns(term:string,access:AccessMetadata){

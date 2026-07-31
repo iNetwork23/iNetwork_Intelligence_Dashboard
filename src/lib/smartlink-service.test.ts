@@ -17,7 +17,7 @@ vi.mock('./cached-smartlinks',()=>({
 }));
 vi.mock('./campaign-snapshots',()=>({loadCampaignDirectoryFromCache:mocks.loadDirectory}));
 
-import{getSmartlinkInsight}from'./smartlink-service';
+import{getAffiliateSmartlinks,getSmartlinkInsight}from'./smartlink-service';
 
 describe('Smartlink source affiliate context',()=>{
  beforeEach(()=>{
@@ -59,5 +59,12 @@ describe('Smartlink source affiliate context',()=>{
   expect(mocks.loadAffiliate).toHaveBeenCalledWith('29',[172],expect.any(Date));
   expect(()=>getSmartlinkInsight(172,access,true,'30')).toThrow(/403/);
   expect(()=>getSmartlinkInsight(172,access,true,'not-an-id')).toThrow(/400/);
+ });
+
+ it('bypasses the affiliate Smartlink cache only for an explicit manual refresh',async()=>{
+  const access=parseAccessMetadata({role:'admin'});
+  await getAffiliateSmartlinks('29',[172],{from:'2026-07-01',to:'2026-07-31'},access,true);
+  expect(mocks.loadAffiliate).toHaveBeenCalledWith('29',[172],expect.any(Date),{from:'2026-07-01',to:'2026-07-31'});
+  expect(mocks.cacheKeys.some(key=>key[0]==='affiliate-smartlinks-cache-v5')).toBe(false);
  });
 });

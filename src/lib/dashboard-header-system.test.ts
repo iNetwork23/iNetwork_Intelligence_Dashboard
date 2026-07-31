@@ -3,11 +3,12 @@ import {join} from 'node:path';
 import {describe,expect,it} from 'vitest';
 const read=(path:string)=>readFileSync(join(process.cwd(),'src/app',path),'utf8');
 
-const routes=['page.tsx','affiliates/page.tsx','smartlinks/page.tsx','automation/page.tsx','cohorts/page.tsx','admin/access/page.tsx','settings/security/page.tsx'];
+const routes=['page.tsx','affiliates/page.tsx','automation/page.tsx','cohorts/page.tsx','admin/access/page.tsx','settings/security/page.tsx'];
 
 describe('shared professional dashboard header system',()=>{
  it('uses one reusable header across every protected dashboard page',()=>{
   for(const route of routes){const source=read(route);expect(source).toContain('<DashboardPageHeader');expect(source).not.toContain('className="topbar"')}
+  expect(read('smartlinks/page.tsx')).toContain('legacySmartlinkRedirectHref');
  });
  it('defines a compact hierarchy with semantic status and page-specific iconography',()=>{
   const source=read('components/DashboardPageHeader.tsx');

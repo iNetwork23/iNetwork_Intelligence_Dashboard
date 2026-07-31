@@ -26,7 +26,8 @@ describe('responsive admin shell',()=>{
 
  it('provides permission-aware navigation, account controls and persistent collapse',()=>{
   const sidebar=read('components/AdminSidebar.tsx');
-  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Smartlink Intelligence','Benutzer & Rechte','Sicherheit','Abmelden','Read only'])expect(sidebar).toContain(marker);
+  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Benutzer & Rechte','Sicherheit','Abmelden','Read only'])expect(sidebar).toContain(marker);
+  expect(sidebar).not.toContain('label:"Smartlink Intelligence"');
   expect(sidebar).not.toContain('Sicherheit & MFA');
   expect(sidebar).toContain('aria-expanded={!collapsed}');
   expect(sidebar).toContain('wlx-sidebar-collapsed');

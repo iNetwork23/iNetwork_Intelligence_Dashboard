@@ -7,7 +7,7 @@ const stages:[Stage,string,string,string][]=[
   ['smartlink','2','Warum und wie?','Campaign-Tiefenanalyse'],
   ['automation','3','Was wurde ausgeführt?','Auto-Rotation & Nachweis'],
 ];
-const hrefs:Record<Stage,string>={affiliate:'/affiliates',smartlink:'/smartlinks',automation:'/automation'};
+const hrefs:Record<Stage,string>={affiliate:'/affiliates',smartlink:'/affiliates?mode=smartlinks',automation:'/automation'};
 
 export default function OptimizationFlow({active}:{active:Stage}){
   return <nav className={styles.flow} aria-label="Gemeinsamer Optimierungsprozess">

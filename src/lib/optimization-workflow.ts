@@ -49,6 +49,63 @@ export function smartlinkDeepDiveHref(input:{campaignId:number;affiliateId?:stri
   return `/smartlinks?${params.toString()}`;
 }
 
+export function affiliateCampaignHref(input:{campaignId:number;affiliateId?:string;currentHref?:string}):string{
+  const affiliate=safeAffiliateId(input.affiliateId),params=new URLSearchParams();
+  if(input.currentHref){
+    try{
+      const current=new URL(input.currentHref,'https://dashboard.local');
+      if(current.origin==='https://dashboard.local'&&current.pathname==='/affiliates')current.searchParams.forEach((value,key)=>params.set(key,value));
+    }catch{}
+  }
+  if(affiliate)params.set('affiliate',affiliate);else params.delete('affiliate');
+  params.set('mode','smartlinks');
+  params.set('campaign',String(input.campaignId));
+  params.delete('offer');
+  return `/affiliates?${params.toString()}`;
+}
+
+export function affiliateCampaignStateHref(input:{campaignId:number;affiliateId?:string;currentHref?:string;query?:string;partner?:string;open?:number|null}):string{
+  const url=new URL(affiliateCampaignHref(input),'https://dashboard.local'),query=(input.query||'').trim().slice(0,200),partner=input.partner;
+  if(query)url.searchParams.set('q',query);else url.searchParams.delete('q');
+  if(partner&&(partner==='unassigned'||/^\d+$/.test(partner)))url.searchParams.set('partner',partner);else url.searchParams.delete('partner');
+  if(input.open&&Number.isSafeInteger(input.open))url.searchParams.set('open',String(input.open));else url.searchParams.delete('open');
+  return`${url.pathname}${url.search}`;
+}
+
+export function affiliateCampaignRefreshHref(input:{campaignId:number;affiliateId:string;currentHref:string;timestamp:number}):string{
+  const url=new URL(affiliateCampaignHref(input),'https://dashboard.local');
+  url.searchParams.set('refresh','1');
+  url.searchParams.set('ts',String(Math.max(0,Math.trunc(input.timestamp))));
+  return`${url.pathname}${url.search}`;
+}
+
+const legacyStateKeys=['period','from','to','calendarYear','calendarMonth','sourcePeriod','sourceFrom','sourceTo','sourceSort','sourceOpen','q','partner','open'] as const;
+
+export function legacySmartlinkRedirectHref(input:{campaignId?:number|null;affiliateId?:string;returnTo?:string;query?:Record<string,string|undefined>}):string{
+  const affiliate=safeAffiliateId(input.affiliateId),base=new URL(affiliateReturnHref(input.returnTo,affiliate),'https://dashboard.local');
+  for(const key of legacyStateKeys){const value=input.query?.[key];if(value)base.searchParams.set(key,value)}
+  if(input.query?.refresh==='1')base.searchParams.set('refresh','1');
+  if(/^\d{1,16}$/.test(input.query?.ts||''))base.searchParams.set('ts',input.query!.ts!);
+  if(input.campaignId&&Number.isSafeInteger(input.campaignId))return affiliateCampaignHref({campaignId:input.campaignId,affiliateId:affiliate,currentHref:`${base.pathname}${base.search}${base.hash}`});
+  if(affiliate)base.searchParams.set('affiliate',affiliate);else base.searchParams.delete('affiliate');
+  base.searchParams.set('mode','smartlinks');
+  return `${base.pathname}${base.search}`;
+}
+
+export function contextlessSmartlinkFavoriteHref(input:{campaignId:number;currentHref?:string}):string{
+  const target=new URL('/smartlinks','https://dashboard.local');
+  if(input.currentHref){try{const current=new URL(input.currentHref,'https://dashboard.local');if(current.origin==='https://dashboard.local'&&current.pathname==='/affiliates')for(const key of legacyStateKeys){if(key==='partner')continue;const value=current.searchParams.get(key);if(value)target.searchParams.set(key,value)}}catch{}}
+  target.searchParams.set('campaign',String(input.campaignId));
+  return`${target.pathname}${target.search}`;
+}
+
+export function automationCampaignHref(input:{campaignId:number;affiliateId:string;slotId?:string}):string{
+  const params=new URLSearchParams({affiliate:safeAffiliateId(input.affiliateId)||'',campaign:String(input.campaignId)});
+  if(input.slotId)params.set('slot',input.slotId);
+  params.set('intent','replace');
+  return `/automation?${params.toString()}`;
+}
+
 export function smartlinkRefreshHref(input:{campaignId:number;affiliateId?:string;returnTo?:string;timestamp:number}):string{
   const url=new URL(smartlinkDeepDiveHref(input),'https://dashboard.local');
   url.searchParams.set('refresh','1');

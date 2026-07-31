@@ -16,9 +16,12 @@ import type { LeadLatencyAnalysis, UrlLeadMaturity } from "@/lib/lead-latency";
 import type { SnapshotFreshness } from "@/lib/snapshot-generation";
 import {
   getCampaignAffiliateMappings,
+  getCampaignDirectory,
   getAffiliateSmartlinks,
 } from "@/lib/smartlink-service";
-import { mergeAffiliateWorkspaces } from "@/lib/affiliate-smartlinks";
+import { buildCampaignOptions, type CampaignOption } from "@/lib/campaign-picker";
+import { mergeAffiliateWorkspaces, overlayPeriodFinancialMappings } from "@/lib/affiliate-smartlinks";
+import { affiliateCampaignRefreshHref, contextlessSmartlinkFavoriteHref, legacySmartlinkRedirectHref } from "@/lib/optimization-workflow";
 import { resolveAffiliatePeriod } from "@/lib/affiliate-period";
 import { resolveSourcePeriod } from "@/lib/source-period";
 import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
@@ -36,6 +39,8 @@ import DashboardPageHeader from "../components/DashboardPageHeader";
 import OptimizationFlow from "../components/OptimizationFlow";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
+import CampaignPicker from "../smartlinks/CampaignPicker";
+import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
 const eur = (n: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
@@ -179,21 +184,36 @@ export default async function AffiliateOptimizerPage({
     sourceTo?: string;
     sourceSort?: string;
     sourceOpen?: string;
+    campaign?: string;
+    partner?: string;
+    open?: string;
+    refresh?: string;
+    ts?: string;
   }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (!can(user.access, "partners.view"))
+  const query = {...await searchParams};
+  const mayPartners = can(user.access, "partners.view");
+  const maySmartlinks = can(user.access, "smartlinks.view") && can(user.access, "finance.view");
+  if (!mayPartners && maySmartlinks && !query.mode) query.mode = "smartlinks";
+  if (!mayPartners && !(query.mode === "smartlinks" && maySmartlinks))
     return (
       <main className="fatal">
         <h1>403 · Keine Berechtigung</h1>
       </main>
     );
-  const query = await searchParams;
+  if (query.mode === "smartlinks" && !maySmartlinks)
+    return (
+      <main className="fatal">
+        <h1>403 · Smartlink Intelligence nicht freigegeben</h1>
+      </main>
+    );
   if (
     foreignScopeRequested(user.access, {
       affiliate: query.affiliate,
       offer: query.offer,
+      campaign: query.campaign,
     })
   )
     return (
@@ -235,7 +255,7 @@ export default async function AffiliateOptimizerPage({
   sourceParams.forEach((value, key) => range.set(key, value));
   const rangeParams = range.toString(),
     eagerDirectSourceData =
-      query.mode==='direct' && query.affiliate
+      mayPartners && query.mode==='direct' && query.affiliate
         ? Promise.allSettled([
             getAffiliateSourceBreakdown(
               query.affiliate,
@@ -253,18 +273,21 @@ export default async function AffiliateOptimizerPage({
             ),
           ])
         : null;
-  let analyses, mappings;
+  let analyses, periodMappings, associationMappings;
   try {
-    [analyses, mappings] = await Promise.all([
-      getAffiliateOptimizations(
-        period.servicePeriod,
-        period.custom,
-        user.access,
-      ),
+    [analyses, periodMappings, associationMappings] = await Promise.all([
+      mayPartners
+        ? getAffiliateOptimizations(
+            period.servicePeriod,
+            period.custom,
+            user.access,
+          )
+        : Promise.resolve([]),
       getCampaignAffiliateMappings(
         { from: period.from, to: period.to },
         user.access,
       ),
+      getCampaignAffiliateMappings(undefined, user.access),
     ]);
   } catch (e) {
     console.error(e);
@@ -288,7 +311,10 @@ export default async function AffiliateOptimizerPage({
   // getAffiliateSourceBreakdown(selected.affiliateId,{from:sourcePeriod.from,to:sourcePeriod.to})
   // getAffiliateSmartlinks(selectedWorkspace.affiliateId,selectedWorkspace.campaigns.map(x=>x.campaignId),{from:period.from,to:period.to})
   const finance = can(user.access, "finance.view"),
-    workspaces = mergeAffiliateWorkspaces(analyses, mappings);
+    mappingView = overlayPeriodFinancialMappings(periodMappings, associationMappings),
+    mergedMappings = mappingView.mappings,
+    historicalPeriodMappings = mappingView.historical,
+    workspaces = mergeAffiliateWorkspaces(analyses, mergedMappings);
   if (!finance)
     return (
       <main className="dashboard affiliateOptimizer">
@@ -325,7 +351,8 @@ export default async function AffiliateOptimizerPage({
         )}
       </main>
     );
-  const q = (query.q || "").trim().toLowerCase(),
+  const selectedCampaignId = /^[0-9]+$/.test(query.campaign || "") ? Number(query.campaign) : undefined,
+    q = (query.q || "").trim().toLowerCase(),
     matches = q
       ? workspaces.filter(
           (x) => x.affiliateId === q || x.affiliate.toLowerCase().includes(q),
@@ -341,7 +368,8 @@ export default async function AffiliateOptimizerPage({
         ? "smartlinks"
         : query.mode === "smartlinks"
           ? "smartlinks"
-          : "direct";
+          : "direct",
+    requestedSmartlinkMismatch = mode === "smartlinks" && Boolean(query.affiliate) && !selectedWorkspace;
   let sourceRows: SourceBreakdownRow[] = [],
     sourceError = false,
     sourceFreshness: Awaited<
@@ -349,7 +377,17 @@ export default async function AffiliateOptimizerPage({
     > | null = null,
     leadLatency: LeadLatencyAnalysis | null = null,
     smartlinkInsights: Awaited<ReturnType<typeof getAffiliateSmartlinks>> = [],
-    rebillEvents: RebillEvent[] = [];
+    rebillEvents: RebillEvent[] = [],
+    campaignOptions: CampaignOption[] = [],
+    campaignDirectoryError = "";
+  if (mode === "smartlinks") {
+    try {
+      campaignOptions = buildCampaignOptions(await getCampaignDirectory(user.access), associationMappings);
+    } catch (cause) {
+      console.error("Campaign directory failed", cause);
+      campaignDirectoryError = "Smartlink-Verzeichnis konnte nicht geladen werden.";
+    }
+  }
   if (selected && mode === "direct") {
     const sourceResult = await (eagerDirectSourceData ??
       Promise.allSettled([
@@ -397,6 +435,7 @@ export default async function AffiliateOptimizerPage({
         selectedWorkspace.campaigns.map((x) => x.campaignId),
         { from: period.from, to: period.to },
         user.access,
+        query.refresh === "1",
       ),
       getAffiliateRebillEvents(
         selectedWorkspace.affiliateId,
@@ -467,6 +506,9 @@ export default async function AffiliateOptimizerPage({
         firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(sourceRebillIndex,{campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
       }),
     ])),
+    selectedSmartlink = smartlinkInsights.find((item) => item.identity.campaignId === selectedCampaignId),
+    smartlinkDirectoryHref = legacySmartlinkRedirectHref({affiliateId:selectedWorkspace?.affiliateId,query:{...query,campaign:undefined,open:undefined,refresh:undefined,ts:undefined}}),
+    smartlinkWorkspaceHref = legacySmartlinkRedirectHref({campaignId:selectedCampaignId,affiliateId:selectedWorkspace?.affiliateId,query:{...query,refresh:undefined,ts:undefined}}),
     smartlinkRebillAnalyses: Record<number, RebillConcentration> =
       Object.fromEntries(
         smartlinkInsights.map((data) => {
@@ -489,7 +531,7 @@ export default async function AffiliateOptimizerPage({
         icon="affiliate"
         description="Direktlinks und Smartlinks pro Partner – getrennte KPIs und vollständige Landingpage-Sicht."
       />
-      <OptimizationFlow active="affiliate" />
+      <OptimizationFlow active={mode === "smartlinks" ? "smartlink" : "affiliate"} />
       <section className="smartSearch affiliateSearch affiliatePickerBar">
         <AffiliatePartnerPicker
           partners={workspaces.map((item) => ({
@@ -511,7 +553,7 @@ export default async function AffiliateOptimizerPage({
         <div className="directScope">
           <b>{workspaces.length}</b>
           <span>
-            Partner · {mappings.length} beobachtete Smartlink-Zuordnungen
+            Partner · {associationMappings.length} beobachtete Smartlink-Zuordnungen
           </span>
         </div>
         <DataReloadButton/>
@@ -530,10 +572,52 @@ export default async function AffiliateOptimizerPage({
         </header>
         <AffiliatePeriodControls period={period} />
       </section>
+      {mode === "smartlinks" && (
+        <>
+          <CampaignPicker
+            campaigns={campaignOptions}
+            currentId={selectedCampaignId}
+            affiliateId={selectedWorkspace?.affiliateId}
+            returnTo={smartlinkDirectoryHref}
+            initialQuery={query.q}
+            initialPartner={query.partner || selectedWorkspace?.affiliateId}
+            initialOpen={query.open || query.campaign}
+            associationError={campaignDirectoryError}
+          />
+          <SmartlinkWatchlist
+            current={selectedSmartlink ? {id:selectedSmartlink.identity.campaignId,name:selectedSmartlink.identity.name,affiliateId:selectedWorkspace?.affiliateId} : undefined}
+            affiliateId={selectedWorkspace?.affiliateId}
+            baseHref={smartlinkWorkspaceHref}
+          />
+          {historicalPeriodMappings.length > 0 && (
+            <details className="smartEmpty historicalMappings">
+              <summary>HISTORISCHE ZUORDNUNGEN IM GEWÄHLTEN ZEITRAUM · {historicalPeriodMappings.length}</summary>
+              <p>Diese Affiliate-/Campaign-Paare hatten im gewählten Zeitraum Kennzahlen, gehören aber nicht zur aktuellen 30-Tage-Zuordnung. Sie werden nicht als aktuelle Zuordnung oder zulässiger Affiliate-Deep-Link verwendet.</p>
+              {historicalPeriodMappings.map(item => (
+                <article key={`${item.affiliateId}-${item.campaignId}`}>
+                  <span>Campaign #{item.campaignId} · historische Affiliate-ID #{item.affiliateId}</span>
+                  <strong>{item.campaign} · {eur(item.profit30)} Profit in {period.label}</strong>
+                  <InstantLink href={contextlessSmartlinkFavoriteHref({campaignId:item.campaignId,currentHref:smartlinkDirectoryHref})}>Campaign über sichere Zuordnung öffnen</InstantLink>
+                </article>
+              ))}
+            </details>
+          )}
+          {selectedCampaignId && selectedWorkspace && (
+            <div className="pickerRefresh">
+              <InstantLink className="refreshBtn" href={affiliateCampaignRefreshHref({campaignId:selectedCampaignId,affiliateId:selectedWorkspace.affiliateId,currentHref:smartlinkWorkspaceHref,timestamp:Date.now()})}>Daten jetzt aktualisieren</InstantLink>
+            </div>
+          )}
+        </>
+      )}
       {(sourceError||(sourceFreshness&&!sourceFreshness.complete)) && (
         <SourceCacheNotice period={sourcePeriod.label} freshness={sourceFreshness} blocked={sourceError}/>
       )}
-      {selectedWorkspace && mode === "smartlinks" ? (
+      {requestedSmartlinkMismatch ? (
+        <section className="smartEmpty" role="alert">
+          <h2>ANGEFORDERTER AFFILIATE NICHT AUFLÖSBAR</h2>
+          <p>Der angeforderte Affiliate ist für diesen Smartlink-Kontext nicht autorisiert oder in der festen 30-Tage-Zuordnung nicht vorhanden. Es werden keine Daten eines anderen Affiliates angezeigt.</p>
+        </section>
+      ) : selectedWorkspace && mode === "smartlinks" ? (
         <>
           <section className="partnerHero smartPartnerHero">
             <div>
@@ -617,6 +701,7 @@ export default async function AffiliateOptimizerPage({
             insights={smartlinkInsights}
             rangeLabel={period.label}
             rebillAnalyses={smartlinkRebillAnalyses}
+            selectedCampaignId={/^\d+$/.test(query.campaign || "") ? Number(query.campaign) : undefined}
             canManageSources={
               user.access.role !== "partner" &&
               can(user.access, "landingpages.manage") &&

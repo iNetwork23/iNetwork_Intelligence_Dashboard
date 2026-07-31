@@ -23,8 +23,8 @@ describe('partner-aware campaign picker UI',()=>{
   expect(html).toContain('50 %');
   expect(html).toContain('Tracking-Domain');
   expect(html).toContain('#6450');
-  expect(html).toContain('Smartlink analysieren');
-  expect(html).toContain('/smartlinks?campaign=2&amp;affiliate=436');
+  expect(html).toContain('Im Affiliate Optimizer analysieren');
+  expect(html).toContain('/affiliates?affiliate=436&amp;mode=smartlinks&amp;campaign=2');
   expect(html).toContain('Partner im Affiliate Optimizer öffnen');
   expect(html).toContain('/affiliates?affiliate=436&amp;mode=smartlinks');
  });
@@ -35,7 +35,7 @@ describe('partner-aware campaign picker UI',()=>{
  });
  it('does not propagate an affiliate context that was not observed for the campaign',()=>{
   const html=renderToStaticMarkup(<CampaignPicker campaigns={campaigns} affiliateId="999" initialOpen="2"/>);
-  expect(html).toContain('href="/smartlinks?campaign=2&amp;affiliate=436&amp;open=2"');
+  expect(html).toContain('href="/affiliates?affiliate=436&amp;mode=smartlinks&amp;campaign=2');
   expect(html).not.toContain('affiliate=999');
  });
  it('shows a mapping error instead of claiming campaigns are unassigned',()=>{

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type {CampaignAffiliateMapping} from '@/lib/affiliate-smartlinks';
-import {primarySmartlinkRecommendation,smartlinkDeepDiveHref,type SmartlinkInsight} from '@/lib/optimization-workflow';
+import {affiliateCampaignHref,primarySmartlinkRecommendation,type SmartlinkInsight} from '@/lib/optimization-workflow';
 import styles from './AffiliateSmartlinkOverview.module.css';
 
 const euro=(value:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(value);
@@ -20,7 +20,7 @@ export default function AffiliateSmartlinkOverview({affiliateId,mappings,insight
       <strong className={critical?styles.critical:styles.clear}>{critical?`${critical} dringend prüfen`:'Keine dringende Campaign'}</strong>
     </header>
     <div className={styles.cards}>{campaigns.map(({mapping,insight,recommendation})=>{
-      const href=smartlinkDeepDiveHref({campaignId:mapping.campaignId,affiliateId,returnTo}),totals=insight?.selectedRange?.attribution.total,saleRate=totals?.sois?100*totals.firstSales/totals.sois:0;
+      const href=affiliateCampaignHref({campaignId:mapping.campaignId,affiliateId,currentHref:returnTo}),totals=insight?.selectedRange?.attribution.total,saleRate=totals?.sois?100*totals.firstSales/totals.sois:0;
       return <article key={mapping.campaignId} className={styles[recommendation?.severity||'missing']}>
         <div className={styles.identity}><span>CAMPAIGN #{mapping.campaignId} · {mapping.status}</span><h3>{mapping.campaign}</h3><small>{insight?.currentSlots.length||0} aktive LPs · {insight?.legacySlots.length||0} Frühere LPs · Offer {insight?.identity.offerIds.map(id=>`#${id}`).join(', ')||'nicht zugeordnet'}</small></div>
         <div className={styles.periodResult}><span>Ausgewählter Zeitraum · {rangeLabel}</span><strong>{totals?`${num(totals.firstSales)} First-Sales`:'First-Sales nicht verfügbar'}</strong><small>{totals?`${saleRate.toFixed(2).replace('.',',')} % der SOIs werden Zahler · ${euro(totals.revenue)} Umsatz`:'Für diesen Zeitraum fehlen Eventdaten.'}</small></div>
