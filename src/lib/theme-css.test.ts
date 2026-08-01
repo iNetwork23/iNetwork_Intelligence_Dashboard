@@ -37,4 +37,11 @@ describe('user-selectable dashboard themes',()=>{
   expect(source).toContain('width:44px;height:44px');
   expect(source).not.toContain('body{padding-bottom:calc(74px + env(safe-area-inset-bottom))');
  });
+
+ it('scopes historical Landingpage cards to direct children so nested source cards do not create giant gaps',()=>{
+  const source=css();
+  expect(source).toContain('.legacySlots>article{');
+  expect(source).toContain('.legacySlots>article>div{');
+  expect(source).not.toContain('.legacySlots article{');
+ });
 });
