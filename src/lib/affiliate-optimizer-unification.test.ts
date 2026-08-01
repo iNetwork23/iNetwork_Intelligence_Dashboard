@@ -11,6 +11,8 @@ describe('zentraler Affiliate Optimizer',()=>{
     expect(page).toContain('getCampaignDirectory');
     expect(page).toContain('<CampaignPicker');
     expect(page).toContain('selectedCampaignId=');
+    expect(page).toContain('affiliateOptimizerCurrentHref');
+    expect(page.match(/returnTo=\{smartlinkCurrentHref\}/g)).toHaveLength(2);
     expect(details).toContain('visibleMappings');
     expect(details).toContain('defaultOpen={selectedCampaignId===mapping.campaignId}');
   });

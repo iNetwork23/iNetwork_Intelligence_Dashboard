@@ -49,6 +49,20 @@ export function smartlinkDeepDiveHref(input:{campaignId:number;affiliateId?:stri
   return `/smartlinks?${params.toString()}`;
 }
 
+const optimizerRangeStateKeys=['period','from','to','calendarYear','calendarMonth','sourcePeriod','sourceFrom','sourceTo','sourceSort','sourceOpen'] as const;
+
+export function affiliateOptimizerCurrentHref(input:{affiliateId?:string;rangeParams?:string;query?:string;partner?:string;open?:string}):string{
+  const params=new URLSearchParams(),range=new URLSearchParams(input.rangeParams||''),affiliate=safeAffiliateId(input.affiliateId);
+  for(const key of optimizerRangeStateKeys){const value=range.get(key);if(value)params.set(key,value.slice(0,4096))}
+  if(affiliate)params.set('affiliate',affiliate);
+  params.set('mode','smartlinks');
+  const query=(input.query||'').trim().slice(0,200);
+  if(query)params.set('q',query);
+  if(input.partner&&(input.partner==='unassigned'||/^\d+$/.test(input.partner)))params.set('partner',input.partner);
+  if(/^\d+$/.test(input.open||''))params.set('open',input.open!);
+  return `/affiliates?${params.toString()}`;
+}
+
 export function affiliateCampaignHref(input:{campaignId:number;affiliateId?:string;currentHref?:string}):string{
   const affiliate=safeAffiliateId(input.affiliateId),params=new URLSearchParams();
   if(input.currentHref){

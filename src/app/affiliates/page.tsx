@@ -21,7 +21,7 @@ import {
 } from "@/lib/smartlink-service";
 import { buildCampaignOptions, type CampaignOption } from "@/lib/campaign-picker";
 import { mergeAffiliateWorkspaces, overlayPeriodFinancialMappings } from "@/lib/affiliate-smartlinks";
-import { affiliateCampaignRefreshHref, contextlessSmartlinkFavoriteHref, legacySmartlinkRedirectHref } from "@/lib/optimization-workflow";
+import { affiliateCampaignRefreshHref, affiliateOptimizerCurrentHref, contextlessSmartlinkFavoriteHref, legacySmartlinkRedirectHref } from "@/lib/optimization-workflow";
 import { resolveAffiliatePeriod } from "@/lib/affiliate-period";
 import { resolveSourcePeriod } from "@/lib/source-period";
 import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
@@ -369,7 +369,14 @@ export default async function AffiliateOptimizerPage({
         : query.mode === "smartlinks"
           ? "smartlinks"
           : "direct",
-    requestedSmartlinkMismatch = mode === "smartlinks" && Boolean(query.affiliate) && !selectedWorkspace;
+    requestedSmartlinkMismatch = mode === "smartlinks" && Boolean(query.affiliate) && !selectedWorkspace,
+    smartlinkCurrentHref = affiliateOptimizerCurrentHref({
+      affiliateId: selectedWorkspace?.affiliateId,
+      rangeParams,
+      query: query.q,
+      partner: query.partner,
+      open: query.open,
+    });
   let sourceRows: SourceBreakdownRow[] = [],
     sourceError = false,
     sourceFreshness: Awaited<
@@ -685,7 +692,7 @@ export default async function AffiliateOptimizerPage({
             mappings={selectedWorkspace.campaigns}
             insights={smartlinkInsights}
             rangeLabel={period.label}
-            returnTo={`/affiliates?affiliate=${selectedWorkspace.affiliateId}&mode=smartlinks&${rangeParams}`}
+            returnTo={smartlinkCurrentHref}
           />
           <section className="sectionHead">
             <div>
@@ -696,7 +703,7 @@ export default async function AffiliateOptimizerPage({
           </section>
           <AffiliateSmartlinks
             affiliateId={selectedWorkspace.affiliateId}
-            returnTo={`/affiliates?affiliate=${selectedWorkspace.affiliateId}&mode=smartlinks&${rangeParams}`}
+            returnTo={smartlinkCurrentHref}
             mappings={selectedWorkspace.campaigns}
             insights={smartlinkInsights}
             rangeLabel={period.label}

@@ -3,6 +3,7 @@ import {
   affiliateCampaignHref,
   affiliateCampaignRefreshHref,
   affiliateCampaignStateHref,
+  affiliateOptimizerCurrentHref,
   contextlessSmartlinkFavoriteHref,
   affiliateContextReturnHref,
   affiliateReturnHref,
@@ -112,6 +113,23 @@ describe('gemeinsamer Optimierungs-Workflow',()=>{
     expect(refreshed.searchParams.get('refresh')).toBe('1');
     expect(refreshed.searchParams.get('ts')).toBe('123');
     expect(refreshed.hash).toBe('#campaign-146');
+  });
+
+  it('bewahrt den vollständigen sichtbaren Seitenzustand im realen Campaign-Aufrufer',()=>{
+    const current=new URL(affiliateOptimizerCurrentHref({
+      affiliateId:'20',
+      rangeParams:'period=custom&from=2026-07-03&to=2026-08-01&sourcePeriod=custom&sourceFrom=2026-07-20&sourceTo=2026-08-01&sourceSort=sois&sourceOpen=adv2-a%2Cadv2-b',
+      query:' traffic ',partner:'20',open:'23',
+    }),'https://dashboard.test');
+    expect(current.pathname).toBe('/affiliates');
+    expect(current.searchParams.get('affiliate')).toBe('20');
+    expect(current.searchParams.get('mode')).toBe('smartlinks');
+    expect(current.searchParams.get('period')).toBe('custom');
+    expect(current.searchParams.get('sourceSort')).toBe('sois');
+    expect(current.searchParams.get('sourceOpen')).toBe('adv2-a,adv2-b');
+    expect(current.searchParams.get('q')).toBe('traffic');
+    expect(current.searchParams.get('partner')).toBe('20');
+    expect(current.searchParams.get('open')).toBe('23');
   });
 
   it('schickt alte Favoriten ohne Affiliate ohne stale Partner-Autorität durch den kompatiblen Resolver',()=>{
