@@ -64,6 +64,18 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
     expect(html).toContain('#campaign-23');
   });
 
+  it('behauptet bei Null-Gesamtumsatz trotz gegenläufiger Buckets keinen Legacy-Umsatz',()=>{
+    const empty={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0};
+    const offsetting={...insight,recommendations:[],selectedRange:{from:'2026-07-03',to:'2026-08-01',attribution:{
+      total:{...empty,sois:60,payout:180,profit:-180},
+      current:{...empty,sois:60,payout:180,profit:-180},
+      legacy:{...empty,revenue:20,profit:20},beforeRotation:empty,transitionDay:empty,unassigned:{...empty,revenue:-20,profit:-20},rotationDay:'2026-07-22',reconciled:true,
+    }}} as unknown as SmartlinkInsight;
+    const html=renderToStaticMarkup(<AffiliateSmartlinkOverview affiliateId="436" mappings={[mapping]} insights={[offsetting]} rangeLabel="30 Tage" returnTo="/affiliates?affiliate=436&mode=smartlinks&period=30d"/>).replaceAll('\u00a0',' ');
+    expect(html).toContain('Auch die Campaign gesamt hat noch keinen Umsatz.');
+    expect(html).not.toContain('Umsatzbeiträge: frühere LPs.');
+  });
+
   it('behauptet ohne belegte Herkunft keinen Legacy-Umsatz',()=>{
     const empty={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0};
     const unattributed={...insight,

@@ -7,12 +7,19 @@ const app=(path:string)=>readFileSync(join(process.cwd(),'src/app',path),'utf8')
 describe('zentraler Affiliate Optimizer',()=>{
   it('bindet vollständige Smartlink-Suche und ausgewählte Campaign in dieselbe Oberfläche ein',()=>{
     const page=app('affiliates/page.tsx');
+    const overview=app('affiliates/AffiliateSmartlinkOverview.tsx');
+    const liveLink=app('affiliates/LiveCampaignDeepDiveLink.tsx');
+    const picker=app('smartlinks/CampaignPicker.tsx');
     const details=app('affiliates/AffiliateSmartlinks.tsx');
     expect(page).toContain('getCampaignDirectory');
     expect(page).toContain('<CampaignPicker');
     expect(page).toContain('selectedCampaignId=');
     expect(page).toContain('affiliateOptimizerCurrentHref');
     expect(page.match(/returnTo=\{smartlinkCurrentHref\}/g)).toHaveLength(2);
+    expect(overview).toContain('<LiveCampaignDeepDiveLink');
+    expect(picker).toContain("window.dispatchEvent(new Event('affiliate-url-statechange'))");
+    expect(liveLink).toContain("window.addEventListener('affiliate-url-statechange'");
+    expect(liveLink).toContain('window.location.href');
     expect(details).toContain('visibleMappings');
     expect(details).toContain('defaultOpen={selectedCampaignId===mapping.campaignId}');
   });

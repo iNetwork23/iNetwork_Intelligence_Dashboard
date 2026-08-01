@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import LiveCampaignDeepDiveLink from './LiveCampaignDeepDiveLink';
 import type {CampaignAffiliateMapping} from '@/lib/affiliate-smartlinks';
 import {affiliateCampaignHref,primarySmartlinkRecommendation,type SmartlinkInsight} from '@/lib/optimization-workflow';
 import styles from './AffiliateSmartlinkOverview.module.css';
@@ -22,7 +22,7 @@ function campaignAttention(insight:SmartlinkInsight|undefined){
       attribution.transitionDay.revenue>0?'Campaign-Speichertag':'',
       attribution.unassigned.revenue>0?'nicht eindeutig zugeordnete Events':'',
     ].filter(Boolean);
-    const originDetail=origins.length?`Umsatzbeiträge: ${joinOrigins(origins)}.`:attribution.total.revenue>0?'Die Umsatzherkunft ist nicht vollständig zugeordnet.':'Auch die Campaign gesamt hat noch keinen Umsatz.';
+    const originDetail=attribution.total.revenue<=0?'Auch die Campaign gesamt hat noch keinen Umsatz.':origins.length?`Umsatzbeiträge: ${joinOrigins(origins)}.`:'Die Umsatzherkunft ist nicht vollständig zugeordnet.';
     return{
       severity:'warning' as const,
       title:'Aktuelle Rotation noch ohne Umsatz',
@@ -54,7 +54,7 @@ export default function AffiliateSmartlinkOverview({affiliateId,mappings,insight
         <div className={styles.periodResult}><span>Ausgewählter Zeitraum · {rangeLabel}</span><strong>{totals?`${num(totals.firstSales)} First-Sales · ${num(totals.rebills)} Rebills · ${num(totals.coinSpend)} Coin-Spend-Events`:'Monetarisierung nicht verfügbar'}</strong><small>{totals?`${saleRate.toFixed(2).replace('.',',')} % First-Sales je SOI · ${euro(totals.revenue)} Umsatz`:'Für diesen Zeitraum fehlen Eventdaten.'}</small>{revenueWithoutFirstSale&&totals&&<small className={styles.explanation}>Der Umsatz stammt aus {totals.rebills?`${num(totals.rebills)} Rebills`:''}{totals.rebills&&totals.coinSpend?' und ':''}{totals.coinSpend?`${num(totals.coinSpend)} Coin-Spend-Events`:''}; deshalb sind Umsatz und 0 First-Sales gleichzeitig möglich.</small>}</div>
         <div className={styles.decision}><span>NÄCHSTE PRÜFUNG</span><b>{attention.title}</b><small>{attention.detail}</small></div>
         <div className={styles.metrics}><span><b className={mapping.profit30>=0?styles.up:styles.down}>{euro(mapping.profit30)}</b><small>Profit · {rangeLabel}</small></span><span><b>{num(mapping.sois30)}</b><small>SOIs · {rangeLabel}</small></span><span><b>{insight?`${insight.traffic24.cvr.toFixed(2).replace('.',',')} %`:'–'}</b><small>CVR · {insight?.windows.traffic||'Daten fehlen'}</small></span></div>
-        <Link href={href} prefetch={false}>Campaign-Tiefenanalyse öffnen <span aria-hidden="true">→</span></Link>
+        <LiveCampaignDeepDiveLink campaignId={mapping.campaignId} affiliateId={affiliateId} initialHref={href}/>
       </article>;
     })}</div>
   </section>;
