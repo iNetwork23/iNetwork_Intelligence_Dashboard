@@ -8,16 +8,27 @@ const num=(value:number)=>new Intl.NumberFormat('de-DE').format(value);
 const rank={critical:0,warning:1,positive:2,neutral:3,missing:4} as const;
 type AttentionSeverity=keyof typeof rank;
 
+const joinOrigins=(values:string[])=>values.length<2?values[0]||'':`${values.slice(0,-1).join(', ')} und ${values.at(-1)}`;
+
 function campaignAttention(insight:SmartlinkInsight|undefined){
   const recommendation=primarySmartlinkRecommendation(insight?.recommendations||[]);
-  const current=insight?.selectedRange?.attribution.current;
+  const attribution=insight?.selectedRange?.attribution,current=attribution?.current;
   const currentMonetizationGap=Boolean(current&&current.sois>=50&&current.firstSales===0&&current.revenue<=0&&current.profit<0);
   if(recommendation?.severity==='critical')return{severity:'critical' as const,title:recommendation.title,detail:recommendation.detail};
-  if(currentMonetizationGap&&current)return{
-    severity:'warning' as const,
-    title:'Aktuelle Rotation noch ohne Umsatz',
-    detail:`${num(current.sois)} SOIs der aktuellen LPs · ${euro(current.revenue)} Umsatz · ${euro(current.profit)} Profit. Der Gesamtumsatz stammt aus früheren LPs oder vor der aktuellen Rotation. Einzelne LPs bleiben bis zu ihrer Reifeschwelle auf Beobachten.`,
-  };
+  if(currentMonetizationGap&&current&&attribution){
+    const origins=[
+      attribution.legacy.revenue>0?'frühere LPs':'',
+      attribution.beforeRotation.revenue>0?'Zeitraum vor aktueller Rotation':'',
+      attribution.transitionDay.revenue>0?'Campaign-Speichertag':'',
+      attribution.unassigned.revenue>0?'nicht eindeutig zugeordnete Events':'',
+    ].filter(Boolean);
+    const originDetail=origins.length?`Umsatzbeiträge: ${joinOrigins(origins)}.`:attribution.total.revenue>0?'Die Umsatzherkunft ist nicht vollständig zugeordnet.':'Auch die Campaign gesamt hat noch keinen Umsatz.';
+    return{
+      severity:'warning' as const,
+      title:'Aktuelle Rotation noch ohne Umsatz',
+      detail:`${num(current.sois)} SOIs der aktuellen LPs · ${euro(current.revenue)} Umsatz · ${euro(current.profit)} Profit. ${originDetail} Einzelne LPs bleiben bis zu ihrer Reifeschwelle auf Beobachten.`,
+    };
+  }
   return{severity:(recommendation?.severity||'missing') as AttentionSeverity,title:recommendation?.title||'Daten prüfen',detail:recommendation?.detail||'Keine gemeinsame Campaign-Empfehlung verfügbar.'};
 }
 
