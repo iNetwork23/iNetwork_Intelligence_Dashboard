@@ -62,10 +62,11 @@ describe('gemeinsamer Optimierungs-Workflow',()=>{
     expect(url.searchParams.get('period')).toBe('custom');
     expect(url.searchParams.get('from')).toBe('2026-07-01');
     expect(url.searchParams.get('to')).toBe('2026-07-31');
+    expect(url.hash).toBe('#campaign-135');
   });
 
   it('führt alte Smartlink-Links in den zentralen Optimizer, bewahrt Filter und bereitet Austausch sicher vor',()=>{
-    expect(legacySmartlinkRedirectHref({campaignId:135,affiliateId:'436',returnTo:'https://evil.example'})).toBe('/affiliates?affiliate=436&mode=smartlinks&campaign=135');
+    expect(legacySmartlinkRedirectHref({campaignId:135,affiliateId:'436',returnTo:'https://evil.example'})).toBe('/affiliates?affiliate=436&mode=smartlinks&campaign=135#campaign-135');
     const preserved=new URL(legacySmartlinkRedirectHref({campaignId:135,affiliateId:'436',query:{period:'custom',from:'2026-07-01',to:'2026-07-31',q:'foo',open:'135',refresh:'1',ts:'123',sourceSort:'sois',evil:'drop'}}),'https://dashboard.test');
     expect(preserved.searchParams.get('period')).toBe('custom');
     expect(preserved.searchParams.get('from')).toBe('2026-07-01');
@@ -76,6 +77,7 @@ describe('gemeinsamer Optimierungs-Workflow',()=>{
     expect(preserved.searchParams.get('ts')).toBe('123');
     expect(preserved.searchParams.get('sourceSort')).toBe('sois');
     expect(preserved.searchParams.has('evil')).toBe(false);
+    expect(preserved.hash).toBe('#campaign-135');
     expect(automationCampaignHref({campaignId:135,affiliateId:'436',slotId:'901'})).toBe('/automation?affiliate=436&campaign=135&slot=901&intent=replace');
   });
 
@@ -102,12 +104,14 @@ describe('gemeinsamer Optimierungs-Workflow',()=>{
     expect(switched.searchParams.get('q')).toBe('tp');
     expect(switched.searchParams.get('partner')).toBe('6');
     expect(switched.searchParams.get('open')).toBe('2');
+    expect(switched.hash).toBe('#campaign-2');
     const refreshed=new URL(affiliateCampaignRefreshHref({campaignId:146,affiliateId:'436',currentHref:current,timestamp:123}),'https://dashboard.test');
     expect(refreshed.searchParams.get('q')).toBe('traffic');
     expect(refreshed.searchParams.get('partner')).toBe('436');
     expect(refreshed.searchParams.get('open')).toBe('146');
     expect(refreshed.searchParams.get('refresh')).toBe('1');
     expect(refreshed.searchParams.get('ts')).toBe('123');
+    expect(refreshed.hash).toBe('#campaign-146');
   });
 
   it('schickt alte Favoriten ohne Affiliate ohne stale Partner-Autorität durch den kompatiblen Resolver',()=>{

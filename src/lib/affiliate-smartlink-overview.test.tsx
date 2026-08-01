@@ -33,9 +33,34 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
     expect(html).toContain('Frühere LPs');
     expect(html).toContain('Offer #57');
     expect(html).toContain('8 First-Sales');
-    expect(html).toContain('1,20 % der SOIs werden Zahler');
+    expect(html).toContain('1,20 % First-Sales je SOI');
     expect(html).toContain('133,28 € Umsatz');
     expect(html).toContain('Ausgewählter Zeitraum · 30 Tage');
     expect(html).not.toContain('Auto-Rotation freigeben');
+  });
+
+  it('erklärt Campaign-Umsatz ohne First-Sales und warnt bei unmonetarisierter aktueller Rotation',()=>{
+    const empty={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0};
+    const campaign23={...insight,
+      identity:{...insight.identity,campaignId:23,name:'TrafficHunt - SOI XLOVES',affiliateId:20,affiliate:'TrafficHunt'},
+      recommendations:[{slotId:'2946',action:'hold',severity:'neutral',reasonCode:'insufficient_evidence',title:'Beobachten',detail:'Noch keine belastbare Stop- oder Scale-Evidenz.'}],
+      selectedRange:{from:'2026-07-03',to:'2026-08-01',attribution:{
+        total:{clicks:1447,sois:115,cvr:7.95,firstSales:0,firstSaleRate:0,rebills:24,coinSpend:0,revenue:491.55,payout:342,profit:149.55,profitEpc:.103},
+        current:{clicks:1225,sois:113,cvr:9.22,firstSales:0,firstSaleRate:0,rebills:9,coinSpend:0,revenue:0,payout:336,profit:-336,profitEpc:-.274},
+        legacy:{...empty,rebills:7,revenue:320.77,profit:320.77},
+        beforeRotation:{...empty,clicks:202,rebills:8,revenue:170.78,profit:170.78,profitEpc:.845},
+        transitionDay:{...empty,clicks:20,sois:2,cvr:10,payout:6,profit:-6,profitEpc:-.3},
+        unassigned:empty,rotationDay:'2026-07-22',reconciled:true,
+      }},
+    } as unknown as SmartlinkInsight;
+    const campaign23Mapping={...mapping,campaignId:23,campaign:'TrafficHunt - SOI XLOVES',affiliateId:'20',affiliate:'TrafficHunt',sois30:115,revenue30:491.55,payout30:342,profit30:149.55};
+    const html=renderToStaticMarkup(<AffiliateSmartlinkOverview affiliateId="20" mappings={[campaign23Mapping]} insights={[campaign23]} rangeLabel="30 Tage" returnTo="/affiliates?affiliate=20&mode=smartlinks&period=30d"/>).replaceAll('\u00a0',' ');
+    expect(html).toContain('1 Campaign mit Prüfhinweis');
+    expect(html).toContain('0 First-Sales · 24 Rebills · 0 Coin-Spend-Events');
+    expect(html).toContain('113 SOIs der aktuellen LPs');
+    expect(html).toContain('0,00 € Umsatz');
+    expect(html).toContain('-336,00 € Profit');
+    expect(html).toContain('früheren LPs oder vor der aktuellen Rotation');
+    expect(html).toContain('#campaign-23');
   });
 });

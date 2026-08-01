@@ -61,7 +61,7 @@ export function affiliateCampaignHref(input:{campaignId:number;affiliateId?:stri
   params.set('mode','smartlinks');
   params.set('campaign',String(input.campaignId));
   params.delete('offer');
-  return `/affiliates?${params.toString()}`;
+  return `/affiliates?${params.toString()}#campaign-${input.campaignId}`;
 }
 
 export function affiliateCampaignStateHref(input:{campaignId:number;affiliateId?:string;currentHref?:string;query?:string;partner?:string;open?:number|null}):string{
@@ -69,14 +69,14 @@ export function affiliateCampaignStateHref(input:{campaignId:number;affiliateId?
   if(query)url.searchParams.set('q',query);else url.searchParams.delete('q');
   if(partner&&(partner==='unassigned'||/^\d+$/.test(partner)))url.searchParams.set('partner',partner);else url.searchParams.delete('partner');
   if(input.open&&Number.isSafeInteger(input.open))url.searchParams.set('open',String(input.open));else url.searchParams.delete('open');
-  return`${url.pathname}${url.search}`;
+  return`${url.pathname}${url.search}${url.hash}`;
 }
 
 export function affiliateCampaignRefreshHref(input:{campaignId:number;affiliateId:string;currentHref:string;timestamp:number}):string{
   const url=new URL(affiliateCampaignHref(input),'https://dashboard.local');
   url.searchParams.set('refresh','1');
   url.searchParams.set('ts',String(Math.max(0,Math.trunc(input.timestamp))));
-  return`${url.pathname}${url.search}`;
+  return`${url.pathname}${url.search}${url.hash}`;
 }
 
 const legacyStateKeys=['period','from','to','calendarYear','calendarMonth','sourcePeriod','sourceFrom','sourceTo','sourceSort','sourceOpen','q','partner','open'] as const;
