@@ -115,6 +115,21 @@ describe('gemeinsamer Optimierungs-Workflow',()=>{
     expect(refreshed.hash).toBe('#campaign-146');
   });
 
+  it('übernimmt Live-Zustand auch aus einer absoluten lokalen Campaign-URL',()=>{
+    const current=new URL(affiliateCampaignHref({
+      campaignId:23,
+      affiliateId:'20',
+      currentHref:'http://127.0.0.1:3110/affiliates?affiliate=20&mode=smartlinks&period=30d&sourcePeriod=custom&sourceFrom=2026-07-20&sourceTo=2026-08-01&sourceSort=sois&sourceOpen=adv2-a&q=traffic&partner=20&open=23',
+    }),'https://dashboard.test');
+    expect(current.searchParams.get('campaign')).toBe('23');
+    expect(current.searchParams.get('q')).toBe('traffic');
+    expect(current.searchParams.get('partner')).toBe('20');
+    expect(current.searchParams.get('open')).toBe('23');
+    expect(current.searchParams.get('sourcePeriod')).toBe('custom');
+    expect(current.searchParams.get('sourceOpen')).toBe('adv2-a');
+    expect(current.hash).toBe('#campaign-23');
+  });
+
   it('bewahrt den vollständigen sichtbaren Seitenzustand im realen Campaign-Aufrufer',()=>{
     const current=new URL(affiliateOptimizerCurrentHref({
       affiliateId:'20',

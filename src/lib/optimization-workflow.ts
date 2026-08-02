@@ -68,7 +68,7 @@ export function affiliateCampaignHref(input:{campaignId:number;affiliateId?:stri
   if(input.currentHref){
     try{
       const current=new URL(input.currentHref,'https://dashboard.local');
-      if(current.origin==='https://dashboard.local'&&current.pathname==='/affiliates')current.searchParams.forEach((value,key)=>params.set(key,value));
+      if(current.pathname==='/affiliates')current.searchParams.forEach((value,key)=>params.set(key,value));
     }catch{}
   }
   if(affiliate)params.set('affiliate',affiliate);else params.delete('affiliate');
