@@ -24,6 +24,22 @@ describe('zentraler Affiliate Optimizer',()=>{
     expect(details).toContain('defaultOpen={selectedCampaignId===mapping.campaignId}');
   });
 
+  it('lädt beim Affiliate-Wechsel nur kompakte Campaign-Daten und die volle Tiefe erst für die ausgewählte Campaign',()=>{
+    const page=app('affiliates/page.tsx');
+    expect(page).toContain('compactSmartlinkInsights');
+    expect(page).toContain('selectedSmartlinkDetails');
+    expect(page).toContain('getAffiliateSmartlinks(\n        selectedWorkspace.affiliateId,\n        selectedWorkspace.campaigns.map');
+    expect(page).toContain('false,\n        false,');
+    expect(page).toContain('detailedCampaignId ? getAffiliateSmartlinks');
+    expect(page).toContain('selectedRebillDetails');
+    expect(page).toContain('detailedCampaignId ? getAffiliateRebillEvents');
+    expect(page).toContain('smartlinkDetailsError');
+    expect(page).toContain('Campaign-Tiefendaten konnten nicht geladen werden');
+    expect(page).toContain('Detailansicht wird nicht mit unvollständigen Daten dargestellt');
+    expect(page).toContain('{selectedCampaignId && (\n            smartlinkDetailsError ?');
+    expect(page).toContain(': (\n              <>\n                <section className="sectionHead">');
+  });
+
   it('führt Rotationskandidaten in die getrennte sichere Ausführung und füllt den Scope vor',()=>{
     const details=app('affiliates/AffiliateSmartlinks.tsx');
     const automation=app('automation/AutomationDashboard.tsx');

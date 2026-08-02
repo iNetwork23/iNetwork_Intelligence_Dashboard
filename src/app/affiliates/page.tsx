@@ -379,6 +379,7 @@ export default async function AffiliateOptimizerPage({
     });
   let sourceRows: SourceBreakdownRow[] = [],
     sourceError = false,
+    smartlinkDetailsError = false,
     sourceFreshness: Awaited<
       ReturnType<typeof getAffiliateSourceFreshness>
     > | null = null,
@@ -436,26 +437,46 @@ export default async function AffiliateOptimizerPage({
       }
   }
   if (selectedWorkspace && mode === "smartlinks") {
-    const smartlinkResult = await Promise.allSettled([
-      getAffiliateSmartlinks(
+    const detailedCampaignId = selectedCampaignId && selectedWorkspace.campaigns.some((item) => item.campaignId === selectedCampaignId) ? selectedCampaignId : undefined;
+    const compactSmartlinkInsights = getAffiliateSmartlinks(
         selectedWorkspace.affiliateId,
         selectedWorkspace.campaigns.map((x) => x.campaignId),
         { from: period.from, to: period.to },
         user.access,
-        query.refresh === "1",
+        false,
+        false,
       ),
-      getAffiliateRebillEvents(
+      selectedSmartlinkDetails = detailedCampaignId ? getAffiliateSmartlinks(
+        selectedWorkspace.affiliateId,
+        [detailedCampaignId],
+        { from: period.from, to: period.to },
+        user.access,
+        query.refresh === "1",
+      ) : Promise.resolve([]),
+      selectedRebillDetails = detailedCampaignId ? getAffiliateRebillEvents(
         selectedWorkspace.affiliateId,
         { from: period.from, to: period.to },
         user.access,
-      ),
-    ]);
-    if (smartlinkResult[0].status === "fulfilled")
-      smartlinkInsights = smartlinkResult[0].value;
-    else console.error("Affiliate smartlinks failed", smartlinkResult[0].reason);
-    if (smartlinkResult[1].status === "fulfilled")
-      rebillEvents = smartlinkResult[1].value;
-    else console.error("Rebill distribution failed", smartlinkResult[1].reason);
+      ) : Promise.resolve([]),
+      smartlinkResult = await Promise.allSettled([
+        compactSmartlinkInsights,
+        selectedSmartlinkDetails,
+        selectedRebillDetails,
+      ]);
+    if (smartlinkResult[0].status === "fulfilled") {
+      const detailed = smartlinkResult[1].status === "fulfilled" ? new Map(smartlinkResult[1].value.map((item) => [item.identity.campaignId, item])) : new Map();
+      smartlinkInsights = smartlinkResult[0].value.map((item) => detailed.get(item.identity.campaignId) || item);
+    } else {
+      console.error("Affiliate smartlink summaries failed", smartlinkResult[0].reason);
+      if (smartlinkResult[1].status === "fulfilled") smartlinkInsights = smartlinkResult[1].value;
+    }
+    if (smartlinkResult[1].status === "rejected") {
+      smartlinkDetailsError = true;
+      console.error("Affiliate smartlink details failed", smartlinkResult[1].reason);
+    }
+    if (smartlinkResult[2].status === "fulfilled")
+      rebillEvents = smartlinkResult[2].value;
+    else console.error("Rebill distribution failed", smartlinkResult[2].reason);
   }
   const sourceRowsByUrl = new Map<string, SourceBreakdownRow[]>();
   for (const row of sourceRows) {
@@ -694,32 +715,46 @@ export default async function AffiliateOptimizerPage({
             rangeLabel={period.label}
             returnTo={smartlinkCurrentHref}
           />
-          <section className="sectionHead">
-            <div>
-              <span>ERGÄNZENDE PARTNERDATEN</span>
-              <h2>Campaign-Bilanzen und Nachlauf prüfen</h2>
-            </div>
-            <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
-          </section>
-          <AffiliateSmartlinks
-            affiliateId={selectedWorkspace.affiliateId}
-            returnTo={smartlinkCurrentHref}
-            mappings={selectedWorkspace.campaigns}
-            insights={smartlinkInsights}
-            rangeLabel={period.label}
-            rebillAnalyses={smartlinkRebillAnalyses}
-            selectedCampaignId={/^\d+$/.test(query.campaign || "") ? Number(query.campaign) : undefined}
-            canManageSources={
-              user.access.role !== "partner" &&
-              can(user.access, "landingpages.manage") &&
-              can(user.access, "api.manage")
-            }
-            canManageCampaigns={
-              user.access.role !== "partner" &&
-              can(user.access, "campaigns.edit") &&
-              can(user.access, "api.manage")
-            }
-          />
+          {selectedCampaignId && (
+            smartlinkDetailsError ? (
+              <section className="sourceCacheError" role="alert">
+                <h3>Campaign-Tiefendaten konnten nicht geladen werden</h3>
+                <p>
+                  Die kompakte Campaign-Bilanz bleibt sichtbar. Die Detailansicht wird nicht mit unvollständigen Daten dargestellt.
+                </p>
+                <DataReloadButton />
+              </section>
+            ) : (
+              <>
+                <section className="sectionHead">
+                <div>
+                  <span>ERGÄNZENDE PARTNERDATEN</span>
+                  <h2>Campaign-Bilanzen und Nachlauf prüfen</h2>
+                </div>
+                <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
+              </section>
+                <AffiliateSmartlinks
+                affiliateId={selectedWorkspace.affiliateId}
+                returnTo={smartlinkCurrentHref}
+                mappings={selectedWorkspace.campaigns}
+                insights={smartlinkInsights}
+                rangeLabel={period.label}
+                rebillAnalyses={smartlinkRebillAnalyses}
+                selectedCampaignId={selectedCampaignId}
+                canManageSources={
+                  user.access.role !== "partner" &&
+                  can(user.access, "landingpages.manage") &&
+                  can(user.access, "api.manage")
+                }
+                canManageCampaigns={
+                  user.access.role !== "partner" &&
+                  can(user.access, "campaigns.edit") &&
+                  can(user.access, "api.manage")
+                }
+                />
+              </>
+            )
+          )}
         </>
       ) : selected && activeOffer ? (
         <>

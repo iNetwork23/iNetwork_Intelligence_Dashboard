@@ -61,6 +61,13 @@ describe('Smartlink source affiliate context',()=>{
   expect(()=>getSmartlinkInsight(172,access,true,'not-an-id')).toThrow(/400/);
  });
 
+ it('loads a compact affiliate summary without year-long source enrichment for picker navigation',async()=>{
+  const access=parseAccessMetadata({role:'admin'});
+  await getAffiliateSmartlinks('29',[172,173],{from:'2026-07-01',to:'2026-07-31'},access,false,false);
+  expect(mocks.loadAffiliate).toHaveBeenCalledWith('29',[172,173],expect.any(Date),{from:'2026-07-01',to:'2026-07-31'},false);
+  expect(mocks.cacheKeys.some(key=>key.includes('compact'))).toBe(true);
+ });
+
  it('bypasses the affiliate Smartlink cache only for an explicit manual refresh',async()=>{
   const access=parseAccessMetadata({role:'admin'});
   await getAffiliateSmartlinks('29',[172],{from:'2026-07-01',to:'2026-07-31'},access,true);

@@ -18,6 +18,24 @@ describe('affiliate partner picker UI',()=>{
   expect(picker).toContain('M12 17v5');
   expect(picker).toContain('M5 17h14');
  });
+ it('shows the selected target immediately and clears or recovers the pending navigation',()=>{
+  const picker=read('affiliates/AffiliatePartnerPicker.tsx');
+  for(const marker of[
+   'useTransition',
+   'pendingPartner',
+   'startTransition(()=>router.push(target))',
+   'aria-busy={Boolean(pendingPartner)}',
+   'Affiliate wird geöffnet',
+   'affiliatePickerPending',
+   '8_000',
+   'setPendingPartner(null)',
+  ])expect(picker).toContain(marker);
+  expect(picker).toContain("if(pendingPartner&&isSameRouteTarget(pendingTarget,routeKey))");
+  expect(picker).not.toContain('currentId===pendingPartner.id');
+  expect(picker).toContain('timedOutTarget');
+  expect(picker).toContain('isSameRouteTarget(timedOutTarget,routeKey)');
+  expect(picker).toContain('setTimedOutTarget');
+ });
  it('uses a bounded desktop dropdown and a viewport-safe mobile panel',()=>{
   const css=read('globals.css');
   for(const marker of['.affiliatePickerMenu','.affiliatePinButton.pinned','.affiliatePickerTrafficFilter','grid-template-columns:repeat(3,minmax(0,1fr))','min-height:44px','max-height:min(520px,65vh)','inset:66px 12px auto','max-height:calc(100vh - 198px)'])expect(css).toContain(marker);
