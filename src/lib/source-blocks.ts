@@ -31,6 +31,23 @@ export const sourceBlockStoreKey=(block:Pick<NormalizedSourceBlock,'affiliateId'
 export const sourceBlockLabel=(block:Pick<NormalizedSourceBlock,'mainValue'|'subValue'|'level'>)=>block.level==='sub_source'?`${block.mainValue||'nicht übermittelt'} → ${block.subValue}`:(block.mainValue||'nicht übermittelt');
 export const sourceBlockRequiredConfirmation=(block:Pick<NormalizedSourceBlock,'mainValue'|'subValue'|'level'>)=>(block.level==='sub_source'?block.subValue:block.mainValue)||'NICHT ÜBERMITTELT';
 
+type SourceBlockSnapshotRow={columns:Array<{column_type:string;id:string;label:string}>};
+const snapshotDimension=(row:SourceBlockSnapshotRow,type:string)=>row.columns.find(column=>column.column_type===type);
+const snapshotSourceValue=(row:SourceBlockSnapshotRow,type:'source_id'|'sub1')=>normalizedValue(snapshotDimension(row,type)?.id);
+const snapshotRowMatchesBlock=(row:SourceBlockSnapshotRow,block:NormalizedSourceBlock)=>{
+ const affiliate=snapshotDimension(row,'affiliate')?.id||'',mode=snapshotDimension(row,'traffic_mode')?.id||'';
+ if(affiliate!==String(block.affiliateId)||mode!==block.trafficMode||snapshotSourceValue(row,'source_id')!==block.mainValue)return false;
+ return block.level==='main_source'||snapshotSourceValue(row,'sub1')===block.subValue;
+};
+export function sourceBlockOffersFromSnapshotRows(rows:SourceBlockSnapshotRow[],block:NormalizedSourceBlock){
+ const offers=new Map<string,string>();
+ for(const row of rows){if(!snapshotRowMatchesBlock(row,block))continue;const offer=snapshotDimension(row,'offer');if(offer?.id)offers.set(offer.id,offer.id===String(block.offerId)?block.offerName:(offer.label||`Offer #${offer.id}`))}
+ return[...offers].sort(([a],[b])=>Number(a)-Number(b)||a.localeCompare(b)).map(([offerId,offerName])=>({offerId,offerName}));
+}
+export function sourceBlockVisibleInSnapshotRows(rows:SourceBlockSnapshotRow[],block:NormalizedSourceBlock){
+ return rows.some(row=>snapshotRowMatchesBlock(row,block)&&snapshotDimension(row,'offer')?.id===String(block.offerId)&&(block.originCampaignId===null||snapshotDimension(row,'campaign')?.id===String(block.originCampaignId)));
+}
+
 export type SourceBlockMetricRow={metric_date:string;affiliate_id:string;offer_id:string;source_id:string;sub_source:string;sois:number;payout:number;raw?:Record<string,unknown>};
 const rowValue=(row:SourceBlockMetricRow,field:string)=>{if(field==='source_id')return normalizedValue(row.source_id);if(field==='sub1')return normalizedValue(row.sub_source);return normalizedValue(row.raw?.[field])};
 export function metricMatchesSourceBlock(row:SourceBlockMetricRow,block:Pick<NormalizedSourceBlock,'affiliateId'|'offerId'|'level'|'mainField'|'mainValue'|'subField'|'subValue'>){if(row.affiliate_id!==String(block.affiliateId)||row.offer_id!==String(block.offerId))return false;const main=rowValue(row,block.mainField),sub=rowValue(row,block.subField);if(block.level==='main_source')return main===block.mainValue;return main===block.mainValue&&sub===block.subValue}

@@ -6,7 +6,7 @@ import{loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,l
 import{analyzeLeadLatency}from'./lead-latency';
 import{resolveSourcePeriod}from'./source-period';
 import{attachSourceActivity,mergeSourceWindows}from'./source-breakdown';
-import{resolveActivityCoverage}from'./snapshot-generation';
+import{resolveActivityCoverage,sourceScopeCoverageComplete}from'./snapshot-generation';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess,sourceRowsForAccess}from'./service-scopes';
 
@@ -31,6 +31,15 @@ export async function getAffiliateSourceBreakdown(affiliateId:string,range:{from
  if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
  const yearly=resolveSourcePeriod({sourcePeriod:'12m'},now);
  return sourceEvaluation(affiliateId,range,{from:yearly.from,to:yearly.to},access);
+}
+
+export async function getAffiliateSourceScopeRows(affiliateId:string,range:{from:string;to:string},access:AccessMetadata){
+ if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
+ assertScopesSupported(access,['affiliate','offer','campaign','source','sub_source']);
+ if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
+ const[rows,freshness]=await Promise.all([loadAffiliateSourceRowsRangeFromCache(range,affiliateId).then(items=>sourceRowsForAccess(items,access)),freshnessWindow(range)]);
+ if(!sourceScopeCoverageComplete(range,freshness))throw new Error('Source-Historie ist unvollständig. Keine Änderung durchgeführt.');
+ return rows;
 }
 
 export async function getAffiliateSourceFreshness(range:{from:string;to:string}){
