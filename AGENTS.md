@@ -2,7 +2,7 @@
 
 ## Auftrag
 
-Dieses Repository enthält das private iNetwork Intelligence Dashboard. Änderungen müssen Profit-, Datenqualitäts- und Sicherheitsanforderungen vor visueller Bequemlichkeit priorisieren.
+Dieses Repository enthält das öffentliche iNetwork Intelligence Dashboard. Änderungen müssen Profit-, Datenqualitäts- und Sicherheitsanforderungen vor visueller Bequemlichkeit priorisieren.
 
 ## Einstieg
 

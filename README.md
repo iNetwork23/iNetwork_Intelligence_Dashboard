@@ -2,7 +2,7 @@
 
 Internes Performance- und Intelligence-Dashboard für Everflow-Traffic, Smartlinks, Affiliates, Automationsentscheidungen und langfristige LTV-/Kohortenanalysen.
 
-> **Vertraulich:** Dieses Projekt ist für ein privates GitHub-Repository vorgesehen. Zugangsdaten, API-Schlüssel und Produktionsdaten dürfen nicht committed werden.
+> **Öffentliches Repository:** Zugangsdaten, API-Schlüssel, interne Produktionsdaten und personenbezogene Daten dürfen niemals committed werden.
 
 ## Funktionsumfang
 
