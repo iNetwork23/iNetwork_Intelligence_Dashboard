@@ -694,6 +694,7 @@ export const translations = {
   "Ausschließlich Ihr zugeordneter Datenscope": "Only your assigned data scope",
   "Alle Offers, Affiliates, Smartlinks und Direkt-Traffic auf einen Blick.": "All offers, affiliates, smartlinks and direct traffic at a glance.",
   "12 Monate": "12 months",
+  "365 Tage": "365 days",
   "Gesamt": "Total",
   "Zeitraum anwenden": "Apply period",
   "Account-Profit": "Account Profit",

@@ -7,19 +7,19 @@ Authentifiziertes Everflow-, Smartlink- und Operations-Dashboard mit Supabase-Hi
 - freigegebener Produktcommit: `84594ae314401b721a3bc8ba86f53adc89ad8058`;
 - der aktuelle kanonische Branch darf zusätzlich reine `src/data/automation-journal.ts`-Nachfolger enthalten;
 - Produktionsalias: `https://wlx-railway-dashboard.vercel.app`;
-- finaler Prüfbericht: `/home/hermes/release-artifacts/full-project-check-2026-08-02/WLX-VOLLSTAENDIGER-PROJEKTCHECK-2026-08-02.md`;
-- maschinenlesbares Manifest: `/home/hermes/release-artifacts/WLX-ABNAHME-CHECKLIST-2026-08-02.json`.
+- operator-lokaler Prüfbericht (nicht Teil dieses Repositories): `/home/hermes/release-artifacts/full-project-check-2026-08-02/WLX-VOLLSTAENDIGER-PROJEKTCHECK-2026-08-02.md`;
+- operator-lokales Manifest (nicht Teil dieses Repositories): `/home/hermes/release-artifacts/WLX-ABNAHME-CHECKLIST-2026-08-02.json`.
 
 Der historische Campaign-#23-CTA-, Picker-, Source-Preview-Statement-Timeout- und Rohhistorien-Cachefehler ist im lokalen Kandidaten behoben. Campaign-Umsatz wird nur nach reconcilierten Buckets erklärt; Eventanzahlen werden nicht als kausale Umsatzzuordnung ausgegeben. Neue Releases benötigen trotzdem erneut Tests, immutable Review, Deploymentfingerprint und echte Desktop-/Mobil-Browserklicks.
 
 ## Everflow-Historiencache mit Supabase
 
-Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten dauerhaft in Supabase. Jeder Lauf arbeitet den 365-Tage-Backfill in höchstens sieben Tagen rückwärts ab. Auf Vercel Pro läuft `/api/sync` einmal pro Stunde. Nach Abschluss des Backfills aktualisiert derselbe Cron das rollierende 30-Tage-Fenster höchstens stündlich.
+Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten dauerhaft in Supabase. Jeder Lauf arbeitet den 365-Tage-Backfill in höchstens sieben Tagen rückwärts ab. Auf Vercel Pro läuft `/api/sync` stündlich um Minute 17. Nach Abschluss des Backfills aktualisiert derselbe Cron das rollierende 30-Tage-Fenster höchstens stündlich.
 
 ## Einmalige Einrichtung
 
 1. Ein Supabase-Projekt anlegen.
-2. Den vollständigen Inhalt von `supabase/migrations/20260722191500_everflow_history_cache.sql` im Supabase SQL-Editor ausführen.
+2. Die Migrationen bis einschließlich `20260729003000_rebill_concentration_index.sql` einzeln in lexikografischer Reihenfolge aus `supabase/migrations/` ausführen und jeden Schritt per Objekt-Read-back bestätigen. Für die nachfolgenden Fraud-, Identity-, Replacement- und LTV-Schritte ausschließlich `docs/FRAUD-CONTROL-MIGRATION-RUNBOOK.md` verwenden; dessen getrennte `CREATE INDEX CONCURRENTLY`-Dateien dürfen nicht in einen gemeinsamen SQL-Editor-Block aufgenommen werden.
 3. In Vercel unter **Project → Settings → Environment Variables** setzen:
 
 ```text
@@ -44,7 +44,7 @@ APP_ORIGIN=https://<dashboard-domain>
 
 `ONESIGNAL_REST_API_KEY` darf niemals mit `NEXT_PUBLIC_` beginnen. OneSignal-Geräte werden mit der serverseitig authentifizierten Dashboard-User-ID als OneSignal-`external_id` verbunden; eine vom Browser gelieferte User-ID wird nicht als Autorisierung verwendet. Unter **App & Hinweise** wird nur der Konfigurationsstatus angezeigt. Credentials allein belegen keine Gerätebindung: Vor einer Freigabe müssen SDK-Aliasbindung, rate-limitierter Testversand, reale Provider-Message-ID, Desktop/Mobil und getrennte interne-Web-Push-Zustände geprüft werden. Interner Web Push und OneSignal werden nicht still gespiegelt, da sonst doppelte Zustellungen entstehen können.
 
-4. Neu deployen. `vercel.json` startet `/api/sync` auf Vercel Pro stündlich zur vollen Stunde.
+4. Neu deployen. `vercel.json` startet `/api/sync` auf Vercel Pro stündlich um Minute 17.
 
 ## Tabellen
 

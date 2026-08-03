@@ -92,6 +92,7 @@ describe("legacy campaign import", () => {
       ),
     ).rejects.toThrow("5701");
   });
+  it('rejects automatic multi-offer import because LP families require manual confirmation',async()=>{const multi={...campaign,relationship:{...campaign.relationship,redirects:{entries:[campaign.relationship.redirects.entries[0],{...campaign.relationship.redirects.entries[1],redirect_network_offer_id:50,redirect_network_offer_url_id:5001}]}}};const searchOffers=vi.fn(),loadLandingpages=vi.fn();await expect(buildImportedAutomationDraft({campaignId:146,affiliateId:436,apiKey:'test'},{readBaseline:vi.fn().mockResolvedValue({campaign:multi,fingerprint:'sha256:x'}),searchOffers,loadLandingpages})).rejects.toThrow('manuell bestätigte LP-Familien');expect(searchOffers).not.toHaveBeenCalled();expect(loadLandingpages).not.toHaveBeenCalled()});
   it("rejects duplicate active offer URL ids before inventory lookup",async()=>{const duplicate={...campaign,relationship:{...campaign.relationship,redirects:{entries:[campaign.relationship.redirects.entries[0],{...campaign.relationship.redirects.entries[1],redirect_network_offer_url_id:5701},campaign.relationship.redirects.entries[2]]}}};await expect(buildImportedAutomationDraft({campaignId:146,affiliateId:436,apiKey:"test"},{readBaseline:vi.fn().mockResolvedValue({campaign:duplicate,fingerprint:"sha256:x"}),searchOffers:vi.fn(),loadLandingpages:vi.fn()})).rejects.toThrow("doppelte aktive Offer-URL-IDs")});
   it.each([
     ["zero", 0],

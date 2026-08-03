@@ -346,7 +346,7 @@ export default function SourceBreakdown({
                           {eur(leaf.metric.profit)} Profit
                         </b>
                       </span>
-                      {rebillAnalyses[sourceRebillKey(leaf.sourceId,leaf.subSource)]&&<div className="trafficLeafRebill"><RebillConcentrationPanel analysis={rebillAnalyses[sourceRebillKey(leaf.sourceId,leaf.subSource)]} scope={`${apiMode?'ADV2':'Sub-Source'} ${leaf.subSource||leaf.sourceId} · ${rangeLabel}`}/></div>}
+                      {rebillAnalyses[sourceRebillKey(apiMode?'api':'tracked',leaf.sourceId,leaf.subSource)]&&<div className="trafficLeafRebill"><RebillConcentrationPanel analysis={rebillAnalyses[sourceRebillKey(apiMode?'api':'tracked',leaf.sourceId,leaf.subSource)]} scope={`${apiMode?'ADV2':'Sub-Source'} ${leaf.subSource||leaf.sourceId} · ${rangeLabel}`}/></div>}
                     </article>
                   ))}
                 </div>

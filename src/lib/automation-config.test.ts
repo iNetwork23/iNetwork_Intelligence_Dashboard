@@ -59,14 +59,17 @@ describe('automation configuration',()=>{
   expect(validateAutomationDraft(result)).toContain('Alle Startgewichte müssen endlich und größer als 0 sein.');
  });
 
- it('removes the unimplemented full-matrix contract and safely normalizes legacy multi-offer drafts',()=>{
+ it('removes the unimplemented full-matrix contract and rejects unsupported strategies fail closed',()=>{
   const second={offerId:50,offerName:'Sex69',landingpages:single.offers[0].landingpages.map((lp,index)=>({...lp,offerUrlId:5001+index,offerUrlName:`Sex69 ${lp.familyName}`}))};
-  const result=normalizeAutomationDraft({...single,testMode:'multi_offer',strategy:'full_matrix',offers:[single.offers[0],second]},new Date('2026-07-30T12:00:00Z'));
-  expect(result.strategy).toBe('matched_rounds');
+  expect(()=>normalizeAutomationDraft({...single,testMode:'multi_offer',strategy:'full_matrix',offers:[single.offers[0],second]},new Date('2026-07-30T12:00:00Z'))).toThrow('nicht unterstützt');
+  expect(()=>normalizeAutomationDraft({...single,strategy:'typo'},new Date('2026-07-30T12:00:00Z'))).toThrow('nicht unterstützt');
   const ui=readFileSync(join(process.cwd(),'src/app/automation/AutomationDashboard.tsx'),'utf8');
   expect(ui).not.toContain('value="full_matrix"');
   expect(ui).not.toContain('Vollständige Offer×LP-Matrix');
+  expect(readFileSync(join(process.cwd(),'src/lib/automation-import.ts'),'utf8')).not.toContain("'full_matrix'");
  });
+
+ it('rejects mode and strategy combinations that are impossible at runtime',()=>{const config=normalizeAutomationDraft(single);expect(validateAutomationDraft({...config,testMode:'multi_offer'} as never)).toContain('Strategie passt nicht zum Testtyp.');expect(validateAutomationDraft({...config,strategy:'matched_rounds'} as never)).toContain('Strategie passt nicht zum Testtyp.')});
 
  it('recommends a measurable lead gate and estimated duration from partner traffic',()=>{
   const rec=recommendAutomationThresholds({variantCount:3,baselineCvr:0.01,clicksPerDay:1500,soisPerDay:15,affiliateId:436});

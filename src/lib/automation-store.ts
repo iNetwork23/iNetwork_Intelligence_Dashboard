@@ -9,7 +9,7 @@ export type AutomationIncident={incidentId:string;at:string;runId:string;message
 export type StoredAutomationConfiguration=AutomationConfiguration&{updatedBy:string;acceptedBaselineFingerprint?:string;runs:AutomationRun[];lastIncident?:AutomationIncident};
 type StoredRecord=Omit<StoredAutomationConfiguration,'runs'> & {lastFailedRun?:AutomationRun};
 type Transition='dry_run'|'request_live'|'activate_live'|'pause'|'resume'|'hold'|'complete';
-const isConfig=(value:unknown):value is StoredRecord=>Boolean(value)&&typeof value==='object'&&(value as StoredRecord).schemaVersion===1&&typeof (value as StoredRecord).id==='string';
+const isConfig=(value:unknown):value is StoredRecord=>{if(!value||typeof value!=='object')return false;const candidate=value as StoredRecord;if(candidate.schemaVersion!==1||typeof candidate.id!=='string'||!Array.isArray(candidate.offers)||!Array.isArray(candidate.slots))return false;try{return validateAutomationDraft(candidate).length===0}catch{return false}};
 const configKey=(id:string)=>`${PREFIX}${id}`;
 const runPrefix=(id:string)=>`${RUN_PREFIX}${id}:`;
 async function runs(store:SecurityStore,id:string){return(await store.list(runPrefix(id))).map(x=>x.value).filter((x):x is AutomationRun=>Boolean(x)&&typeof x==='object'&&typeof(x as AutomationRun).runId==='string').sort((a,b)=>b.startedAt.localeCompare(a.startedAt));}

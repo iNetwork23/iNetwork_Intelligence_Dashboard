@@ -13,4 +13,5 @@ describe('automation preflight',()=>{
   expect(result.verified).toBe(false);
   expect(result.blockers).toEqual(expect.arrayContaining(['Offer #57 ist nicht aktiv.','Offer #57 ist für Affiliate #436 nicht sichtbar.','Offer-URL #5702 ist im aktiven Everflow-Inventar nicht vorhanden.']));
  });
+ it('rejects an unsupported persisted strategy before calling the provider',async()=>{const readBaseline=vi.fn(),searchOffers=vi.fn(),loadLandingpages=vi.fn(),result=await runAutomationPreflight({...config,strategy:'full_matrix'} as never,'key',{readBaseline,searchOffers,loadLandingpages});expect(result.verified).toBe(false);expect(result.blockers).toContain('Strategie passt nicht zum Testtyp.');expect(readBaseline).not.toHaveBeenCalled();expect(searchOffers).not.toHaveBeenCalled();expect(loadLandingpages).not.toHaveBeenCalled()});
 });

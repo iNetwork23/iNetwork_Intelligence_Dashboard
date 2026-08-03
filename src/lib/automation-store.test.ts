@@ -6,6 +6,7 @@ import {normalizeAutomationDraft} from './automation-config';
 const draft=()=>normalizeAutomationDraft({name:'Test',affiliateId:436,campaignId:146,testMode:'single_offer',strategy:'equal_slots',objective:'sale_first',offers:[{offerId:57,offerName:'Singles69',landingpages:[{familyKey:'a',familyName:'A',offerUrlId:1,offerUrlName:'A',status:'active'},{familyKey:'b',familyName:'B',offerUrlId:2,offerUrlName:'B',status:'active'}]}],schedule:{intervalMinutes:120},thresholds:{targetSois:50,minClicks:500,minAgeHours:24,maxAgeHours:336,maturityHours:336,minIndependentFirstSales:3,minIndependentPayers:3},weights:{mode:'equal'}},new Date('2026-07-30T12:00:00Z'));
 
 describe('automation store',()=>{
+ it('does not decode a persisted unsupported legacy strategy as executable configuration',async()=>{const store=new MemorySecurityStore(),legacy={...draft(),strategy:'full_matrix',updatedBy:'legacy'};await store.set(`automation:config:v1:${legacy.id}`,legacy);expect(await getAutomationConfiguration(store,legacy.id)).toBeNull();expect(await listAutomationConfigurations(store)).toEqual([])});
  it('persists versioned configurations and rejects stale updates',async()=>{
   const store=new MemorySecurityStore(),created=await createAutomationConfiguration(store,draft(),'actor-1');
   expect((await getAutomationConfiguration(store,created.id))?.version).toBe(1);

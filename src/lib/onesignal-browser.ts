@@ -14,7 +14,7 @@ declare global{
 }
 
 export async function bindOneSignalIdentity(sdk:Pick<OneSignalBrowserSdk,'login'|'logout'>,input:{previousBinding?:string;desiredBinding:string;externalId:string}){
- if(input.previousBinding&&!input.previousBinding.startsWith('pending:')&&input.previousBinding!==input.desiredBinding)await sdk.logout();
+ await sdk.logout();
  await sdk.login(input.externalId);
 }
 

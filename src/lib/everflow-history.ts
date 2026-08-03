@@ -27,10 +27,11 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
       const first=await load(1),rawTotal=first.paging?.total_count;
       if(typeof rawTotal!=='number'||!Number.isInteger(rawTotal)||rawTotal<0)throw new Error('Everflow Conversion-Pagination: gültiges total_count fehlt');
       const total=rawTotal,pages=Math.max(1,Math.ceil(total/pageSize));
+      const assertTotal=(result:{paging?:{total_count?:number}})=>{const value=result.paging?.total_count;if(typeof value!=='number'||!Number.isInteger(value)||value<0||value!==total)throw new Error('Everflow Conversion-Pagination: inkonsistentes total_count')};
       const rows=[...(first.conversions||[])];
       for(let start=2;start<=pages;start+=4){
         const results=await Promise.all(Array.from({length:Math.min(4,pages-start+1)},(_,index)=>load(start+index)));
-        for(const result of results)rows.push(...(result.conversions||[]));
+        for(const result of results){assertTotal(result);rows.push(...(result.conversions||[]))}
       }
       if(rows.length!==total)throw new Error(`Everflow Conversion-Pagination unvollständig: erwartet ${total}, erhalten ${rows.length}`);
       return rows;

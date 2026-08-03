@@ -480,7 +480,7 @@ export default async function AffiliateOptimizerPage({
   }
   const sourceRowsByUrl = new Map<string, SourceBreakdownRow[]>();
   for (const row of sourceRows) {
-    const key = `${row.offerId}|${row.offerUrlId}`,
+    const key = `${row.trafficMode}|${row.offerId}|${row.offerUrlId}`,
       bucket = sourceRowsByUrl.get(key);
     if (bucket) bucket.push(row);
     else sourceRowsByUrl.set(key, [row]);
@@ -526,7 +526,7 @@ export default async function AffiliateOptimizerPage({
       firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(index, scope),
     }),
     sourceRebillAnalyses = (rows: SourceBreakdownRow[]) => Object.fromEntries(rows.filter((row)=>row.days30.rebills>0).map((row) => [
-      sourceRebillKey(row.sourceId,row.subSource===NO_SUB_SOURCE?null:row.subSource),
+      sourceRebillKey(row.trafficMode,row.sourceId,row.subSource===NO_SUB_SOURCE?null:row.subSource),
       analyzeRebillConcentration({
         firstSales: row.days30.firstSales,
         totalRebills: row.days30.rebills,
@@ -1131,10 +1131,10 @@ export default async function AffiliateOptimizerPage({
                     {sourceError ? null : (
                       <SourceBreakdown
                         rows={
-                          sourceRowsByUrl.get(`${v.offerId}|${v.offerUrlId}`) ||
+                          sourceRowsByUrl.get(`${v.trafficMode}|${v.offerId}|${v.offerUrlId}`) ||
                           []
                         }
-                        rebillAnalyses={sourceRebillAnalyses(sourceRowsByUrl.get(`${v.offerId}|${v.offerUrlId}`)||[])}
+                        rebillAnalyses={sourceRebillAnalyses(sourceRowsByUrl.get(`${v.trafficMode}|${v.offerId}|${v.offerUrlId}`)||[])}
                         apiMode={v.trafficMode === "api"}
                         rangeLabel={sourcePeriod.label}
                         sourcePeriod={sourcePeriod}

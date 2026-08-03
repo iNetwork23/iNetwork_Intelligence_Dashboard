@@ -3,10 +3,10 @@
 import{useRef,useState,type FormEvent}from'react';
 import{detachOneSignalIdentity}from'@/lib/onesignal-browser';
 
-export default function OneSignalLogoutForm(){
+export default function OneSignalLogoutForm({configured}:{configured:boolean}){
  const form=useRef<HTMLFormElement>(null),bypass=useRef(false),[error,setError]=useState('');
  const submit=(event:FormEvent<HTMLFormElement>)=>{
-  if(bypass.current||!window.__wlxOneSignalBinding)return;
+  if(bypass.current||!configured)return;
   event.preventDefault();setError('');
   const queue=window.OneSignalDeferred;
   if(!queue){setError('OneSignal-Abmeldung konnte nicht sicher vorbereitet werden.');return}

@@ -12,7 +12,7 @@ Bekannt und nicht geheim sind:
 
 Ein in Slack veröffentlichter REST-Key gilt als kompromittiert und darf nicht verwendet werden. Er muss providerseitig widerrufen und durch einen neuen, ausschließlich direkt im Production Secret Store gesetzten Key ersetzt werden.
 
-Der lokale Client nutzt einen separaten Worker unter `/onesignal/OneSignalSDKWorker.js` mit Scope `/onesignal/`, damit der bestehende interne PWA-Worker `/sw.js` nicht ersetzt wird. Die serverseitig aufgelöste interne User-ID wird nur für nicht impersonierte Sitzungen per `OneSignal.login(...)` gebunden.
+Der lokale Client nutzt einen separaten Worker unter `/onesignal/OneSignalSDKWorker.js` mit Scope `/onesignal/`, damit der bestehende interne PWA-Worker `/sw.js` nicht ersetzt wird. Die serverseitig aufgelöste interne User-ID wird nur für nicht impersonierte Sitzungen per `OneSignal.login(...)` gebunden. Vor jeder neuen Bindung wird die möglicherweise persistente Provideridentität unabhängig von flüchtigem Window-Zustand abgelöst. Browser-Logout, Reload, Sessionablauf und Benutzerwechsel müssen `OneSignal.logout()` durchlaufen; bei deaktivierter Integration wird eine vorhandene öffentliche App-Konfiguration nur zum sicheren Detachment geladen.
 
 Der bestehende Serveradapter bleibt trotz vorhandener Werte fail-closed, solange `ONESIGNAL_ENABLED` nicht ausdrücklich auf `true` gesetzt wurde. Ein funktionierender interner Web-Push-Test ist kein OneSignal-Nachweis.
 

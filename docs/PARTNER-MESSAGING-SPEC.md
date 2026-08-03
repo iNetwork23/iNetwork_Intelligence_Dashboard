@@ -34,7 +34,7 @@ Unterstützte Absichten:
 type PartnerMessageContext = {
   affiliateId: string;
   affiliateName: string;
-  trafficMode: 'tracked' | 'api';
+  trafficMode: 'tracked_smartlink' | 'tracked_direct' | 'clickless_api';
   offerId: string;
   offerName: string;
   campaignId: string | null;
@@ -48,6 +48,8 @@ type PartnerMessageContext = {
 ```
 
 Die Destination wird serverseitig ausschließlich aus `affiliateId` aufgelöst. Technische Main-/Subsource-Werte dürfen nicht durch Anzeigenamen ersetzt werden.
+
+Ein kanonisch als `unknown` klassifizierter Trafficmodus darf weder einen sendbaren Draft noch einen Versand erzeugen. Der Modus ist Bestandteil von Tuple-, Draft-, Idempotenz- und Audit-Schlüsseln; Smartlink, Direct und clickless API dürfen nie zusammenfallen.
 
 ## 4. Analysevertrag
 
@@ -125,6 +127,8 @@ Vorgesehene Endpunkte:
   - nur bestätigten Providerstatus speichern.
 
 Antworten sind `private, no-store`. Browserkörper dürfen keine Chat-/Topic-ID oder Credentials enthalten.
+
+Verbindliche Grenzen: Preview- und KI-JSON-Körper höchstens 16 KiB, finaler Plain-Text höchstens 4.096 Zeichen, Draft-TTL 15 Minuten, höchstens zehn Previews je Actor und Stunde sowie drei Send-Claims je Actor und Destination innerhalb von 15 Minuten. Telegram wird ohne `parse_mode` als Plain-Text angesprochen; Token oder Destination-ID dürfen weder in URLs noch in Logs erscheinen.
 
 ## 8. Telegram-Konfiguration
 
