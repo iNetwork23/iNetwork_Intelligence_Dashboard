@@ -13,6 +13,7 @@ type Props={
  impersonating:boolean;
  actorId:string;
  mayStatistics:boolean;
+ mayFraud:boolean;
  mayPartners:boolean;
  mayAutomation:boolean;
  maySourceBlocks:boolean;
@@ -22,7 +23,7 @@ type Props={
 };
 type IconName="monitor"|"chart"|"users"|"rotation"|"spark"|"shield"|"lock";
 type PrimaryItem={href:string;label:string;icon:IconName;show:boolean};
-const PRIMARY_ROUTES=["/","/cohorts","/affiliates","/automation"];
+const PRIMARY_ROUTES=["/","/cohorts","/fraud","/affiliates","/automation"];
 const icons:Record<IconName,React.ReactNode>={
  monitor:<><rect x="3" y="4" width="18" height="15" rx="2"/><path d="M8 22h8M12 19v3M7 9h3v6H7zm7-2h3v8h-3z"/></>,
  chart:<><path d="M4 19V9m6 10V5m6 14v-7m4 9H2"/></>,
@@ -48,6 +49,7 @@ export default function AdminSidebar(props:Props){
  const items:PrimaryItem[]=[
   {href:"/",label:"Account Monitor",icon:"monitor",show:true},
   {href:"/cohorts",label:"LTV-Kohorten",icon:"chart",show:props.mayStatistics},
+  {href:"/fraud",label:"Fraud Detection",icon:"shield",show:props.mayFraud},
   {href:"/affiliates",label:"Affiliate Optimizer",icon:"users",show:props.mayPartners||props.maySmartlinks},
   {href:"/automation",label:"Auto-Rotation",icon:"rotation",show:props.mayAutomation},
 

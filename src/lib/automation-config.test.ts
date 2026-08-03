@@ -1,4 +1,6 @@
 import {describe,expect,it} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {normalizeAutomationDraft,recommendAutomationThresholds,validateAutomationDraft} from './automation-config';
 
 const single={
@@ -55,6 +57,15 @@ describe('automation configuration',()=>{
   result.slots[1].weight=100-invalidWeight;
   result.slots[2].weight=0.01;
   expect(validateAutomationDraft(result)).toContain('Alle Startgewichte müssen endlich und größer als 0 sein.');
+ });
+
+ it('removes the unimplemented full-matrix contract and safely normalizes legacy multi-offer drafts',()=>{
+  const second={offerId:50,offerName:'Sex69',landingpages:single.offers[0].landingpages.map((lp,index)=>({...lp,offerUrlId:5001+index,offerUrlName:`Sex69 ${lp.familyName}`}))};
+  const result=normalizeAutomationDraft({...single,testMode:'multi_offer',strategy:'full_matrix',offers:[single.offers[0],second]},new Date('2026-07-30T12:00:00Z'));
+  expect(result.strategy).toBe('matched_rounds');
+  const ui=readFileSync(join(process.cwd(),'src/app/automation/AutomationDashboard.tsx'),'utf8');
+  expect(ui).not.toContain('value="full_matrix"');
+  expect(ui).not.toContain('Vollständige Offer×LP-Matrix');
  });
 
  it('recommends a measurable lead gate and estimated duration from partner traffic',()=>{

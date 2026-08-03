@@ -57,11 +57,11 @@ async function upsertSourceSnapshots(from:string,to:string,rows:DailyMetricRow[]
   for(const row of rows){let affiliates=byDay.get(row.metric_date);if(!affiliates){affiliates=new Map();byDay.set(row.metric_date,affiliates)}const group=affiliates.get(row.affiliate_id)||[];group.push(row);affiliates.set(row.affiliate_id,group)}
   const supabase=getSupabaseAdmin(),markers:{key:string;value:unknown}[]=[],activeGenerations=new Map<string,string>();
   for(let day=from;day<=to;day=nextDay(day)){
-    const generation=newSnapshotGeneration(),affiliates=byDay.get(day)||new Map<string,DailyMetricRow[]>(),dayRows=Array.from(affiliates.values()).flat(),snapshots:{key:string;value:unknown}[]=Array.from(affiliates,([affiliateId,metrics])=>({key:`source_day:${day}:${generation}:${affiliateId}`,value:{version:2,date:day,affiliate_id:affiliateId,affiliate_name:metrics[0].affiliate_name,rows:metrics.map(encodeSourceSnapshotRow)}}));
+    const generation=newSnapshotGeneration(),affiliates=byDay.get(day)||new Map<string,DailyMetricRow[]>(),dayRows=Array.from(affiliates.values()).flat(),snapshots:{key:string;value:unknown}[]=Array.from(affiliates,([affiliateId,metrics])=>({key:`source_day:${day}:${generation}:${affiliateId}`,value:{version:3,date:day,affiliate_id:affiliateId,affiliate_name:metrics[0].affiliate_name,rows:metrics.map(encodeSourceSnapshotRow)}}));
     snapshots.push({key:`campaign_affiliate_day:${day}:${generation}`,value:{version:2,date:day,rows:campaignAffiliateRows(dayRows)}});
     snapshots.push({key:`portfolio_day:${day}:${generation}`,value:{version:2,date:day,rows:canonicalMetricRows(dayRows).map(encodePortfolioSnapshotRow)}});
     if(snapshots.length){const {error}=await supabase.from('sync_state').upsert(snapshots,{onConflict:'key'});throwIfError(error,'source snapshot upsert')}
-    const marker={version:2,date:day,generation};
+    const marker={version:3,date:day,generation};
     markers.push({key:`source_day_generation:${day}`,value:marker},{key:`portfolio_day_generation:${day}`,value:marker},{key:`campaign_affiliate_day_generation:${day}`,value:marker});
     activeGenerations.set(day,generation);
   }
@@ -86,6 +86,7 @@ export function createSupabaseSyncStore():SyncStore{
       return(data?.value as SyncState|undefined)||null;
     },
     async upsertConversions(rows){if(rows.length)await upsertBatches('conversions',rows)},
+    async replaceConversions(from,to,rows){const result=await getSupabaseAdmin().rpc('replace_conversion_window',{p_from:from,p_to:to,p_rows:rows});throwIfError(result.error,'atomic conversion window replacement');if(Number(result.data)!==rows.length)throw new Error('Supabase atomic conversion window replacement: row count mismatch')},
     async upsertMetrics(rows){if(rows.length)await upsertBatches('daily_metrics',rows)},
     async replaceMetrics(from,to,rows){
       const release=await acquireMetricReplaceLock();try{const [canonical,existing]=[canonicalMetricRows(rows),await existingMetricIds(from,to)];if(canonical.length)await upsertBatches('daily_metrics',canonical);const stale=staleMetricIds(existing,canonical);if(stale.length)await zeroMetrics(stale);await upsertSourceSnapshots(from,to,rows)}finally{await release()}

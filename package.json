@@ -11,7 +11,8 @@
     "start": "next start -p ${PORT:-3000}",
     "test": "vitest run",
     "lint": "eslint .",
-    "admin:unlock-access": "node scripts/unlock-admin-access.mjs"
+    "admin:unlock-access": "node scripts/unlock-admin-access.mjs",
+    "source-block:e2e": "node scripts/source-block-controlled-e2e.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",

@@ -7,12 +7,14 @@ export default async function DashboardShell({children}:{children:React.ReactNod
  const user=await currentUser();
  if(!user)return children;
  const mayAdmin=can(user.access,'users.manage')||can(user.access,'roles.manage')||can(user.access,'audit.view');
+ const mayFraud=user.access.role==='super_admin'&&Object.values(user.access.scopes).every(values=>values.length===0)&&can(user.access,'statistics.view')&&can(user.access,'finance.view');
  return <DashboardShellFrame sidebar={<AdminSidebar
    email={user.email}
    role={user.access.role}
    impersonating={user.impersonating}
    actorId={user.actorId}
    mayStatistics={can(user.access,'statistics.view')}
+   mayFraud={mayFraud}
    mayPartners={can(user.access,'partners.view')}
    mayAutomation={user.access.role!=='partner'&&can(user.access,'campaigns.edit')&&can(user.access,'finance.view')}
    maySourceBlocks={user.access.role!=='partner'&&can(user.access,'landingpages.manage')&&can(user.access,'api.manage')}

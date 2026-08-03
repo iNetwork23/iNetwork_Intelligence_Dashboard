@@ -1,0 +1,4 @@
+"use client";
+import {useRouter} from 'next/navigation';
+import {useState} from 'react';
+export default function FraudStopDeactivateButton({id}:{id:string}){const router=useRouter(),[busy,setBusy]=useState(false),[error,setError]=useState('');return <><button className="fraudDeactivate" type="button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const response=await fetch('/api/fraud/stops',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'deactivate',id})}),body=await response.json();if(!response.ok)throw new Error(body.error||'Deaktivierung fehlgeschlagen');router.refresh()}catch(value){setError(value instanceof Error?value.message:'Deaktivierung fehlgeschlagen')}finally{setBusy(false)}}}>{busy?'…':'Kontrolle beenden'}</button>{error&&<small className="fraudInlineError">{error}</small>}</>}

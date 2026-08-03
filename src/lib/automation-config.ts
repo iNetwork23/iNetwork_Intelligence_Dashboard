@@ -1,6 +1,6 @@
 export type AutomationStatus='draft'|'dry_run'|'awaiting_live'|'active'|'paused'|'hold'|'completed';
 export type AutomationTestMode='single_offer'|'multi_offer';
-export type AutomationStrategy='equal_slots'|'champion_challenger'|'matched_rounds'|'full_matrix';
+export type AutomationStrategy='equal_slots'|'champion_challenger'|'matched_rounds';
 export type AutomationObjective='sale_first'|'profit_per_soi'|'profit_epc';
 export type AutomationLandingpage={familyKey:string;familyName:string;offerUrlId:number;offerUrlName:string;status:string;selection:'active'|'candidate'|'excluded'};
 export type AutomationOffer={offerId:number;offerName:string;landingpages:AutomationLandingpage[]};
@@ -27,10 +27,10 @@ export function normalizeAutomationDraft(raw:unknown,now=new Date()):AutomationC
   offerId:positiveInt(offer.offerId,0),offerName:text(offer.offerName,`Offer #${positiveInt(offer.offerId,0)}`),landingpages:landingpagesRaw.slice(0,100).map(value=>{const lp=object(value);return{familyKey:text(lp.familyKey).toLowerCase(),familyName:text(lp.familyName),offerUrlId:positiveInt(lp.offerUrlId,0),offerUrlName:text(lp.offerUrlName),status:text(lp.status,'unknown').toLowerCase(),selection:enumValue(lp.selection,['active','candidate','excluded'] as const,'active')}}),
  }});
  const candidates=offers.flatMap(offer=>offer.landingpages.filter(lp=>lp.selection==='active').map(lp=>({offerId:offer.offerId,offerUrlId:lp.offerUrlId,familyKey:lp.familyKey,familyName:lp.familyName,offerUrlName:lp.offerUrlName})));
- const weights=equalWeights(candidates.length),date=now.toISOString(),schedule=object(input.schedule),thresholds=object(input.thresholds),weightInput=object(input.weights),weightMode=enumValue(weightInput.mode,['equal','champion_challenger'] as const,'equal'),championOfferUrlId=positiveInt(weightInput.championOfferUrlId,0);
+ const weights=equalWeights(candidates.length),date=now.toISOString(),schedule=object(input.schedule),thresholds=object(input.thresholds),weightInput=object(input.weights),weightMode=enumValue(weightInput.mode,['equal','champion_challenger'] as const,'equal'),championOfferUrlId=positiveInt(weightInput.championOfferUrlId,0),testMode=enumValue(input.testMode,['single_offer','multi_offer'] as const,'single_offer'),strategy=testMode==='multi_offer'?enumValue(input.strategy,['matched_rounds'] as const,'matched_rounds'):enumValue(input.strategy,['equal_slots','champion_challenger'] as const,'equal_slots');
  return{
   schemaVersion:1,id:text(input.id)||crypto.randomUUID(),name:text(input.name,'Neue Smartlink-Automation').slice(0,120),affiliateId:positiveInt(input.affiliateId,0),campaignId:positiveInt(input.campaignId,0),
-  testMode:enumValue(input.testMode,['single_offer','multi_offer'] as const,'single_offer'),strategy:enumValue(input.strategy,['equal_slots','champion_challenger','matched_rounds','full_matrix'] as const,'equal_slots'),objective:enumValue(input.objective,['sale_first','profit_per_soi','profit_epc'] as const,'sale_first'),offers,
+  testMode,strategy,objective:enumValue(input.objective,['sale_first','profit_per_soi','profit_epc'] as const,'sale_first'),offers,
   schedule:{intervalMinutes:Math.min(1440,Math.max(15,positiveInt(schedule.intervalMinutes,120)))},
   thresholds:{targetSois:positiveInt(thresholds.targetSois,50),minClicks:positiveInt(thresholds.minClicks,500),minAgeHours:positiveInt(thresholds.minAgeHours,24),maxAgeHours:positiveInt(thresholds.maxAgeHours,336),maturityHours:positiveInt(thresholds.maturityHours,168),minIndependentFirstSales:positiveInt(thresholds.minIndependentFirstSales,3),minIndependentPayers:positiveInt(thresholds.minIndependentPayers,3)},
   weights:{mode:weightMode,...(championOfferUrlId?{championOfferUrlId}:{})},

@@ -16,24 +16,44 @@ describe('Supabase API source mapping',()=>{
     expect(rows.find(row=>row.columns.some(column=>column.id==='placement-1'))?.reporting.cv).toBe(6);
   });
   it('keeps tracked offers on source_id and sub1',()=>{
-    const[report]=mapAffiliateSourceRows([{...base,offer_id:'8',offer_name:'Michverlieben',source_id:'source-a',sub_source:'sub-b',raw:{traffic_mode:'tracked',adv1:'ignored',adv2:'ignored'}}]);
+    const[report]=mapAffiliateSourceRows([{...base,offer_id:'8',offer_name:'Michverlieben',source_id:'source-a',sub_source:'sub-b',raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub1',adv1:'ignored',adv2:'ignored'}}]);
     expect(report.columns.find(column=>column.column_type==='source_id')?.id).toBe('source-a');
     expect(report.columns.find(column=>column.column_type==='sub1')?.id).toBe('sub-b');
+  });
+  it('does not merge equal sub values from different tracked dimensions',()=>{
+    const rows=mapAffiliateSourceRows([
+      {...base,offer_id:'8',source_id:'source-a',sub_source:'same',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub1'}},
+      {...base,offer_id:'8',source_id:'source-a',sub_source:'same',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub3'}},
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows.map(row=>row.columns.find(column=>column.column_type==='sub_source_dimension')?.id).sort()).toEqual(['sub1','sub3']);
+    expect(rows.map(row=>row.reporting.cv)).toEqual([1,1]);
+  });
+  it('does not merge delimiter-bearing source tuples',()=>{
+    const rows=mapAffiliateSourceRows([
+      {...base,offer_id:'8',source_id:'A|B',sub_source:'C',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub1'}},
+      {...base,offer_id:'8',source_id:'A',sub_source:'B|C',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub1'}},
+    ]);
+    expect(rows).toHaveLength(2);
   });
   it('preserves the snapshot day when mapping daily source rows',()=>{
     const[report]=mapAffiliateSourceRows([base],'2026-07-23');
     expect(report.columns.find(column=>column.column_type==='date')).toMatchObject({id:'2026-07-23',label:'2026-07-23'});
   });
-  it('loads all available days when the current Berlin snapshot is still pending',()=>{
+  it('loads only dimension-complete v3 days when the current Berlin snapshot is still pending',()=>{
     expect(availableSourceSnapshotDays({from:'2025-07-29',to:'2026-07-28'},[
-      {date:'2025-07-28',generation:'outside'},
-      {date:'2025-07-29',generation:'g1'},
-      {date:'2026-07-27',generation:'g364'},
-      {date:'2026-07-28',generation:''},
-    ])).toEqual([
-      {date:'2025-07-29',generation:'g1'},
-      {date:'2026-07-27',generation:'g364'},
+      {version:3,date:'2025-07-28',generation:'outside'},
+      {version:3,date:'2025-07-29',generation:'g1'},
+      {version:2,date:'2026-07-26',generation:'legacy-without-dimensions'},
+      {version:3,date:'2026-07-27',generation:'g364'},
+      {version:3,date:'2026-07-28',generation:''},
+    ],{minimumVersion:3})).toEqual([
+      {version:3,date:'2025-07-29',generation:'g1'},
+      {version:3,date:'2026-07-27',generation:'g364'},
     ]);
+  });
+  it('keeps legacy v2 snapshots readable for existing source-block evidence until v3 cutover completes',()=>{
+    expect(availableSourceSnapshotDays({from:'2026-07-26',to:'2026-07-27'},[{version:2,date:'2026-07-26',generation:'legacy'},{version:3,date:'2026-07-27',generation:'current'}])).toHaveLength(2);
   });
   it('round-trips compact source snapshots without duplicating canonical cache fields',()=>{
     const metric={...base,clicks:Number(base.clicks),sois:Number(base.sois),first_sales:Number(base.first_sales),rebills:Number(base.rebills),coin_spend:Number(base.coin_spend),payout:Number(base.payout),revenue:Number(base.revenue),profit:Number(base.profit),id:'metric-id',metric_date:'2026-07-23',raw:{...base.raw,canonical_id:'legacy-id'}},encoded=encodeSourceSnapshotRow(metric),decoded=decodeSourceSnapshotRow(encoded,base.affiliate_id,base.affiliate_name);

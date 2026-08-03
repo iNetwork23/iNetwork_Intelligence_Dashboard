@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {advanceSyncState,canonicalMetricRows,conversionReportBody,conversionToCacheRow,initialSyncState,loadDailyReportSlices,metricRows,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
+import {advanceSyncState,canonicalMetricRows,conversionReportBody,conversionToCacheRow,initialSyncState,loadDailyReportSlices,metricRows,refreshConversionRange,refreshHistoryRange,resolveManualSourceRange,runHistorySync,selectSyncWindow,staleMetricIds,type EverflowConversion,type ReportRow,type SyncStore} from './history-cache';
 
 describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
@@ -27,21 +27,37 @@ describe('history cache sync windows',()=>{
 
 describe('Everflow conversion mapping',()=>{
   it('limits a historical conversion backfill to the requested affiliate',()=>{expect(conversionReportBody('2026-01-01','2026-01-07','30').query.filters).toEqual([{resource_type:'affiliate',filter_id_value:'30'}])});
-  const base:EverflowConversion={conversion_id:'cv-1',transaction_id:'lead-1',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',status:'approved',payout:3,revenue:0,source_id:'src',sub1:'sub',relationship:{affiliate:{network_affiliate_id:6,name:'Partner'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2774,name:'LP'}}};
-  it('preserves the stable conversion id and tracked transaction identity for backward-compatible LTV joins',()=>{
-    expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',lead_id:'lead-1',source_id:'src',sub_source:'sub',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{transaction_id:'lead-1',event:'SOI',is_event:false,relationship:{offer:{network_offer_id:57},offer_url:{network_offer_url_id:2774}}}});
+  const base:EverflowConversion={conversion_id:'cv-1',transaction_id:'lead-1',click_unix_timestamp:1784743080,conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',status:'approved',payout:3,revenue:0,source_id:'src',sub1:'sub',sub2:'child',sub3:'leaf',adv1:'publisher',adv2:'placement',country:'DE',relationship:{affiliate:{network_affiliate_id:6,name:'Partner'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2774,name:'LP'}}};
+  it('preserves tracked identity while failing closed on contradictory source signals',()=>{
+    expect(conversionToCacheRow(base)).toMatchObject({id:'cv-1',type:'soi',source_id:null,sub_source:null,source_dimension:'unknown',sub_source_dimension:'unknown',traffic_mode:'unknown',click_at:'2026-07-22T17:58:00.000Z',affiliate_id:'6',offer_id:'57',offer_url_id:'2774',status:'approved',payout:3,revenue:0,raw:{transaction_id:'lead-1',event:'SOI',is_event:false,traffic_mode:'unknown',relationship:{offer:{network_offer_id:57},offer_url:{network_offer_url_id:2774}}}});
+    expect(conversionToCacheRow(base)?.lead_id).toMatch(/^unjoinable-sha256:/);
     expect(conversionToCacheRow(base)?.raw).not.toHaveProperty('conversion_id');
+    expect(conversionToCacheRow(base)?.raw).not.toHaveProperty('adv2');
   });
-  it('maps Sale and Rebill events and excludes unrelated events',()=>{
+  it('keeps the deepest tracked sub dimension when no API signal conflicts',()=>{
+    const tracked={...base,adv1:undefined,adv2:undefined};
+    expect(conversionToCacheRow(tracked)).toMatchObject({traffic_mode:'tracked_direct',source_id:'src',sub_source:'leaf',source_dimension:'source_id',sub_source_dimension:'sub3'});
+  });
+  it('maps Coin Spend, Sale and Rebill events and excludes unrelated events',()=>{
+    expect(conversionToCacheRow({...base,conversion_id:'coin',is_event:true,event:'Coin Spend'})?.type).toBe('coin_spend');
     expect(conversionToCacheRow({...base,conversion_id:'sale',is_event:true,event:'Sale'})?.type).toBe('first_sale');
     expect(conversionToCacheRow({...base,conversion_id:'rebill',is_event:true,event:'Rebill'})?.type).toBe('rebill');
-    expect(conversionToCacheRow({...base,conversion_id:'coin',is_event:true,event:'Coin Spend'})).toBeNull();
+    expect(conversionToCacheRow({...base,conversion_id:'other',is_event:true,event:'Other'})).toBeNull();
   });
   it('maps API ADV1 and ADV2 into the canonical conversion source fields',()=>{
-    const api={...base,source_id:'',sub1:'',adv1:'publisher-a',adv2:'placement-b',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES API'}}};
+    const api={...base,click_unix_timestamp:undefined,source_id:'',sub1:'',adv1:'publisher-a',adv2:'placement-b',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES API'}}};
     expect(conversionToCacheRow(api)).toMatchObject({source_id:'publisher-a',sub_source:'placement-b',raw:{traffic_mode:'api',adv1:'publisher-a',adv2:'placement-b'}});
   });
-  it('uses one irreversible customer identity for API Sale and Rebill rows with the same ADV4 customer id',()=>{const sale={...base,conversion_id:'api-sale',transaction_id:'event-sale',is_event:true,event:'Sale',adv4:' Customer-4711 ',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES - API'}}}as EverflowConversion,rebill={...sale,conversion_id:'api-rebill',transaction_id:'event-rebill',event:'Rebill'};const saleRow=conversionToCacheRow(sale),rebillRow=conversionToCacheRow(rebill);expect(saleRow?.lead_id).toMatch(/^api-customer-sha256:/);expect(rebillRow?.lead_id).toBe(saleRow?.lead_id);expect(JSON.stringify(saleRow?.raw)).not.toContain('Customer-4711')});
+  it('derives API customer identity from canonical clickless mode even when the offer name has no API label',()=>{
+    const api={...base,click_unix_timestamp:undefined,source_id:'',sub1:'',adv1:'publisher',adv2:'placement',adv4:'customer-42',relationship:{...base.relationship,offer:{network_offer_id:999,name:'Neutral offer name'}}};
+    const mapped=conversionToCacheRow(api);expect(mapped).toMatchObject({traffic_mode:'clickless_api',raw:{traffic_mode:'api'}});expect(mapped?.lead_id).toMatch(/^api-customer-sha256:/);expect(mapped?.lead_id).not.toContain('customer-42');
+  });
+  it('uses a unique non-empty unjoinable identity for clickless events without a verified customer key',()=>{
+    const api={...base,click_unix_timestamp:undefined,source_id:'',sub1:'',adv1:'publisher',adv2:'placement',adv4:undefined,email:undefined,relationship:{...base.relationship,offer:{network_offer_id:999,name:'Neutral offer name'}}};
+    const first=conversionToCacheRow(api),second=conversionToCacheRow({...api,conversion_id:'cv-2'});expect(first?.lead_id).toMatch(/^unjoinable-sha256:/);expect(first?.lead_id).not.toBe('');expect(second?.lead_id).not.toBe(first?.lead_id);
+  });
+  it('uses one irreversible customer identity for API Sale and Rebill rows with the same ADV4 customer id',()=>{const sale={...base,click_unix_timestamp:undefined,conversion_id:'api-sale',transaction_id:'event-sale',is_event:true,event:'Sale',adv4:' Customer-4711 ',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES - API'}}}as EverflowConversion,rebill={...sale,conversion_id:'api-rebill',transaction_id:'event-rebill',event:'Rebill'};const saleRow=conversionToCacheRow(sale),rebillRow=conversionToCacheRow(rebill);expect(saleRow?.lead_id).toMatch(/^api-customer-sha256:/);expect(rebillRow?.lead_id).toBe(saleRow?.lead_id);expect(JSON.stringify(saleRow?.raw)).not.toContain('Customer-4711')});
+  it('normalizes API customer identities case-insensitively like the historical migration',()=>{const api={...base,click_unix_timestamp:undefined,source_id:'',sub1:'',adv1:'publisher',adv2:'placement',adv4:' Customer-4711 ',relationship:{...base.relationship,offer:{network_offer_id:20,name:'XLOVES API'}}};expect(conversionToCacheRow(api)?.lead_id).toBe(conversionToCacheRow({...api,conversion_id:'cv-2',adv4:'customer-4711'})?.lead_id)});
 });
 
 describe('daily metric mapping',()=>{
@@ -62,6 +78,33 @@ describe('daily metric mapping',()=>{
     expect(row).toMatchObject({metric_date:'2026-07-22',affiliate_id:'6',offer_id:'57',campaign_id:'2',offer_url_id:'2774',source_id:'src',sub_source:'sub',clicks:100,sois:10,first_sales:2,rebills:3,payout:30,revenue:80,profit:50});
     expect(row.raw).toMatchObject({traffic_mode:'tracked',adv1:'',adv2:''});
     expect(row.id).toMatch(/^metric:/);
+  });
+  it('uses the same deepest tracked sub dimension for report metrics and conversion cohorts',()=>{
+    const deep=[...columns,{column_type:'sub3',id:'leaf',label:'leaf'}],base:ReportRow={columns:deep,reporting:{total_click:20,cv:2,payout:6}},sale:ReportRow={columns:[...deep,{column_type:'event_name',id:'1',label:'Sale'}],reporting:{event:1}};
+    const [row]=metricRows([base],[sale]);
+    expect(row).toMatchObject({source_id:'src',sub_source:'leaf',first_sales:1,raw:{source_dimension:'source_id',sub_source_dimension:'sub3'}});
+  });
+  it('preserves event-only API groups as zero-traffic facts instead of dropping monetization',()=>{
+    const apiColumns=[...columns.map(column=>column.column_type==='offer'?{...column,id:'20',label:'XLOVES API'}:column.column_type==='campaign'||column.column_type==='offer_url'?{...column,id:'0'}:column).filter(column=>!['source_id','sub1'].includes(column.column_type)),{column_type:'adv1',id:'publisher-a',label:'publisher-a'},{column_type:'adv2',id:'placement-b',label:'placement-b'}];
+    const coin:ReportRow={columns:[...apiColumns,{column_type:'event_name',id:'3',label:'Coin Spend'}],reporting:{event:4}};
+    const [row]=metricRows([],[coin]);
+    expect(row).toMatchObject({clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:4,payout:0,revenue:0,raw:{traffic_mode:'api',adv1:'publisher-a',adv2:'placement-b'}});
+    const sale:ReportRow={columns:apiColumns.map(column=>column).concat({column_type:'event_name',id:'4',label:'Sale'}),reporting:{event:2,payout:2,revenue:10}};
+    const rebill:ReportRow={columns:apiColumns.map(column=>column).concat({column_type:'event_name',id:'5',label:'Rebill'}),reporting:{event:3,payout:3,revenue:12}};
+    const forward=metricRows([],[coin,sale,rebill])[0],reverse=metricRows([],[rebill,sale,coin])[0];
+    expect(forward).toMatchObject({coin_spend:4,first_sales:2,rebills:3,payout:5,revenue:22,profit:17});
+    expect(reverse).toMatchObject({coin_spend:4,first_sales:2,rebills:3,payout:5,revenue:22,profit:17});
+  });
+  it('normalizes empty and N/A dimension sentinels when joining base and event rows',()=>{
+    const base:ReportRow={columns:columns.filter(column=>column.column_type!=='sub1'),reporting:{cv:2,payout:6}};
+    const event:ReportRow={columns:[...columns.map(column=>column.column_type==='sub1'?{...column,id:'N/A',label:'N/A'}:column),{column_type:'event_name',id:'1',label:'Sale'}],reporting:{event:1}};
+    expect(metricRows([base],[event])).toHaveLength(1);
+    expect(metricRows([base],[event])[0]).toMatchObject({sois:2,first_sales:1});
+  });
+  it('keeps delimiter-bearing source tuples collision-free at the real metric grouping boundary',()=>{
+    const first=columns.map(column=>column.column_type==='source_id'?{...column,id:'A|B',label:'A|B'}:column.column_type==='sub1'?{...column,id:'C',label:'C'}:column),second=columns.map(column=>column.column_type==='source_id'?{...column,id:'A',label:'A'}:column.column_type==='sub1'?{...column,id:'B|C',label:'B|C'}:column);
+    const rows=metricRows([{columns:first,reporting:{cv:1}},{columns:second,reporting:{cv:1}}],[]);
+    expect(rows).toHaveLength(2);expect(rows.map(row=>[row.source_id,row.sub_source])).toEqual([['A|B','C'],['A','B|C']]);
   });
   it('preserves ADV1 and ADV2 as distinct API source dimensions',()=>{
     const apiColumns=[
@@ -89,6 +132,26 @@ describe('daily metric mapping',()=>{
 });
 
 describe('sync orchestration',()=>{
+  it('refreshes and deduplicates conversion-only history without touching daily metrics',async()=>{
+    const calls:string[]=[];
+    const conversion:EverflowConversion={conversion_id:'coin',transaction_id:'lead',conversion_unix_timestamp:1784743200,is_event:true,event:'Coin Spend'};
+    const store:SyncStore={getState:async()=>null,upsertConversions:async rows=>{calls.push(`conversions:${rows.length}:${rows[0]?.type}`)},upsertMetrics:async()=>{calls.push('metrics')},replaceMetrics:async()=>{calls.push('replace')},setState:async()=>{}};
+    const result=await refreshConversionRange({store,from:'2026-06-01',to:'2026-07-30',loadConversions:async()=>[conversion,conversion]});
+    expect(calls).toEqual(['conversions:1:coin_spend']);
+    expect(result).toMatchObject({from:'2026-06-01',to:'2026-07-30',upsertedConversions:1});
+    expect(result.identityDigest).toMatch(/^[a-f0-9]{64}$/);
+    const changed=await refreshConversionRange({store,from:'2026-06-01',to:'2026-07-30',loadConversions:async()=>[{...conversion,conversion_id:'different-event'}]});
+    expect(changed.identityDigest).not.toBe(result.identityDigest);
+  });
+
+  it('atomically replaces the conversion window when the store supports authoritative repair',async()=>{
+    const calls:string[]=[];
+    const conversion:EverflowConversion={conversion_id:'fresh',transaction_id:'lead',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI'};
+    const store:SyncStore={getState:async()=>null,upsertConversions:async()=>{calls.push('upsert')},replaceConversions:async(from,to,rows)=>{calls.push(`replace:${from}:${to}:${rows[0]?.id}`)},upsertMetrics:async()=>{},setState:async()=>{}};
+    await refreshConversionRange({store,from:'2026-07-01',to:'2026-07-07',loadConversions:async()=>[conversion]});
+    expect(calls).toEqual(['replace:2026-07-01:2026-07-07:fresh']);
+  });
+
   it('accepts only bounded non-future manual Source ranges',()=>{const now=new Date('2026-07-27T08:30:00Z');expect(resolveManualSourceRange(new URLSearchParams('from=2026-04-29&to=2026-05-28'),now)).toEqual({from:'2026-04-29',to:'2026-05-28'});expect(()=>resolveManualSourceRange(new URLSearchParams('from=2026-04-29&to=2026-05-30'),now)).toThrow('höchstens 31');expect(()=>resolveManualSourceRange(new URLSearchParams('from=2026-07-28&to=2026-07-28'),now)).toThrow('Zukunft');expect(()=>resolveManualSourceRange(new URLSearchParams('from=broken&to=2026-07-27'),now)).toThrow('Ungültiger')});
   it('refreshes the complete rolling 30-day report window before continuing an older backfill window',async()=>{
     const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-12-17',last_success_at:'2026-07-23T06:00:00.000Z'};

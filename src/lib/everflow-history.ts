@@ -11,9 +11,9 @@ async function request<T>(url:string,body:unknown,apiKey:string,fetcher:Fetcher)
   return response.json() as Promise<T>;
 }
 
-const reportBody=(from:string,to:string,events:boolean)=>({
+export const everflowEntityReportBody=(from:string,to:string,events:boolean)=>({
   from,to,timezone_id:80,currency_id:'EUR',
-  columns:['date','affiliate','offer','campaign','offer_url','source_id','sub1','adv1','adv2',...(events?['event_name']:[])].map(column=>({column})),
+  columns:['date','affiliate','offer','campaign','offer_url','source_id','sub1','sub2','sub3','sub4','sub5','adv1','adv2',...(events?['event_name']:[])].map(column=>({column})),
   query:{filters:[],search_terms:[]},
 });
 
@@ -30,11 +30,12 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         const results=await Promise.all(Array.from({length:Math.min(4,pages-start+1)},(_,index)=>load(start+index)));
         for(const result of results)rows.push(...(result.conversions||[]));
       }
+      if(rows.length!==total)throw new Error(`Everflow Conversion-Pagination unvollständig: erwartet ${total}, erhalten ${rows.length}`);
       return rows;
     },
     async loadReports(from:string,to:string){
       const [base,events]=await Promise.all([false,true].map(includeEvents=>loadDailyReportSlices(from,to,async day=>{
-        const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,reportBody(day,day,includeEvents),apiKey,fetcher);
+        const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day,includeEvents),apiKey,fetcher);
         return result.table||[];
       },10_000,3)));
       return{base,events};
