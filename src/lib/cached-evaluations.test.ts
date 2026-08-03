@@ -7,7 +7,7 @@ describe('Supabase API source mapping',()=>{
   it('keeps ADV2 when ADV1 is missing and exposes clickless economics',()=>{
     const[report]=mapAffiliateSourceRows([base]);
     expect(report.columns.find(column=>column.column_type==='source_id')).toMatchObject({id:'Nicht übermittelt'});
-    expect(report.columns.find(column=>column.column_type==='sub1')).toMatchObject({id:'placement-1'});
+    expect(report.columns.find(column=>column.column_type==='adv2')).toMatchObject({id:'placement-1'});
     expect(report.reporting).toMatchObject({total_click:0,cv:4,first_sales:1,rebills:2,coin_spend:3,payout:12,revenue:30,profit:18});
   });
   it('aggregates equal ADV pairs but keeps different ADV2 placements separate',()=>{
@@ -29,6 +29,14 @@ describe('Supabase API source mapping',()=>{
     expect(rows.map(row=>row.columns.find(column=>column.column_type==='sub_source_dimension')?.id).sort()).toEqual(['sub1','sub3']);
     expect(rows.map(row=>row.reporting.cv)).toEqual([1,1]);
   });
+  it('preserves and separates the complete sub1 through sub5 tuple',()=>{
+    const rows=mapAffiliateSourceRows([
+      {...base,offer_id:'8',source_id:'source-a',sub_source:'leaf',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub3',sub1:'parent',sub2:'left',sub3:'leaf'}},
+      {...base,offer_id:'8',source_id:'source-a',sub_source:'leaf',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub3',sub1:'parent',sub2:'right',sub3:'leaf'}},
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows.map(row=>row.columns.find(column=>column.column_type==='sub2')?.id).sort()).toEqual(['left','right']);
+  });
   it('does not merge delimiter-bearing source tuples',()=>{
     const rows=mapAffiliateSourceRows([
       {...base,offer_id:'8',source_id:'A|B',sub_source:'C',sois:1,raw:{traffic_mode:'tracked',source_dimension:'source_id',sub_source_dimension:'sub1'}},
@@ -40,7 +48,7 @@ describe('Supabase API source mapping',()=>{
     const[report]=mapAffiliateSourceRows([base],'2026-07-23');
     expect(report.columns.find(column=>column.column_type==='date')).toMatchObject({id:'2026-07-23',label:'2026-07-23'});
   });
-  it('loads only dimension-complete v3 days when the current Berlin snapshot is still pending',()=>{
+  it('loads only requested dimension-complete snapshot versions when the current Berlin snapshot is still pending',()=>{
     expect(availableSourceSnapshotDays({from:'2025-07-29',to:'2026-07-28'},[
       {version:3,date:'2025-07-28',generation:'outside'},
       {version:3,date:'2025-07-29',generation:'g1'},
@@ -52,11 +60,11 @@ describe('Supabase API source mapping',()=>{
       {version:3,date:'2026-07-27',generation:'g364'},
     ]);
   });
-  it('keeps legacy v2 snapshots readable for existing source-block evidence until v3 cutover completes',()=>{
+  it('keeps legacy v2 snapshots readable only for consumers that explicitly permit them',()=>{
     expect(availableSourceSnapshotDays({from:'2026-07-26',to:'2026-07-27'},[{version:2,date:'2026-07-26',generation:'legacy'},{version:3,date:'2026-07-27',generation:'current'}])).toHaveLength(2);
   });
   it('round-trips compact source snapshots without duplicating canonical cache fields',()=>{
-    const metric={...base,clicks:Number(base.clicks),sois:Number(base.sois),first_sales:Number(base.first_sales),rebills:Number(base.rebills),coin_spend:Number(base.coin_spend),payout:Number(base.payout),revenue:Number(base.revenue),profit:Number(base.profit),id:'metric-id',metric_date:'2026-07-23',raw:{...base.raw,canonical_id:'legacy-id'}},encoded=encodeSourceSnapshotRow(metric),decoded=decodeSourceSnapshotRow(encoded,base.affiliate_id,base.affiliate_name);
-    expect(decoded).toMatchObject(base);expect(encoded).not.toHaveProperty('id');expect(encoded).not.toHaveProperty('canonical_id');expect(JSON.stringify(encoded).length).toBeLessThan(JSON.stringify(metric).length);
+    const metric={...base,clicks:Number(base.clicks),sois:Number(base.sois),first_sales:Number(base.first_sales),rebills:Number(base.rebills),coin_spend:Number(base.coin_spend),payout:Number(base.payout),revenue:Number(base.revenue),profit:Number(base.profit),id:'metric-id',metric_date:'2026-07-23',raw:{...base.raw,sub1:'parent',sub2:'child',sub3:'leaf',sub4:'',sub5:'',canonical_id:'legacy-id'}},encoded=encodeSourceSnapshotRow(metric),decoded=decodeSourceSnapshotRow(encoded,base.affiliate_id,base.affiliate_name);
+    expect(decoded).toMatchObject({...base,raw:{...base.raw,sub1:'parent',sub2:'child',sub3:'leaf',sub4:'',sub5:''}});expect(encoded).not.toHaveProperty('id');expect(encoded).not.toHaveProperty('canonical_id');expect(JSON.stringify(encoded).length).toBeLessThan(JSON.stringify(metric).length);
   });
 });

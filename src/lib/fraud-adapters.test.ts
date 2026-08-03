@@ -22,7 +22,18 @@ describe('fraud reporting adapters',()=>{
   });
 
   it('maps an API snapshot to clickless without click semantics',()=>{
-    expect(fraudMetricFromReportRow(row({mode:'api',offer:'20',offerName:'XLOVES API'}))).toMatchObject({trafficMode:'clickless_api',offerId:'20'});
+    const api=row({mode:'api',offer:'20',offerName:'XLOVES API'});api.columns.push({column_type:'adv1',id:'publisher-a',label:'publisher-a'},{column_type:'adv2',id:'placement-b',label:'placement-b'});
+    expect(fraudMetricFromReportRow(api)).toMatchObject({trafficMode:'clickless_api',offerId:'20',source:'publisher-a',subSource:'placement-b',sourceDimension:'adv1',subSourceDimension:'adv2'});
+  });
+
+  it('uses the deepest complete tracked source tuple at the real fraud boundary',()=>{
+    const deep=row();deep.columns.push({column_type:'sub2',id:'child',label:'child'},{column_type:'sub3',id:'leaf',label:'leaf'});
+    expect(fraudMetricFromReportRow(deep)).toMatchObject({source:'source-x',subSource:'leaf',sourceDimension:'source_id',subSourceDimension:'sub3'});
+  });
+
+  it('keeps an explicit event-only tracked snapshot in tracked Direct mode',()=>{
+    const eventOnly=row();eventOnly.reporting.total_click=0;eventOnly.columns=eventOnly.columns.map(column=>column.column_type==='offer_url'?{...column,id:'0'}:column);
+    expect(fraudMetricFromReportRow(eventOnly)).toMatchObject({trafficMode:'tracked_direct',source:'source-x',subSource:'leaf-y'});
   });
 
   it('preserves an explicit unknown snapshot mode instead of reclassifying it from clicks',()=>{

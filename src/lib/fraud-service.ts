@@ -19,7 +19,7 @@ export function assertFraudAccess(access:AccessMetadata){if(access.role==='partn
 async function loadAccountSourceRows(range:{from:string;to:string}){
   const client=getSupabaseAdmin(),markerPrefix='source_day_generation:',markerResult=await client.from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');
   if(markerResult.error)throw new Error(`Supabase Fraud Source-Generationen: ${markerResult.error.message}`);
-  const markers=availableSourceSnapshotDays(range,(markerResult.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}}),{minimumVersion:3}),reportRows:ReturnType<typeof mapAffiliateSourceRows>=[];
+  const markers=availableSourceSnapshotDays(range,(markerResult.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}}),{minimumVersion:4}),reportRows:ReturnType<typeof mapAffiliateSourceRows>=[];
   for(const marker of markers){
     const prefix=`source_day:${marker.date}:${marker.generation}:`;
     for(let start=0;;start+=4000){

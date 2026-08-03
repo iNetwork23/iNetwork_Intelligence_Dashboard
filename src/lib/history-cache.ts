@@ -1,5 +1,5 @@
 export type SyncPhase='backfill'|'rolling';
-export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null};
+export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null;snapshot_version?:number};
 export type SyncWindow={mode:SyncPhase;from:string;to:string};
 export type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
 import{createHash}from'node:crypto';
@@ -29,6 +29,7 @@ export type DailyMetricRow={
 };
 
 const DAY=86_400_000;
+const SOURCE_SNAPSHOT_VERSION=4;
 const isoDay=(value:Date)=>value.toISOString().slice(0,10);
 const berlinDay=(value:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
 const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
@@ -48,7 +49,7 @@ export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(da
 
 export function initialSyncState(now=new Date()):SyncState{
   const end=berlinDay(now);
-  return{phase:'backfill',backfill_start:shift(end,-364),next_end:end,last_success_at:null};
+  return{phase:'backfill',backfill_start:shift(end,-364),next_end:end,last_success_at:null,snapshot_version:SOURCE_SNAPSHOT_VERSION};
 }
 
 export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
@@ -83,7 +84,7 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),
     click_at:row.click_unix_timestamp?new Date(row.click_unix_timestamp*1000).toISOString():null,offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:source.source.startsWith('Nicht ')?null:source.source,sub_source:source.subSource.startsWith('Nicht ')?null:source.subSource,source_dimension:source.sourceDimension,sub_source_dimension:source.subSourceDimension,traffic_mode,country_code:text(row.country),is_scrub:Boolean(row.is_scrub),error_code:text(row.error_code),cost:amount(row.cost),
-    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:customerId,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,traffic_mode:rawTrafficMode,...(rawTrafficMode==='api'?{adv1:text(row.adv1),adv2:text(row.adv2)}:{}),relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
+    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:customerId,raw:{transaction_id:row.transaction_id,event:row.event,is_event:row.is_event,conversion_unix_timestamp:row.conversion_unix_timestamp,traffic_mode:rawTrafficMode,...(rawTrafficMode==='api'?{adv1:text(row.adv1),adv2:text(row.adv2)}:{source_id:text(row.source_id),sub1:text(row.sub1),sub2:text(row.sub2),sub3:text(row.sub3),sub4:text(row.sub4),sub5:text(row.sub5)}),relationship:{campaign:relationship.campaign?{network_campaign_id:relationship.campaign.network_campaign_id,name:relationship.campaign.name}:undefined,offer:relationship.offer?{network_offer_id:relationship.offer.network_offer_id,name:relationship.offer.name}:undefined,offer_url:relationship.offer_url?{network_offer_url_id:relationship.offer_url.network_offer_url_id,name:relationship.offer_url.name}:undefined}},status:text(row.status),
     affiliate_id:text(relationship.affiliate?.network_affiliate_id),affiliate_name:text(relationship.affiliate?.name),offer_id:text(relationship.offer?.network_offer_id),
     offer_name:text(relationship.offer?.name),offer_url_name:text(relationship.offer_url?.name),campaign_id:text(relationship.campaign?.network_campaign_id),
     campaign_name:text(relationship.campaign?.name),
@@ -96,10 +97,11 @@ const legacyMetricDimensions=['date','affiliate','offer','campaign','offer_url',
 const metricDimensionId=(row:ReportRow,type:string)=>{const value=String(dim(row,type).id||'').trim();return!value||value.toUpperCase()==='N/A'?'' : value};
 const reportTrafficMode=(row:ReportRow)=>classifyTrafficPath({campaignId:metricDimensionId(row,'campaign'),clicks:amount(row.reporting.total_click),offerName:dim(row,'offer').label,offerUrlId:metricDimensionId(row,'offer_url'),sourceId:metricDimensionId(row,'source_id'),adv1:metricDimensionId(row,'adv1'),adv2:metricDimensionId(row,'adv2')});
 const reportSource=(row:ReportRow)=>normalizeFraudSource({trafficMode:reportTrafficMode(row),sourceId:metricDimensionId(row,'source_id'),sub1:metricDimensionId(row,'sub1'),sub2:metricDimensionId(row,'sub2'),sub3:metricDimensionId(row,'sub3'),sub4:metricDimensionId(row,'sub4'),sub5:metricDimensionId(row,'sub5'),adv1:metricDimensionId(row,'adv1'),adv2:metricDimensionId(row,'adv2')});
-const metricKey=(row:ReportRow)=>JSON.stringify(metricDimensions.map(type=>metricDimensionId(row,type)));
 const dayFromDimension=(row:ReportRow)=>new Date(Number(dim(row,'date').id)*1000).toISOString().slice(0,10);
-const stableMetricId=(row:ReportRow)=>`metric:${metricDimensions.map(type=>encodeURIComponent(metricDimensionId(row,type))).join(':')}`;
-const legacyStableMetricId=(row:ReportRow)=>`metric:${legacyMetricDimensions.map(type=>encodeURIComponent(metricDimensionId(row,type))).join(':')}`;
+const stableDimensionId=(row:ReportRow,type:string)=>type==='date'?dayFromDimension(row):metricDimensionId(row,type);
+const metricKey=(row:ReportRow)=>JSON.stringify(metricDimensions.map(type=>type==='date'?dayFromDimension(row):metricDimensionId(row,type)));
+const stableMetricId=(row:ReportRow)=>`metric:${metricDimensions.map(type=>encodeURIComponent(stableDimensionId(row,type))).join(':')}`;
+const legacyStableMetricId=(row:ReportRow)=>`metric:${legacyMetricDimensions.map(type=>encodeURIComponent(stableDimensionId(row,type))).join(':')}`;
 
 export type SyncStore={
   getState:()=>Promise<SyncState|null>;
@@ -112,7 +114,7 @@ export type SyncStore={
 
 export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
   const[rawConversions,reports]=input.includeConversions===false?[[],await input.loadReports(input.from,input.to)]:await Promise.all([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);
-  const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events);
+  const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events,input.includeConversions===false?undefined:rawConversions);
   await input.store.upsertConversions(conversions);if(input.store.replaceMetrics)await input.store.replaceMetrics(input.from,input.to,metrics);else await input.store.upsertMetrics(metrics);
   return{conversions,metrics};
 }
@@ -131,14 +133,14 @@ export async function runHistorySync(input:{
   loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>;
 }){
   const now=input.now||new Date();
-  const state=await input.store.getState()||initialSyncState(now);
+  const storedState=await input.store.getState(),state=storedState?.snapshot_version===SOURCE_SNAPSHOT_VERSION?storedState:initialSyncState(now);
   if(state.phase==='rolling'&&state.last_success_at&&now.getTime()-Date.parse(state.last_success_at)<55*60_000){
     const window=selectSyncWindow(state,now);
     return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true,conversionRows:[] as ConversionCacheRow[]};
   }
   const window=selectSyncWindow(state,now);
   const today=berlinDay(now);
-  if(window.mode==='backfill')await refreshHistoryRange({store:input.store,from:shift(today,-29),to:today,includeConversions:false,loadConversions:input.loadConversions,loadReports:input.loadReports});
+  if(window.mode==='backfill')await refreshHistoryRange({store:input.store,from:shift(today,-29),to:today,loadConversions:input.loadConversions,loadReports:input.loadReports});
   const retentionFrom=shift(today,-364),segments:Array<{from:string;to:string;includeConversions:boolean}>=[];
   if(window.mode==='backfill'&&window.from<retentionFrom){const expiredTo=window.to<retentionFrom?window.to:shift(retentionFrom,-1);segments.push({from:window.from,to:expiredTo,includeConversions:false});if(window.to>=retentionFrom)segments.push({from:retentionFrom,to:window.to,includeConversions:true})}else segments.push({from:window.from,to:window.to,includeConversions:true});
   const conversions:ConversionCacheRow[]=[],metrics:DailyMetricRow[]=[];for(const segment of segments){const result=await refreshHistoryRange({store:input.store,...segment,loadConversions:input.loadConversions,loadReports:input.loadReports});conversions.push(...result.conversions);metrics.push(...result.metrics)};
@@ -147,25 +149,50 @@ export async function runHistorySync(input:{
   return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling',conversionRows:conversions};
 }
 
-export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetricRow[]{
-  const map=new Map<string,DailyMetricRow>();
+const conversionReportRow=(row:EverflowConversion):ReportRow=>{
+  const relationship=row.relationship||{},day=berlinDay(new Date(row.conversion_unix_timestamp*1000)),column=(column_type:string,id:unknown,label:unknown=id)=>({column_type,id:text(id)||'',label:text(label)||text(id)||''});
+  return{columns:[
+    column('date',Date.parse(`${day}T00:00:00Z`)/1000,day),
+    column('affiliate',relationship.affiliate?.network_affiliate_id,relationship.affiliate?.name),
+    column('offer',relationship.offer?.network_offer_id,relationship.offer?.name),
+    column('campaign',relationship.campaign?.network_campaign_id,relationship.campaign?.name),
+    column('offer_url',relationship.offer_url?.network_offer_url_id,relationship.offer_url?.name),
+    column('source_id',row.source_id),column('sub1',row.sub1),column('sub2',row.sub2),column('sub3',row.sub3),column('sub4',row.sub4),column('sub5',row.sub5),column('adv1',row.adv1),column('adv2',row.adv2),
+  ],reporting:{}};
+};
+
+export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[],conversionRows?:EverflowConversion[]):DailyMetricRow[]{
+  const map=new Map<string,DailyMetricRow>(),authoritative=conversionRows!==undefined;
   const mappedRow=(row:ReportRow,includeTraffic:boolean):DailyMetricRow=>{
-    const q=row.reporting,mode=reportTrafficMode(row),source=reportSource(row);
+    const q=row.reporting,mode=reportTrafficMode(row),source=reportSource(row),payout=authoritative?0:amount(q.payout),revenue=authoritative?0:amount(q.revenue);
     return{
       id:stableMetricId(row),metric_date:dayFromDimension(row),affiliate_id:dim(row,'affiliate').id||'0',affiliate_name:dim(row,'affiliate').label||'N/A',
       offer_id:dim(row,'offer').id||'0',offer_name:dim(row,'offer').label||'N/A',campaign_id:dim(row,'campaign').id||'0',campaign_name:dim(row,'campaign').label||'N/A',
       offer_url_id:dim(row,'offer_url').id||'0',offer_url_name:dim(row,'offer_url').label||'N/A',source_id:mode==='clickless_api'?'':source.source.startsWith('Nicht ')?'':source.source,sub_source:mode==='clickless_api'?'':source.subSource.startsWith('Nicht ')?'':source.subSource,
-      clicks:includeTraffic?amount(q.total_click):0,sois:includeTraffic?amount(q.cv):0,first_sales:0,rebills:0,coin_spend:0,payout:amount(q.payout),revenue:amount(q.revenue),
-      profit:amount(q.revenue)-amount(q.payout),raw:{traffic_mode:mode==='clickless_api'?'api':mode==='unknown'?'unknown':'tracked',source_dimension:source.sourceDimension,sub_source_dimension:source.subSourceDimension,adv1:dim(row,'adv1').id||'',adv2:dim(row,'adv2').id||'',canonical_id:legacyStableMetricId(row)},
+      clicks:includeTraffic?amount(q.total_click):0,sois:includeTraffic&&!authoritative?amount(q.cv):0,first_sales:0,rebills:0,coin_spend:0,payout,revenue,
+      profit:revenue-payout,raw:{traffic_mode:mode==='clickless_api'?'api':mode==='unknown'?'unknown':'tracked',source_dimension:source.sourceDimension,sub_source_dimension:source.subSourceDimension,sub1:metricDimensionId(row,'sub1'),sub2:metricDimensionId(row,'sub2'),sub3:metricDimensionId(row,'sub3'),sub4:metricDimensionId(row,'sub4'),sub5:metricDimensionId(row,'sub5'),adv1:dim(row,'adv1').id||'',adv2:dim(row,'adv2').id||'',canonical_id:legacyStableMetricId(row)},
     };
   };
   const baseKeys=new Set<string>();for(const row of baseRows){const key=metricKey(row);baseKeys.add(key);map.set(key,mappedRow(row,true))}
-  for(const row of eventRows){
+  if(!authoritative)for(const row of eventRows){
     const key=metricKey(row),exists=map.has(key),target=map.get(key)||mappedRow(row,false);if(!exists)map.set(key,target);else if(!baseKeys.has(key)){target.payout+=amount(row.reporting.payout);target.revenue+=amount(row.reporting.revenue);target.profit+=amount(row.reporting.revenue)-amount(row.reporting.payout)}
     const count=amount(row.reporting.event),event=dim(row,'event_name').label;
     if(event==='Sale')target.first_sales+=count;
     else if(event==='Rebill')target.rebills+=count;
     else if(event==='Coin Spend')target.coin_spend+=count;
+  }
+  if(conversionRows){
+    const unique=new Map<string,{raw:EverflowConversion;mapped:ConversionCacheRow}>();
+    for(const raw of conversionRows){const mapped=conversionToCacheRow(raw);if(mapped)unique.set(mapped.id,{raw,mapped})}
+    for(const{raw,mapped}of unique.values()){
+      if(mapped.is_scrub||mapped.status&&mapped.status.toLowerCase()!=='approved')continue;
+      const report=conversionReportRow(raw),key=metricKey(report),target=map.get(key)||mappedRow(report,false);if(!map.has(key))map.set(key,target);
+      if(mapped.type==='soi')target.sois++;
+      else if(mapped.type==='first_sale')target.first_sales++;
+      else if(mapped.type==='rebill')target.rebills++;
+      else if(mapped.type==='coin_spend')target.coin_spend++;
+      target.payout+=mapped.payout;target.revenue+=mapped.revenue;target.profit+=mapped.revenue-mapped.payout;
+    }
   }
   return Array.from(map.values());
 }

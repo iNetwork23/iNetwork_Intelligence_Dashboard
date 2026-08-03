@@ -33,10 +33,17 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(snapshotStore).toContain("upsert(records)");
   expect(snapshotStore).not.toContain("start+=250");
   expect(route).toContain('resolveManualSourceRange(request.nextUrl.searchParams)');
-  expect(route).toContain('includeConversions:false');
+  expect(route).not.toContain('includeConversions:false');
+  const history=read('src/lib/history-cache.ts');
+  expect(history).toContain('snapshot_version?:number');
+  expect(history).toContain('storedState?.snapshot_version===SOURCE_SNAPSHOT_VERSION');
   const supabase=read('src/lib/supabase.ts');
   expect(supabase).toContain('prunePortfolioRangeSnapshots');
   expect(supabase).toContain('await prunePortfolioRangeSnapshots(rangeRecords)');
+  expect(supabase).toContain('value:{version:4,date:day');
+  expect(supabase).toContain('const marker={version:4,date:day,generation}');
+  expect(read('src/lib/cached-evaluations.ts')).toContain('{minimumVersion:4}');
+  expect(read('src/lib/fraud-service.ts')).toContain('{minimumVersion:4}');
   expect(route).toContain("runtime='nodejs'");
   const rollups=read('src/app/api/sync/rollups/route.ts');
   expect(rollups).toContain('CRON_SECRET');
@@ -47,7 +54,7 @@ describe('automatic Supabase reporting refresh',()=>{
   const reconcile=read('src/app/api/sync/reconcile/route.ts');
   expect(reconcile).toContain('CRON_SECRET');
   expect(reconcile).toContain("reportingRange('30d')");
-  expect(reconcile).toContain('includeConversions:false');
+  expect(reconcile).not.toContain('includeConversions:false');
   expect(reconcile).toContain('acquireHistorySyncLock');
   expect(reconcile).toContain('finally{await release()}');
   const cachedSmartlinks=read('src/lib/cached-smartlinks.ts');

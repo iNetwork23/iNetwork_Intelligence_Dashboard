@@ -17,7 +17,7 @@ export async function GET(request:NextRequest){
   const release=await acquireHistorySyncLock();
   try{
    const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),range=reportingRange('30d');
-   const refreshed=await refreshHistoryRange({store:createSupabaseSyncStore(),from:range.from!,to:range.to,includeConversions:false,loadConversions:source.loadConversions,loadReports:source.loadReports});
+   const refreshed=await refreshHistoryRange({store:createSupabaseSyncStore(),from:range.from!,to:range.to,loadConversions:source.loadConversions,loadReports:source.loadReports});
    revalidateTag('affiliate-source',{expire:0});revalidateTag('affiliate-source-freshness',{expire:0});
    return NextResponse.json({mode:'scheduled-30d-reconcile',from:range.from,to:range.to,upsertedMetrics:refreshed.metrics.length});
   }finally{await release()}
