@@ -138,6 +138,43 @@ describe('Everflow fraud source dimensions',()=>{
     ]);
   });
 
+  it('retries a transient Everflow Big Query rate limit before failing the slice',async()=>{
+    let attempts=0;
+    const fetcher=vi.fn<typeof fetch>(async()=>{attempts++;return attempts===1
+      ?new Response(JSON.stringify({error:'Big Query usage is above limit'}),{status:429,headers:{'content-type':'application/json','retry-after':'0'}})
+      :json({table:[]})});
+    await expect(createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01')).resolves.toEqual({base:[],events:[]});
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the fallback delay for an empty Retry-After header',async()=>{
+    vi.useFakeTimers();
+    try{
+      let attempts=0;
+      const fetcher=vi.fn<typeof fetch>(async()=>{attempts++;return attempts===1
+        ?new Response(JSON.stringify({error:'limited'}),{status:429,headers:{'retry-after':''}})
+        :json({table:[]})});
+      const pending=createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01');
+      await vi.advanceTimersByTimeAsync(999);expect(fetcher).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);await expect(pending).resolves.toEqual({base:[],events:[]});
+    }finally{vi.useRealTimers()}
+  });
+
+  it('cancels oversized provider error bodies after reading 300 bytes',async()=>{
+    const cancel=vi.spyOn(ReadableStreamDefaultReader.prototype,'cancel');
+    const body=new ReadableStream<Uint8Array>({pull(controller){controller.enqueue(new TextEncoder().encode('x'.repeat(500)));controller.close()}});
+    const fetcher=vi.fn<typeof fetch>(async()=>new Response(body,{status:500}));
+    let error:unknown;try{await createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01')}catch(value){error=value}
+    expect(error).toBeInstanceOf(Error);expect((error as Error).message).toBe(`Everflow 500: ${'x'.repeat(300)}`);
+    expect(cancel).toHaveBeenCalledOnce();cancel.mockRestore();
+  });
+
+  it('preserves the provider status when cancelling its oversized error body fails',async()=>{
+    const body=new ReadableStream<Uint8Array>({pull(controller){controller.enqueue(new TextEncoder().encode('x'.repeat(500)))},cancel(){throw new Error('cancel failed')}});
+    const fetcher=vi.fn<typeof fetch>(async()=>new Response(body,{status:500}));
+    await expect(createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01')).rejects.toThrow('Everflow 500:');
+  });
+
   it('fails before any provider request when the Everflow key is missing',()=>{
     const fetcher=vi.fn<typeof fetch>();
     expect(()=>createEverflowHistorySource(' ',fetcher)).toThrow('EVERFLOW_API_KEY');

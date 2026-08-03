@@ -5,10 +5,25 @@ import {conversionReportBody,loadDailyReportSlices} from './history-cache';
 const BASE='https://api.eflow.team/v1';
 type Fetcher=typeof fetch;
 
+async function responsePreview(response:Response,maxBytes=300){
+  if(!response.body)return'';
+  const reader=response.body.getReader(),chunks:Uint8Array[]=[];let size=0;
+  try{
+    while(size<maxBytes){const{done,value}=await reader.read();if(done)break;const chunk=value.subarray(0,maxBytes-size);chunks.push(chunk);size+=chunk.length;if(chunk.length<value.length||size===maxBytes){try{await reader.cancel()}catch{}break}}
+  }finally{reader.releaseLock()}
+  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}return new TextDecoder().decode(bytes);
+}
+
 async function request<T>(url:string,body:unknown,apiKey:string,fetcher:Fetcher):Promise<T>{
-  const response=await fetcher(url,{method:'POST',headers:{'content-type':'application/json','X-Eflow-API-Key':apiKey},body:JSON.stringify(body),cache:'no-store',signal:AbortSignal.timeout(55_000)});
-  if(!response.ok)throw new Error(`Everflow ${response.status}: ${(await response.text()).slice(0,300)}`);
-  return response.json() as Promise<T>;
+  for(let attempt=0;attempt<4;attempt++){
+    const response=await fetcher(url,{method:'POST',headers:{'content-type':'application/json','X-Eflow-API-Key':apiKey},body:JSON.stringify(body),cache:'no-store',signal:AbortSignal.timeout(55_000)});
+    if(response.ok)return response.json() as Promise<T>;
+    const message=await responsePreview(response);
+    if(response.status!==429||attempt===3)throw new Error(`Everflow ${response.status}: ${message}`);
+    const retryHeader=response.headers.get('retry-after'),retryAfter=retryHeader!==null&&/^\d+$/.test(retryHeader)?Number.parseInt(retryHeader,10):Number.NaN,delay=Number.isFinite(retryAfter)?Math.min(15_000,retryAfter*1000):[1_000,3_000,7_000][attempt];
+    await new Promise(resolve=>setTimeout(resolve,delay));
+  }
+  throw new Error('Everflow retry state invalid');
 }
 
 export const everflowEntityReportBody=(from:string,to:string,affiliateId?:string,offerId?:string)=>({
