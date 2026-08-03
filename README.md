@@ -50,7 +50,7 @@ Echte Werte gehören ausschließlich in `.env.local` oder in die Secret-Verwaltu
 ## Supabase-Historiencache
 
 1. Ein Supabase-Projekt anlegen.
-2. Den vollständigen Inhalt von `supabase/migrations/20260722191500_everflow_history_cache.sql` im Supabase SQL-Editor ausführen.
+2. Die Dateien in `supabase/migrations/` in Dateinamensreihenfolge vollständig im Supabase SQL-Editor ausführen.
 3. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` und `EVERFLOW_API_KEY` im Hosting setzen.
 4. `CRON_SECRET` setzen. Vercel sendet den Wert beim Cron-Aufruf als `Authorization: Bearer <CRON_SECRET>`; ohne den Wert bleibt `/api/sync` nur mit angemeldeter Session erreichbar.
 5. Neu deployen. `vercel.json` startet `/api/sync` über den Cron-Ausdruck `0 * * * *` stündlich (Vercel Pro).
@@ -59,10 +59,13 @@ Ohne einen laufenden Cron wird der Historiencache nicht mehr befüllt und sämtl
 
 Der Sync verarbeitet den 365-Tage-Backfill in höchstens sieben Tagen pro Lauf. Nach Abschluss wird das rollierende 30-Tage-Fenster höchstens stündlich aktualisiert.
 
+Die Stundenmetriken laufen unabhängig davon: Sie decken bei jedem Lauf die letzten 14 Tage vollständig ab, damit die Smartlink-Ansichten auch während eines laufenden Backfills echte Stundenauflösung haben und nachträgliche Everflow-Korrekturen einfließen. Schlägt allein der Stundenreport fehl, läuft der übrige Sync weiter und die Antwort von `/api/sync` weist den Fehler unter `hourlyError` aus.
+
 ### Tabellen und Views
 
 - `conversions`: deduplizierte SOIs, First-Sales und Rebills; `lead_id` entspricht der Everflow-`transaction_id`
-- `daily_metrics`: Tagesaggregate einschließlich aller Klicks
+- `daily_metrics`: Tagesaggregate einschließlich aller Klicks; Grundlage für Portfolio-, Affiliate- und Source-Auswertungen
+- `hourly_metrics`: Stundenaggregate je Campaign und Landingpage für die Smartlink-Ansichten; bewusst ohne `source_id`/`sub_source` und nach 21 Tagen automatisch bereinigt
 - `sync_state`: wiederaufnehmbarer Fortschritt
 - `ltv_cohorts`: Registrierungsmonat × kumulierter Umsatz nach 30/60/90/180/365 Tagen
 

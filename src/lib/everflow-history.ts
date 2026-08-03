@@ -17,6 +17,17 @@ const reportBody=(from:string,to:string,events:boolean)=>({
   query:{filters:[],search_terms:[]},
 });
 
+// Ohne source_id und sub1: die Smartlink-Ansichten gruppieren nur nach offer_url, und
+// beide Dimensionen würden die Zeilenzahl je Stunde unnötig vervielfachen.
+const hourlyReportBody=(from:string,to:string,events:boolean)=>({
+  from,to,timezone_id:80,currency_id:'EUR',
+  columns:['hour','affiliate','offer','campaign','offer_url',...(events?['event_name']:[])].map(column=>({column})),
+  query:{filters:[],search_terms:[]},
+});
+
+// Eine Stundenzeile je Tag kann bis zu 24-mal so häufig auftreten wie eine Tageszeile.
+const HOURLY_ROW_CAP=40_000;
+
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');
   return{
@@ -37,6 +48,13 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,reportBody(day,day,includeEvents),apiKey,fetcher);
         return result.table||[];
       })));
+      return{base,events};
+    },
+    async loadHourlyReports(from:string,to:string){
+      const [base,events]=await Promise.all([false,true].map(includeEvents=>loadDailyReportSlices(from,to,async day=>{
+        const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,hourlyReportBody(day,day,includeEvents),apiKey,fetcher);
+        return result.table||[];
+      },HOURLY_ROW_CAP)));
       return{base,events};
     },
   };

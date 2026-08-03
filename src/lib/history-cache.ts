@@ -25,6 +25,17 @@ export type DailyMetricRow={
   coin_spend:number;payout:number;revenue:number;profit:number;raw:Record<string,unknown>;
 };
 
+export type HourlyMetricRow={
+  id:string;metric_hour:string;affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;
+  offer_url_id:string;offer_url_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number;
+};
+
+// Die Smartlink-Ansicht wertet höchstens 14 Tage aus. Das Fenster wird bei jedem Lauf
+// vollständig neu geladen, damit nachträgliche Everflow-Korrekturen einfließen.
+export const HOURLY_WINDOW_DAYS=14;
+// Etwas Puffer über das Auswertungsfenster hinaus, damit ein ausgefallener Lauf keine Lücke hinterlässt.
+export const HOURLY_RETENTION_DAYS=21;
+
 const DAY=86_400_000;
 const isoDay=(value:Date)=>value.toISOString().slice(0,10);
 const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
@@ -54,6 +65,16 @@ export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
   const candidate=shift(to,-6);
   return{mode:'backfill',from:candidate<state.backfill_start?state.backfill_start:candidate,to};
 }
+
+// Unabhängig von Backfill und rollierendem Fenster: die Stundenmetriken decken immer
+// die letzten HOURLY_WINDOW_DAYS Tage ab, damit die Smartlink-Ansicht auch während
+// eines laufenden Backfills aktuelle Stundenauflösung hat.
+export function selectHourlyWindow(now=new Date()){
+  const to=isoDay(now);
+  return{from:shift(to,-(HOURLY_WINDOW_DAYS-1)),to};
+}
+
+export const hourlyRetentionCutoff=(now=new Date())=>new Date(now.getTime()-HOURLY_RETENTION_DAYS*DAY).toISOString();
 
 export function advanceSyncState(state:SyncState,window:SyncWindow,now=new Date()):SyncState{
   if(window.mode==='rolling')return{...state,phase:'rolling',last_success_at:now.toISOString()};
@@ -89,6 +110,8 @@ export type SyncStore={
   getState:()=>Promise<SyncState|null>;
   upsertConversions:(rows:ConversionCacheRow[])=>Promise<void>;
   upsertMetrics:(rows:DailyMetricRow[])=>Promise<void>;
+  upsertHourlyMetrics:(rows:HourlyMetricRow[])=>Promise<void>;
+  pruneHourlyMetrics:(before:string)=>Promise<void>;
   setState:(state:SyncState)=>Promise<void>;
 };
 
@@ -96,23 +119,40 @@ export async function runHistorySync(input:{
   store:SyncStore;now?:Date;
   loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;
   loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>;
+  loadHourlyReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>;
 }){
   const now=input.now||new Date();
   const state=await input.store.getState()||initialSyncState(now);
   if(state.phase==='rolling'&&state.last_success_at&&now.getTime()-Date.parse(state.last_success_at)<55*60_000){
     const window=selectSyncWindow(state,now);
-    return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true};
+    return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,upsertedHourlyMetrics:0,hourlyError:null,backfillComplete:true,skipped:true};
   }
-  const window=selectSyncWindow(state,now);
-  const [rawConversions,reports]=await Promise.all([input.loadConversions(window.from,window.to),input.loadReports(window.from,window.to)]);
+  const window=selectSyncWindow(state,now),hourlyWindow=selectHourlyWindow(now);
+  // Ein Fehler im Stundenreport darf den Tages- und Conversion-Sync nicht mitreißen,
+  // wird aber im Ergebnis ausgewiesen statt still verschluckt.
+  const [rawConversions,reports,hourly]=await Promise.all([
+    input.loadConversions(window.from,window.to),
+    input.loadReports(window.from,window.to),
+    input.loadHourlyReports(hourlyWindow.from,hourlyWindow.to).then(value=>({ok:true as const,value})).catch((error:unknown)=>({ok:false as const,error})),
+  ]);
   const mappedConversions=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null);
   const conversions=Array.from(new Map(mappedConversions.map(row=>[row.id,row])).values());
   const metrics=metricRows(reports.base,reports.events);
+  const hourlyMetrics=hourly.ok?hourlyMetricRows(hourly.value.base,hourly.value.events):[];
   await input.store.upsertConversions(conversions);
   await input.store.upsertMetrics(metrics);
+  if(hourly.ok){
+    await input.store.upsertHourlyMetrics(hourlyMetrics);
+    await input.store.pruneHourlyMetrics(hourlyRetentionCutoff(now));
+  }
   const next=advanceSyncState(state,window,now);
   await input.store.setState(next);
-  return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling'};
+  return{
+    mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,
+    upsertedHourlyMetrics:hourlyMetrics.length,
+    hourlyError:hourly.ok?null:hourly.error instanceof Error?hourly.error.message:'Stundenreport fehlgeschlagen',
+    backfillComplete:next.phase==='rolling',
+  };
 }
 
 export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetricRow[]{
@@ -129,6 +169,38 @@ export function metricRows(baseRows:ReportRow[],eventRows:ReportRow[]):DailyMetr
   }
   for(const row of eventRows){
     const target=map.get(metricKey(row));
+    if(!target)continue;
+    const count=amount(row.reporting.event),event=dim(row,'event_name').label;
+    if(event==='Sale')target.first_sales+=count;
+    else if(event==='Rebill')target.rebills+=count;
+    else if(event==='Coin Spend')target.coin_spend+=count;
+  }
+  return Array.from(map.values());
+}
+
+const HOURLY_DIMENSIONS=['hour','affiliate','offer','campaign','offer_url'] as const;
+const hourlyKey=(row:ReportRow)=>HOURLY_DIMENSIONS.map(type=>dim(row,type).id||'').join('|');
+const stableHourlyId=(row:ReportRow)=>`hour:${HOURLY_DIMENSIONS.map(type=>encodeURIComponent(dim(row,type).id||'')).join(':')}`;
+const hourEpoch=(row:ReportRow)=>{const value=Number(dim(row,'hour').id);return Number.isFinite(value)&&value>0?value:null};
+
+export function hourlyMetricRows(baseRows:ReportRow[],eventRows:ReportRow[]):HourlyMetricRow[]{
+  const map=new Map<string,HourlyMetricRow>();
+  for(const row of baseRows){
+    const epoch=hourEpoch(row);
+    if(epoch===null)continue;
+    const q=row.reporting;
+    map.set(hourlyKey(row),{
+      id:stableHourlyId(row),metric_hour:new Date(epoch*1000).toISOString(),
+      affiliate_id:dim(row,'affiliate').id||'0',affiliate_name:dim(row,'affiliate').label||'N/A',
+      offer_id:dim(row,'offer').id||'0',offer_name:dim(row,'offer').label||'N/A',
+      campaign_id:dim(row,'campaign').id||'0',campaign_name:dim(row,'campaign').label||'N/A',
+      offer_url_id:dim(row,'offer_url').id||'0',offer_url_name:dim(row,'offer_url').label||'N/A',
+      clicks:amount(q.total_click),sois:amount(q.cv),first_sales:0,rebills:0,coin_spend:0,
+      payout:amount(q.payout),revenue:amount(q.revenue),profit:amount(q.profit??(amount(q.revenue)-amount(q.payout))),
+    });
+  }
+  for(const row of eventRows){
+    const target=map.get(hourlyKey(row));
     if(!target)continue;
     const count=amount(row.reporting.event),event=dim(row,'event_name').label;
     if(event==='Sale')target.first_sales+=count;

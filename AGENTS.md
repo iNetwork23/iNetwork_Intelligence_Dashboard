@@ -39,6 +39,7 @@ Vor Abschluss einer Änderung müssen Tests, Lint und Build erfolgreich sein. Be
 - Hohe Lead-CVR oder ein einzelner Sale sind kein ausreichender Qualitätsnachweis.
 - Auffälligkeiten sachlich beschreiben; keine unbelegten Fraud-Vorwürfe.
 - Historische und aktuelle Werte nicht vermischen. Zeitzonen und Zeitfenster explizit behandeln.
+- Rollierende Stundenfenster ausschließlich aus `hourly_metrics` bedienen. `daily_metrics` kennt nur Kalendertage; daraus abgeleitete 24h- oder 72h-Werte sind Tagesgrenzen und dürfen nicht als rollierend beschriftet werden.
 
 ## Sicherheit
 
