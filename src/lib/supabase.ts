@@ -18,7 +18,7 @@ export function getSupabaseAdmin(){
 export const getCohortClient=()=>getSupabaseAdmin() as unknown as CohortClient;
 
 const throwIfError=(error:{message:string}|null,operation:string)=>{if(error)throw new Error(`Supabase ${operation}: ${error.message}`)};
-async function upsertBatches(table:'conversions'|'daily_metrics'|'hourly_metrics',rows:ConversionCacheRow[]|DailyMetricRow[]|HourlyMetricRow[]){
+async function upsertBatches(table:'conversions'|'daily_metrics'|'smartlink_hourly_metrics',rows:ConversionCacheRow[]|DailyMetricRow[]|HourlyMetricRow[]){
   const supabase=getSupabaseAdmin();
   for(let start=0;start<rows.length;start+=100){
     const batch=rows.slice(start,start+100);
@@ -36,10 +36,10 @@ export function createSupabaseSyncStore():SyncStore{
     },
     async upsertConversions(rows){if(rows.length)await upsertBatches('conversions',rows)},
     async upsertMetrics(rows){if(rows.length)await upsertBatches('daily_metrics',rows)},
-    async upsertHourlyMetrics(rows){if(rows.length)await upsertBatches('hourly_metrics',rows)},
+    async upsertHourlyMetrics(rows){if(rows.length)await upsertBatches('smartlink_hourly_metrics',rows)},
     async pruneHourlyMetrics(before){
-      const {error}=await getSupabaseAdmin().rpc('prune_hourly_metrics',{p_before:before});
-      throwIfError(error,'prune_hourly_metrics');
+      const {error}=await getSupabaseAdmin().rpc('prune_smartlink_hourly_metrics',{p_before:before});
+      throwIfError(error,'prune_smartlink_hourly_metrics');
     },
     async setState(state){
       const {error}=await getSupabaseAdmin().from('sync_state').upsert({key:'everflow_history',value:state},{onConflict:'key'});

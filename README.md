@@ -65,9 +65,11 @@ Die Stundenmetriken laufen unabhängig davon: Sie decken bei jedem Lauf die letz
 
 - `conversions`: deduplizierte SOIs, First-Sales und Rebills; `lead_id` entspricht der Everflow-`transaction_id`
 - `daily_metrics`: Tagesaggregate einschließlich aller Klicks; Grundlage für Portfolio-, Affiliate- und Source-Auswertungen
-- `hourly_metrics`: Stundenaggregate je Campaign und Landingpage für die Smartlink-Ansichten; bewusst ohne `source_id`/`sub_source` und nach 21 Tagen automatisch bereinigt
+- `smartlink_hourly_metrics`: Stundenaggregate je Campaign und Landingpage für die Smartlink-Ansichten; bewusst ohne `source_id`/`sub_source` und nach 21 Tagen automatisch bereinigt
 - `sync_state`: wiederaufnehmbarer Fortschritt
 - `ltv_cohorts`: Registrierungsmonat × kumulierter Umsatz nach 30/60/90/180/365 Tagen
+
+In derselben Datenbank liegt eine projektfremde Tabelle `hourly_metrics` mit der Zeitspalte `hour_start`, die von einem anderen System geschrieben wird. Sie gehört nicht zu diesem Repository. Alle hier angelegten Objekte tragen deshalb das Präfix `smartlink_`; Migrationen dieses Projekts dürfen `hourly_metrics` weder lesen noch verändern.
 
 ## Automationsjournal
 
