@@ -81,7 +81,7 @@ Im laufenden Modus kann zusätzlich `"skipped": true` erscheinen, wenn seit dem 
 
 Der Account Monitor liest seine Reports aus der Postgres-Funktion `portfolio_metric_rows`. Verfügbar sind Heute, 7 Tage, 30 Tage, 90 Tage, 12 Monate, **365 Tage** sowie ein freier Zeitraum. Der kompatible URL-Wert `period=all` bezeichnet ausdrücklich einen begrenzten 365-Tage-Bereich und keine Lifetime-Historie. `/cohorts` zeigt die LTV-Kohorten; `/api/cohorts?source=…&sub_source=…` liefert dieselben Daten als authentifiziertes JSON.
 
-Im Automation Builder stehen nur tatsächlich implementierte Strategien zur Verfügung: `equal_slots`, `champion_challenger` und für Multi-Offer `matched_rounds`. Der frühere reine Enum-/UI-Wert `full_matrix` wurde entfernt; alte Multi-Offer-Drafts werden sicher zu `matched_rounds` normalisiert. Eine nicht vorhandene vollständige Offer×Landingpage-Engine wird nicht mehr behauptet.
+Im Automation Builder stehen nur tatsächlich implementierte Strategien zur Verfügung: `equal_slots`, `champion_challenger` und für Multi-Offer `matched_rounds`. Der frühere reine Enum-/UI-Wert `full_matrix` wurde entfernt; alte Drafts mit diesem Wert werden explizit abgelehnt und nicht still in eine andere Strategie umgedeutet. Operatoren müssen den betroffenen Draft nach Prüfung der LP-Familien neu anlegen. Eine nicht vorhandene vollständige Offer×Landingpage-Engine wird nicht mehr behauptet.
 
 ## Source-Preview und Fraud-Abgrenzung
 

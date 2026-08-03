@@ -45,6 +45,7 @@ describe('automation decision engine',()=>{
   expect(result.blockers).toContain('Kennzahlen für LP #5702 fehlen.');
  });
  it('holds a stale persisted full_matrix configuration without planning provider writes',()=>{const valid=config(true),stale={...valid,strategy:'full_matrix'} as never,result=evaluateAutomation(stale,[robust(5701),robust(5001)]);expect(result.action).toMatchObject({type:'hold',reasonCode:'unsupported_strategy'});expect(result.writesPlanned).toBe(0);expect(result.targetSlots).toEqual(valid.slots)});
+ it('holds a stale persisted unsupported objective without planning provider writes',()=>{const valid=config(),stale={...valid,objective:'typo'} as never,result=evaluateAutomation(stale,[robust(5701),robust(5702)]);expect(result.action).toMatchObject({type:'hold',reasonCode:'unsupported_objective'});expect(result.writesPlanned).toBe(0)});
 });
 
 function objectiveConfig(objective:AutomationObjective){

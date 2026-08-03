@@ -26,6 +26,7 @@ function objectiveScore(metric:AutomationProgress,objective:AutomationObjective)
 export function evaluateAutomation(config:AutomationConfiguration,metrics:AutomationVariantMetrics[],now=new Date()):AutomationEvaluation{
  const supported=(config.testMode==='single_offer'&&(config.strategy==='equal_slots'||config.strategy==='champion_challenger'))||(config.testMode==='multi_offer'&&config.strategy==='matched_rounds');
  if(!supported)return{evaluatedAt:now.toISOString(),action:{type:'hold',reasonCode:'unsupported_strategy'},progress:[],targetSlots:config.slots,writesPlanned:0,blockers:['Strategie passt nicht zum Testtyp.']};
+ if(!['sale_first','profit_per_soi','profit_epc'].includes(config.objective as string))return{evaluatedAt:now.toISOString(),action:{type:'hold',reasonCode:'unsupported_objective'},progress:[],targetSlots:config.slots,writesPlanned:0,blockers:['Zielmetrik wird nicht unterstützt.']};
  const byId=new Map(metrics.map(metric=>[metric.offerUrlId,metric])),blockers:string[]=[];
  for(const slot of config.slots)if(!byId.has(slot.offerUrlId))blockers.push(`Kennzahlen für LP #${slot.offerUrlId} fehlen.`);
  const numericMetrics=metrics.every(metric=>[metric.clicks,metric.sois,metric.cvr,metric.firstSales,metric.rebills,metric.revenue,metric.payout,metric.profit,metric.ageHours].every(finite));

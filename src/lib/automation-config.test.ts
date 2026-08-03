@@ -71,6 +71,10 @@ describe('automation configuration',()=>{
 
  it('rejects mode and strategy combinations that are impossible at runtime',()=>{const config=normalizeAutomationDraft(single);expect(validateAutomationDraft({...config,testMode:'multi_offer'} as never)).toContain('Strategie passt nicht zum Testtyp.');expect(validateAutomationDraft({...config,strategy:'matched_rounds'} as never)).toContain('Strategie passt nicht zum Testtyp.')});
 
+ it.each([['testMode','typo'],['objective','typo'],['weights',{mode:'typo'}]])('rejects an explicitly malformed %s instead of silently defaulting', (field,value)=>{expect(()=>normalizeAutomationDraft({...single,[field]:value})).toThrow('nicht unterstützt')});
+
+ it('rejects malformed persisted enum values independently',()=>{const config=normalizeAutomationDraft(single);expect(validateAutomationDraft({...config,testMode:'typo'} as never)).toContain('Testtyp wird nicht unterstützt.');expect(validateAutomationDraft({...config,objective:'typo'} as never)).toContain('Zielmetrik wird nicht unterstützt.');expect(validateAutomationDraft({...config,weights:{mode:'typo'}} as never)).toContain('Gewichtungsmodus wird nicht unterstützt.');expect(validateAutomationDraft({...config,offers:[{...config.offers[0],landingpages:[{...config.offers[0].landingpages[0],selection:'typo'}]}]} as never)).toContain('Landingpage #5701 hat einen ungültigen Auswahlstatus.')});
+
  it('recommends a measurable lead gate and estimated duration from partner traffic',()=>{
   const rec=recommendAutomationThresholds({variantCount:3,baselineCvr:0.01,clicksPerDay:1500,soisPerDay:15,affiliateId:436});
   expect(rec.targetSois).toBeGreaterThanOrEqual(40);

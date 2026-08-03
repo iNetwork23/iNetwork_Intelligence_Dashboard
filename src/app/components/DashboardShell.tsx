@@ -5,12 +5,12 @@ import DashboardShellFrame from './DashboardShellFrame';
 import OneSignalIdentity from '../settings/app/OneSignalIdentity';
 
 export default async function DashboardShell({children}:{children:React.ReactNode}){
+ const oneSignalAppId=process.env.ONESIGNAL_APP_ID||'',oneSignalSafariWebId=process.env.ONESIGNAL_SAFARI_WEB_ID||'',oneSignalConfigured=Boolean(oneSignalAppId),oneSignalEnabled=process.env.ONESIGNAL_ENABLED==='true';
  const user=await currentUser();
- if(!user)return children;
+ if(!user)return <><OneSignalIdentity enabled={false} appId={oneSignalAppId} safariWebId={oneSignalSafariWebId} externalId=""/>{children}</>;
  const mayAdmin=can(user.access,'users.manage')||can(user.access,'roles.manage')||can(user.access,'audit.view');
  const mayFraud=user.access.role==='super_admin'&&Object.values(user.access.scopes).every(values=>values.length===0)&&can(user.access,'statistics.view')&&can(user.access,'finance.view');
- const oneSignalAppId=process.env.ONESIGNAL_APP_ID||'',oneSignalConfigured=Boolean(oneSignalAppId),oneSignalEnabled=process.env.ONESIGNAL_ENABLED==='true';
- return <><OneSignalIdentity enabled={oneSignalEnabled} appId={oneSignalAppId} safariWebId={process.env.ONESIGNAL_SAFARI_WEB_ID||''} externalId={user.impersonating?'':user.id}/><DashboardShellFrame sidebar={<AdminSidebar
+ return <><OneSignalIdentity enabled={oneSignalEnabled} appId={oneSignalAppId} safariWebId={oneSignalSafariWebId} externalId={user.impersonating?'':user.id}/><DashboardShellFrame sidebar={<AdminSidebar
    email={user.email}
    role={user.access.role}
    impersonating={user.impersonating}
