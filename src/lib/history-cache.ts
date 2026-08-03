@@ -89,12 +89,17 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   const normalized=row.event.trim().toLowerCase();
   const type=(!row.is_event&&(normalized==='soi'||normalized==='cpl soi'))?'soi':row.is_event&&normalized==='sale'?'first_sale':row.is_event&&normalized==='rebill'?'rebill':null;
   if(!type)return null;
+  // Ohne transaction_id lässt sich die Conversion keinem Lead zuordnen. ltv_cohorts gruppiert
+  // über lead_id und joint darüber; leere Werte verschmelzen dort zu einem Sammel-Lead, der
+  // sich die Umsätze aller betroffenen Zeilen gegenseitig zurechnet.
+  const leadId=String(row.transaction_id??'').trim();
+  if(!leadId)return null;
   const relationship=row.relationship||{};
-  const fallback=[row.transaction_id,type,row.event,row.conversion_unix_timestamp].map(encodeURIComponent).join(':');
+  const fallback=[leadId,type,row.event,row.conversion_unix_timestamp].map(encodeURIComponent).join(':');
   return{
     id:text(row.conversion_id)||fallback,type,converted_at:new Date(row.conversion_unix_timestamp*1000).toISOString(),
     offer_url_id:text(relationship.offer_url?.network_offer_url_id),source_id:text(row.source_id),sub_source:text(row.sub1),cost:amount(row.cost),
-    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:row.transaction_id,raw:{},status:text(row.status),
+    revenue:amount(row.revenue),payout:amount(row.payout),lead_id:leadId,raw:{},status:text(row.status),
     affiliate_id:text(relationship.affiliate?.network_affiliate_id),affiliate_name:text(relationship.affiliate?.name),offer_id:text(relationship.offer?.network_offer_id),
     offer_name:text(relationship.offer?.name),offer_url_name:text(relationship.offer_url?.name),campaign_id:text(relationship.campaign?.network_campaign_id),
     campaign_name:text(relationship.campaign?.name),

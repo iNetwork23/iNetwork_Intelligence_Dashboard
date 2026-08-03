@@ -29,6 +29,16 @@ describe('Everflow conversion mapping',()=>{
     expect(conversionToCacheRow({...base,conversion_id:'rebill',is_event:true,event:'Rebill'})?.type).toBe('rebill');
     expect(conversionToCacheRow({...base,conversion_id:'coin',is_event:true,event:'Coin Spend'})).toBeNull();
   });
+  // ltv_cohorts gruppiert und joint über lead_id. Ein leerer Wert würde alle betroffenen
+  // Zeilen zu einem Sammel-Lead verschmelzen und die Kohortenumsätze verfälschen.
+  it('drops conversions that carry no transaction id',()=>{
+    expect(conversionToCacheRow({...base,transaction_id:''})).toBeNull();
+    expect(conversionToCacheRow({...base,transaction_id:'   '})).toBeNull();
+    expect(conversionToCacheRow({...base,transaction_id:undefined as unknown as string})).toBeNull();
+  });
+  it('trims a padded transaction id instead of storing it verbatim',()=>{
+    expect(conversionToCacheRow({...base,transaction_id:' lead-1 '})).toMatchObject({lead_id:'lead-1'});
+  });
 });
 
 describe('daily metric mapping',()=>{

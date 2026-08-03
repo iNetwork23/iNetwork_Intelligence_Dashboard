@@ -41,6 +41,7 @@ Vor Abschluss einer Änderung müssen Tests, Lint und Build erfolgreich sein. Be
 - Historische und aktuelle Werte nicht vermischen. Zeitzonen und Zeitfenster explizit behandeln.
 - Rollierende Stundenfenster ausschließlich aus `smartlink_hourly_metrics` bedienen. `daily_metrics` kennt nur Kalendertage; daraus abgeleitete 24h- oder 72h-Werte sind Tagesgrenzen und dürfen nicht als rollierend beschriftet werden.
 - Die Tabelle `hourly_metrics` (Zeitspalte `hour_start`) gehört einem anderen System und darf von diesem Projekt weder gelesen noch geschrieben oder migriert werden. Eigene Objekte tragen das Präfix `smartlink_`.
+- `conversions.lead_id` muss immer gefüllt sein. `ltv_cohorts` gruppiert und joint darüber; leere Werte verschmelzen zu einem einzigen Sammel-Lead und verfälschen die Kohortenumsätze. Conversions ohne `transaction_id` werden beim Mapping verworfen.
 
 ## Sicherheit
 
