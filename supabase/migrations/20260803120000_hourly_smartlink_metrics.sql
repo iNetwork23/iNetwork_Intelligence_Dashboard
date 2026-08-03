@@ -9,13 +9,12 @@
 -- group by offer_url only, and leaving out both high-cardinality dimensions keeps
 -- the row count per hour small enough for a 14 day retention window.
 
--- Bewusst kein "create table if not exists": läge bereits eine Tabelle dieses Namens mit
--- abweichenden Spalten vor, würde die Anlage still übersprungen und erst die Indexanweisung
--- mit "column metric_hour does not exist" scheitern. hourly_metrics ist ein reiner Cache mit
--- 21 Tagen Aufbewahrung, den der Sync selbst wieder füllt; ein Neuanlegen verliert nichts.
-drop table if exists public.hourly_metrics cascade;
-
-create table public.hourly_metrics (
+-- ACHTUNG: In der Zieldatenbank existiert bereits eine fremde Tabelle public.hourly_metrics
+-- mit der Zeitspalte hour_start sowie sync_revision und raw. Sie stammt nicht aus diesem
+-- Repository und wird offenbar von einem anderen System geschrieben. Diese Datei darf sie
+-- deshalb weder droppen noch verändern. Der endgültige Tabellenname wird festgelegt, sobald
+-- geklärt ist, ob die vorhandene Tabelle mitgenutzt oder eine eigene angelegt wird.
+create table if not exists public.hourly_metrics (
   id text primary key,
   metric_hour timestamptz not null,
   affiliate_id text not null default '0',
