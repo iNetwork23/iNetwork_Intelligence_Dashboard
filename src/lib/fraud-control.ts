@@ -53,16 +53,23 @@ export function normalizeFraudSource(input:SourceInput):FraudSourceIdentity{
   return{source:'Nicht bestimmbar',subSource:'Nicht bestimmbar',sourceDimension:'unknown',subSourceDimension:'unknown'};
 }
 
+export function fraudAttributionPath(input:SourceInput){
+  const clean=(value?:string|null)=>present(value)?value!.trim():'';
+  if(input.trafficMode==='clickless_api')return JSON.stringify(['adv1',clean(input.adv1),'adv2',clean(input.adv2)]);
+  if(input.trafficMode==='tracked_smartlink'||input.trafficMode==='tracked_direct')return JSON.stringify(['source_id',clean(input.sourceId),'sub1',clean(input.sub1),'sub2',clean(input.sub2),'sub3',clean(input.sub3),'sub4',clean(input.sub4),'sub5',clean(input.sub5)]);
+  return JSON.stringify(['unknown']);
+}
+
 export type FraudMetricInput={
   date:string;affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId:string;campaignName:string;
-  offerUrlId:string;offerUrlName:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];
+  offerUrlId:string;offerUrlName:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string;
   clicks:number;sois:number;firstSales:number;rebills:number;coinEvents:number;payout:number;revenue:number;
 };
 
 export type FraudConversionInput={
   id:string;type:'soi'|'coin_spend'|'first_sale'|'rebill';convertedAt:string;clickAt:string|null;
   affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId:string;campaignName:string;
-  offerUrlId:string;offerUrlName:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];leadId:string;
+  offerUrlId:string;offerUrlName:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string;leadId:string;
   status:string|null;isScrub:boolean;errorCode:string|null;payout:number;revenue:number;
 };
 
@@ -83,8 +90,9 @@ export type FraudSourceEvaluation={
   qualityScore:number;fraudScore:number;riskLevel:FraudRiskLevel;reasons:string[];dataWarnings:string[];
 };
 
-const evaluationKey=(value:{affiliateId:string;offerId:string;campaignId:string;offerUrlId:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension']})=>[value.affiliateId,value.offerId,value.campaignId,value.offerUrlId,value.trafficMode,value.sourceDimension||'unknown',value.source,value.subSourceDimension||'unknown',value.subSource].join('\u0000');
-const coverageKey=(value:{affiliateId:string;offerId:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension']})=>[value.affiliateId,value.offerId,value.trafficMode,value.sourceDimension||'unknown',value.source,value.subSourceDimension||'unknown',value.subSource].join('\u0000');
+const pathKey=(value:{source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string})=>value.attributionPath||[value.sourceDimension||'unknown',value.source,value.subSourceDimension||'unknown',value.subSource].join('\u0000');
+const evaluationKey=(value:{affiliateId:string;offerId:string;campaignId:string;offerUrlId:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string})=>[value.affiliateId,value.offerId,value.campaignId,value.offerUrlId,value.trafficMode,pathKey(value)].join('\u0000');
+const coverageKey=(value:{affiliateId:string;offerId:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string})=>[value.affiliateId,value.offerId,value.trafficMode,pathKey(value)].join('\u0000');
 const approved=(row:FraudConversionInput)=>!row.isScrub&&(!row.status||row.status.toLowerCase()==='approved');
 const identityAvailable=(row:FraudConversionInput)=>hasStableCustomerIdentity(row.leadId);
 const level=(score:number):FraudRiskLevel=>score>=70?'hohes_risiko':score>=50?'verdächtig':score>=25?'beobachten':'unauffällig';
