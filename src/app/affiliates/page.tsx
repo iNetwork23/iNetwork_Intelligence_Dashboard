@@ -517,7 +517,7 @@ export default async function AffiliateOptimizerPage({
     rebillAnalysis = (
       firstSales: number,
       totalRebills: number,
-      scope: { campaignId?: string; offerId?: string; offerUrlId?: string },
+      scope: { trafficMode: RebillEvent['trafficMode']; campaignId?: string; offerId?: string; offerUrlId?: string },
       index = rebillIndex,
     ) => analyzeRebillConcentration({
       firstSales,
@@ -530,8 +530,8 @@ export default async function AffiliateOptimizerPage({
       analyzeRebillConcentration({
         firstSales: row.days30.firstSales,
         totalRebills: row.days30.rebills,
-        customerIds: rebillCustomerIdsFromIndex(sourceRebillIndex,{campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
-        firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(sourceRebillIndex,{campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
+        customerIds: rebillCustomerIdsFromIndex(sourceRebillIndex,{trafficMode:row.trafficMode==='api'?'clickless_api':'tracked_direct',campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
+        firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(sourceRebillIndex,{trafficMode:row.trafficMode==='api'?'clickless_api':'tracked_direct',campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
       }),
     ])),
     selectedSmartlink = smartlinkInsights.find((item) => item.identity.campaignId === selectedCampaignId),
@@ -544,6 +544,7 @@ export default async function AffiliateOptimizerPage({
           return [
             data.identity.campaignId,
             rebillAnalysis(totals.firstSales, totals.rebills, {
+              trafficMode: 'tracked_smartlink',
               campaignId: String(data.identity.campaignId),
             }),
           ];
@@ -1113,6 +1114,7 @@ export default async function AffiliateOptimizerPage({
                         v.days30.firstSales,
                         v.days30.rebills,
                         {
+                          trafficMode: v.trafficMode === "api" ? "clickless_api" : "tracked_direct",
                           campaignId: "0",
                           offerId: v.offerId,
                           offerUrlId: v.offerUrlId,

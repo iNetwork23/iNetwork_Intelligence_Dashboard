@@ -61,6 +61,9 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
     expect(html).toContain('0,00 € Umsatz');
     expect(html).toContain('-336,00 € Profit');
     expect(html).toContain('Umsatzbeiträge: frühere LPs und Zeitraum vor aktueller Rotation.');
+    expect(html).toContain('Im gleichen Zeitraum wurden 24 Rebills erfasst');
+    expect(html).toContain('eine direkte Umsatzzuordnung liegt hier nicht vor');
+    expect(html).not.toContain('Der Umsatz stammt aus');
     expect(html).toContain('#campaign-23');
   });
 

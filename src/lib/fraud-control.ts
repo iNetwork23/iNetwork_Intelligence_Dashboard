@@ -1,4 +1,5 @@
 import{hasStableCustomerIdentity}from'./customer-identity';
+import{berlinRangeUtcBounds}from'./reporting-day';
 
 export type FraudTrafficMode='tracked_smartlink'|'tracked_direct'|'clickless_api'|'unknown';
 
@@ -66,8 +67,8 @@ export type FraudConversionInput={
 };
 
 export function conversionsForFraudRange(conversions:FraudConversionInput[],range:{from:string;to:string}){
-  const from=Date.parse(`${range.from}T00:00:00.000Z`),through=Date.parse(`${range.to}T23:59:59.999Z`);
-  return conversions.filter(row=>{const at=Date.parse(row.convertedAt);return at>=from&&at<=through});
+  const bounds=berlinRangeUtcBounds(range.from,range.to),from=Date.parse(bounds.from),through=Date.parse(bounds.toExclusive);
+  return conversions.filter(row=>{const at=Date.parse(row.convertedAt);return at>=from&&at<through});
 }
 
 export type FraudRiskLevel='unauffällig'|'beobachten'|'verdächtig'|'hohes_risiko'|'unbekannt';

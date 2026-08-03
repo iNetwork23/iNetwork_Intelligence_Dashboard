@@ -25,8 +25,8 @@ describe('responsive admin shell',()=>{
  });
 
  it('provides permission-aware navigation, account controls and persistent collapse',()=>{
-  const sidebar=read('components/AdminSidebar.tsx');
-  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Benutzer & Rechte','Sicherheit','Abmelden','Read only'])expect(sidebar).toContain(marker);
+  const sidebar=read('components/AdminSidebar.tsx'),logout=read('components/OneSignalLogoutForm.tsx'),navigation=`${sidebar}\n${logout}`;
+  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Benutzer & Rechte','Sicherheit','Abmelden','Read only'])expect(navigation).toContain(marker);
   expect(sidebar).not.toContain('label:"Smartlink Intelligence"');
   expect(sidebar).not.toContain('Sicherheit & MFA');
   expect(sidebar).toContain('aria-expanded={!collapsed}');

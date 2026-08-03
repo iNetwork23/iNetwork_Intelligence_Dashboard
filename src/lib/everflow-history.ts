@@ -24,7 +24,9 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
       const body=conversionReportBody(from,to,affiliateId);
       const pageSize=2000;
       const load=(page:number)=>request<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,body,apiKey,fetcher);
-      const first=await load(1),total=Number(first.paging?.total_count||first.conversions?.length||0),pages=Math.max(1,Math.ceil(total/pageSize));
+      const first=await load(1),rawTotal=first.paging?.total_count;
+      if(typeof rawTotal!=='number'||!Number.isInteger(rawTotal)||rawTotal<0)throw new Error('Everflow Conversion-Pagination: gültiges total_count fehlt');
+      const total=rawTotal,pages=Math.max(1,Math.ceil(total/pageSize));
       const rows=[...(first.conversions||[])];
       for(let start=2;start<=pages;start+=4){
         const results=await Promise.all(Array.from({length:Math.min(4,pages-start+1)},(_,index)=>load(start+index)));

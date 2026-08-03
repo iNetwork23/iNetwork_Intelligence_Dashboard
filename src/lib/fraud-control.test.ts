@@ -36,8 +36,8 @@ const metric=(overrides:Partial<FraudMetricInput>={}):FraudMetricInput=>({date:'
 const conversion=(lead:number,type:FraudConversionInput['type'],overrides:Partial<FraudConversionInput>={}):FraudConversionInput=>({id:`${type}-${lead}-${overrides.convertedAt||''}`,type,convertedAt:type==='soi'?'2026-07-01T10:00:00.000Z':'2026-07-02T10:00:00.000Z',clickAt:type==='soi'?'2026-07-01T09:58:00.000Z':null,affiliateId:'6',affiliateName:'Partner',offerId:'57',offerName:'Singles69',campaignId:'0',campaignName:'Direct',offerUrlId:'1',offerUrlName:'LP',trafficMode:'tracked_direct',source:'source-a',subSource:'placement-a',leadId:`lead-${lead}`,status:'approved',isScrub:false,errorCode:null,payout:type==='soi'?3:0,revenue:0,...overrides});
 
 describe('fraud analysis range isolation',()=>{
-  it('keeps older stop-compliance history out of the selected source-analysis period',()=>{
-    const rows=[conversion(1,'soi',{convertedAt:'2026-06-15T10:00:00.000Z'}),conversion(2,'soi',{convertedAt:'2026-07-01T00:00:00.000Z'}),conversion(3,'rebill',{convertedAt:'2026-07-31T23:59:59.999Z'}),conversion(4,'rebill',{convertedAt:'2026-08-01T00:00:00.000Z'})];
+  it('uses the same Europe/Berlin half-open boundaries as load and replacement paths',()=>{
+    const rows=[conversion(1,'soi',{convertedAt:'2026-06-30T21:59:59.999Z'}),conversion(2,'soi',{convertedAt:'2026-06-30T22:00:00.000Z'}),conversion(3,'rebill',{convertedAt:'2026-07-31T21:59:59.999Z'}),conversion(4,'rebill',{convertedAt:'2026-07-31T22:00:00.000Z'})];
     expect(conversionsForFraudRange(rows,{from:'2026-07-01',to:'2026-07-31'}).map(row=>row.leadId)).toEqual(['lead-2','lead-3']);
   });
 });

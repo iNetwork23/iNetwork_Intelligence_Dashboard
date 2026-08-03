@@ -2,20 +2,7 @@
 
 import Script from'next/script';
 import{useEffect}from'react';
-
-type OneSignalSdk={
- init(options:{appId:string;safari_web_id?:string;notifyButton:{enable:boolean};serviceWorkerPath:string;serviceWorkerParam:{scope:string}}):Promise<void>;
- login(externalId:string):Promise<void>;
-};
-type DeferredCallback=(OneSignal:OneSignalSdk)=>void|Promise<void>;
-
-declare global{
- interface Window{
-  OneSignalDeferred?:{push(callback:DeferredCallback):unknown};
-  __wlxOneSignalInitializedAppId?:string;
-  __wlxOneSignalBinding?:string;
- }
-}
+import{bindOneSignalIdentity}from'@/lib/onesignal-browser';
 
 const SDK_URL='https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
 
@@ -25,10 +12,12 @@ export default function OneSignalIdentity({enabled,appId,safariWebId,externalId}
   window.OneSignalDeferred=window.OneSignalDeferred||[];
   const desired=`${appId}:${externalId}`;
   if(window.__wlxOneSignalBinding===desired||window.__wlxOneSignalBinding===`pending:${desired}`)return;
+  const previousBinding=window.__wlxOneSignalBinding;
   window.__wlxOneSignalBinding=`pending:${desired}`;
   window.OneSignalDeferred.push(async function(OneSignal){
    try{
     if(window.__wlxOneSignalInitializedAppId!==appId){
+     if(!OneSignal.init)throw new Error('OneSignal SDK init unavailable');
      await OneSignal.init({
       appId,
       ...(safariWebId?{safari_web_id:safariWebId}:{}),
@@ -38,7 +27,7 @@ export default function OneSignalIdentity({enabled,appId,safariWebId,externalId}
      });
      window.__wlxOneSignalInitializedAppId=appId;
     }
-    await OneSignal.login(externalId);
+    await bindOneSignalIdentity(OneSignal,{previousBinding,desiredBinding:desired,externalId});
     window.__wlxOneSignalBinding=desired;
    }catch{
     if(window.__wlxOneSignalBinding===`pending:${desired}`)delete window.__wlxOneSignalBinding;

@@ -10,7 +10,7 @@ Authentifiziertes Everflow-, Smartlink- und Operations-Dashboard mit Supabase-Hi
 - finaler Prüfbericht: `/home/hermes/release-artifacts/full-project-check-2026-08-02/WLX-VOLLSTAENDIGER-PROJEKTCHECK-2026-08-02.md`;
 - maschinenlesbares Manifest: `/home/hermes/release-artifacts/WLX-ABNAHME-CHECKLIST-2026-08-02.json`.
 
-Der historische Campaign-#23-CTA-, Picker-, Source-Preview-Statement-Timeout- und Rohhistorien-Cachefehler ist in diesem Stand behoben. Neue Releases benötigen trotzdem erneut Tests, immutable Review, Deploymentfingerprint und echte Desktop-/Mobil-Browserklicks.
+Der historische Campaign-#23-CTA-, Picker-, Source-Preview-Statement-Timeout- und Rohhistorien-Cachefehler ist im lokalen Kandidaten behoben. Campaign-Umsatz wird nur nach reconcilierten Buckets erklärt; Eventanzahlen werden nicht als kausale Umsatzzuordnung ausgegeben. Neue Releases benötigen trotzdem erneut Tests, immutable Review, Deploymentfingerprint und echte Desktop-/Mobil-Browserklicks.
 
 ## Everflow-Historiencache mit Supabase
 
