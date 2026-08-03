@@ -44,6 +44,14 @@ describe('Everflow fraud source dimensions',()=>{
     await expect(createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01')).rejects.toThrow('10,000-row cap');
   });
 
+  it('partitions a capped daily entity report by discovered affiliate without losing dimensions',async()=>{
+    const capped=Array.from({length:10_000},()=>({columns:[],reporting:{total_click:0}})),affiliate=(id:string)=>({columns:[{column_type:'affiliate',id,label:`Affiliate ${id}`}],reporting:{total_click:1}}),fetcher=vi.fn<typeof fetch>(async(_url,init)=>{const body=JSON.parse(String(init?.body)),columns=body.columns.map((item:{column:string})=>item.column),filter=body.query.filters[0]?.filter_id_value;if(columns.length===1)return json({table:[affiliate('7'),affiliate('8')]});if(!filter)return json({table:capped});return json({table:[{columns:[{column_type:'affiliate',id:filter,label:`Affiliate ${filter}`},{column_type:'sub5',id:`leaf-${filter}`,label:`leaf-${filter}`}],reporting:{total_click:1}}]})});
+    const result=await createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01');
+    expect(result.base).toHaveLength(2);
+    expect(result.base.map(row=>row.columns.find(column=>column.column_type==='sub5')?.id)).toEqual(['leaf-7','leaf-8']);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
   it('fails closed when conversion pagination returns fewer rows than total_count',async()=>{
     let call=0;
     const fetcher=vi.fn<typeof fetch>(async()=>json({conversions:call++===0?[{conversion_id:'a'},{conversion_id:'b'}]:[],paging:{total_count:3}}));
