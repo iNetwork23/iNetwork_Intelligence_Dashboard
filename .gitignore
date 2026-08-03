@@ -4,3 +4,6 @@ node_modules
 !.env.example
 .railway
 .vercel
+artifacts/
+core
+tsconfig.tsbuildinfo

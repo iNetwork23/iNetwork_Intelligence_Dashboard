@@ -1,8 +1,10 @@
 {
-  "name": "wlx-railway-dashboard",
+  "name": "inetwork-intelligence-dashboard",
   "version": "1.0.0",
   "private": true,
-  "engines": {"node": ">=22"},
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,6 +13,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4"
