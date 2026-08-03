@@ -46,6 +46,8 @@ describe('automation decision engine',()=>{
  });
  it('holds a stale persisted full_matrix configuration without planning provider writes',()=>{const valid=config(true),stale={...valid,strategy:'full_matrix'} as never,result=evaluateAutomation(stale,[robust(5701),robust(5001)]);expect(result.action).toMatchObject({type:'hold',reasonCode:'unsupported_strategy'});expect(result.writesPlanned).toBe(0);expect(result.targetSlots).toEqual(valid.slots)});
  it('holds a stale persisted unsupported objective without planning provider writes',()=>{const valid=config(),stale={...valid,objective:'typo'} as never,result=evaluateAutomation(stale,[robust(5701),robust(5702)]);expect(result.action).toMatchObject({type:'hold',reasonCode:'unsupported_objective'});expect(result.writesPlanned).toBe(0)});
+ it('holds a stale persisted unsupported weight mode without planning provider writes',()=>{const valid=config(),stale={...valid,weights:{mode:'typo'}} as never,result=evaluateAutomation(stale,[robust(5701),robust(5702)]);expect(result.action).toMatchObject({type:'hold',reasonCode:'unsupported_configuration'});expect(result.writesPlanned).toBe(0)});
+ it('holds a stale persisted unsupported landingpage selection without planning provider writes',()=>{const valid=config(),stale={...valid,offers:[{...valid.offers[0],landingpages:[{...valid.offers[0].landingpages[0],selection:'typo'},...valid.offers[0].landingpages.slice(1)]}]} as never,result=evaluateAutomation(stale,[robust(5701),robust(5702)]);expect(result.action).toMatchObject({type:'hold',reasonCode:'unsupported_configuration'});expect(result.writesPlanned).toBe(0)});
 });
 
 function objectiveConfig(objective:AutomationObjective){
