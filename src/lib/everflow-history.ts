@@ -11,11 +11,11 @@ async function request<T>(url:string,body:unknown,apiKey:string,fetcher:Fetcher)
   return response.json() as Promise<T>;
 }
 
-export const everflowEntityReportBody=(from:string,to:string,affiliateId?:string)=>({
+export const everflowEntityReportBody=(from:string,to:string,affiliateId?:string,offerId?:string)=>({
   timezone_id:80,
   currency_id:'EUR',
   columns:['affiliate','offer','campaign','offer_url','source_id','sub1','sub2','sub3','sub4','sub5'].map(column=>({column})),
-  query:{filters:affiliateId?[{resource_type:'affiliate',filter_id_value:affiliateId}]:[],exclusions:[],metric_filters:[],settings:{}} as Record<string,unknown>,
+  query:{filters:[...(affiliateId?[{resource_type:'affiliate',filter_id_value:affiliateId}]:[]),...(offerId?[{resource_type:'offer',filter_id_value:offerId}]:[])],exclusions:[],metric_filters:[],settings:{}} as Record<string,unknown>,
   from,
   to,
 });
@@ -26,17 +26,23 @@ const datedRows=(day:string,rows:ReportRow[])=>rows.map(row=>({
   columns:[dayColumn(day),...row.columns.filter(column=>column.column_type!=='date')],
 }));
 const affiliateDiscoveryBody=(day:string)=>({...everflowEntityReportBody(day,day),columns:[{column:'affiliate'}]});
-const affiliateId=(row:ReportRow)=>row.columns.find(column=>column.column_type==='affiliate')?.id||'';
+const offerDiscoveryBody=(day:string,affiliateId:string)=>({...everflowEntityReportBody(day,day,affiliateId),columns:[{column:'offer'}]});
+const dimensionId=(row:ReportRow,type:string)=>row.columns.find(column=>column.column_type===type)?.id||'';
+const affiliateId=(row:ReportRow)=>dimensionId(row,'affiliate');
+const offerId=(row:ReportRow)=>dimensionId(row,'offer');
+async function mapBounded<T,R>(items:T[],width:number,load:(item:T)=>Promise<R>){const results:R[]=[];for(let start=0;start<items.length;start+=width){const settled=await Promise.allSettled(items.slice(start,start+width).map(load));for(const result of settled)if(result.status==='rejected')throw result.reason;results.push(...settled.map(result=>(result as PromiseFulfilledResult<R>).value))}return results}
+function createLimiter(width:number){let active=0;const queue:Array<()=>void>=[];return function limit<T>(task:()=>Promise<T>){return new Promise<T>((resolve,reject)=>{const start=()=>{active++;task().then(resolve,reject).finally(()=>{active--;queue.shift()?.()})};if(active<width)start();else queue.push(start)})}}
 
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
+  const limit=createLimiter(8),call=<T>(url:string,body:unknown)=>limit(()=>request<T>(url,body,apiKey,fetcher));
   const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
     const pageSize=2000,unique=new Map<string,EverflowConversion>();
     let expectedTotal:number|undefined,repeatedPage=false;
     for(let pass=1;pass<=3;pass++){
       const fingerprints=new Set<string>();
       for(let page=1;;page++){
-        const result=await request<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId),apiKey,fetcher);
+        const result=await call<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId));
         const rows=result.conversions||[],reportedTotal=result.paging?.total_count;
         if(!Number.isSafeInteger(reportedTotal)||Number(reportedTotal)<0)throw new Error(`Everflow conversion pagination missing or invalid total_count on page ${page}`);
         expectedTotal=Number(reportedTotal);
@@ -59,16 +65,25 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
 
   const loadReports=async(from:string,to:string)=>{
     const rows=await loadDailyReportSlices(from,to,async day=>{
-      const result=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day),apiKey,fetcher);
+      const result=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day));
       const unpartitioned=result.table||[];
       if(unpartitioned.length<10_000)return datedRows(day,unpartitioned);
-      const discovery=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,affiliateDiscoveryBody(day),apiKey,fetcher),affiliateRows=discovery.table||[];
+      const discovery=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,affiliateDiscoveryBody(day)),affiliateRows=discovery.table||[];
       if(affiliateRows.length>=10_000)throw new Error(`Everflow daily affiliate discovery reached the 10,000-row cap for ${day}`);
-      const ids=Array.from(new Set(affiliateRows.map(affiliateId).filter(Boolean))),partitioned:ReportRow[]=[];
+      const ids=Array.from(new Set(affiliateRows.map(affiliateId).filter(Boolean)));
       if(!ids.length)throw new Error(`Everflow daily entity report could not discover affiliates for ${day}`);
-      for(const id of ids){const partition=await request<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day,id),apiKey,fetcher),affiliateTable=partition.table||[];if(affiliateTable.length>=10_000)throw new Error(`Everflow daily entity report reached the 10,000-row cap for ${day}, affiliate ${id}`);partitioned.push(...affiliateTable)}
-      return datedRows(day,partitioned);
-    },Number.MAX_SAFE_INTEGER);
+      const partitions=await mapBounded(ids,4,async id=>{
+        const partition=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day,id)),affiliateTable=partition.table||[];
+        if(affiliateTable.length<10_000)return affiliateTable;
+        const discovery=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,offerDiscoveryBody(day,id)),offerRows=discovery.table||[];
+        if(offerRows.length>=10_000)throw new Error(`Everflow daily offer discovery reached the 10,000-row cap for ${day}, affiliate ${id}`);
+        const offerIds=Array.from(new Set(offerRows.map(offerId).filter(Boolean)));
+        if(!offerIds.length)throw new Error(`Everflow daily entity report could not discover offers for ${day}, affiliate ${id}`);
+        const offerPartitions=await mapBounded(offerIds,4,async offer=>{const result=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day,id,offer)),table=result.table||[];if(table.length>=10_000)throw new Error(`Everflow daily entity report reached the 10,000-row cap for ${day}, affiliate ${id}, offer ${offer}`);return table});
+        return offerPartitions.flat();
+      });
+      return datedRows(day,partitions.flat());
+    },Number.MAX_SAFE_INTEGER,2);
     const base=rows.filter(row=>Number(row.reporting.total_click||0)>0);
     return{base,events:[] as ReportRow[]};
   };

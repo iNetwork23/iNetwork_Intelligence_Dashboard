@@ -1,5 +1,5 @@
 export type SyncPhase='backfill'|'rolling';
-export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null;snapshot_version?:number};
+export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null;last_hot_at?:string|null;snapshot_version?:number};
 export type SyncWindow={mode:SyncPhase;from:string;to:string};
 export type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
 import{createHash}from'node:crypto';
@@ -41,7 +41,7 @@ export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(da
   for(let day=from;day<=to;day=shift(day,1))days.push(day);
   const width=Math.max(1,Math.min(10,Math.floor(concurrency)||1));
   for(let start=0;start<days.length;start+=width){
-    const slice=days.slice(start,start+width),batches=await Promise.all(slice.map(day=>loadDay(day)));
+    const slice=days.slice(start,start+width),settled=await Promise.allSettled(slice.map(day=>loadDay(day)));for(const result of settled)if(result.status==='rejected')throw result.reason;const batches=settled.map(result=>(result as PromiseFulfilledResult<T[]>).value);
     for(let index=0;index<batches.length;index++){const batch=batches[index],day=slice[index];if(batch.length>=rowCap)throw new Error(`Everflow daily entity report reached the ${rowCap.toLocaleString('en-US')}-row cap for ${day}`);rows.push(...batch)}
   }
   return rows;
@@ -49,7 +49,7 @@ export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(da
 
 export function initialSyncState(now=new Date()):SyncState{
   const end=berlinDay(now);
-  return{phase:'backfill',backfill_start:shift(end,-364),next_end:end,last_success_at:null,snapshot_version:SOURCE_SNAPSHOT_VERSION};
+  return{phase:'backfill',backfill_start:shift(end,-364),next_end:end,last_success_at:null,last_hot_at:null,snapshot_version:SOURCE_SNAPSHOT_VERSION};
 }
 
 export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
@@ -113,7 +113,8 @@ export type SyncStore={
 };
 
 export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
-  const[rawConversions,reports]=input.includeConversions===false?[[],await input.loadReports(input.from,input.to)]:await Promise.all([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);
+  let rawConversions:EverflowConversion[],reports:{base:ReportRow[];events:ReportRow[]};
+  if(input.includeConversions===false){rawConversions=[];reports=await input.loadReports(input.from,input.to)}else{const[conversionResult,reportResult]=await Promise.allSettled([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);if(conversionResult.status==='rejected')throw conversionResult.reason;if(reportResult.status==='rejected')throw reportResult.reason;rawConversions=conversionResult.value;reports=reportResult.value}
   const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events,input.includeConversions===false?undefined:rawConversions);
   await input.store.upsertConversions(conversions);if(input.store.replaceMetrics)await input.store.replaceMetrics(input.from,input.to,metrics);else await input.store.upsertMetrics(metrics);
   return{conversions,metrics};
@@ -139,12 +140,12 @@ export async function runHistorySync(input:{
     return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true,conversionRows:[] as ConversionCacheRow[]};
   }
   const window=selectSyncWindow(state,now);
-  const today=berlinDay(now);
-  if(window.mode==='backfill')await refreshHistoryRange({store:input.store,from:shift(today,-29),to:today,loadConversions:input.loadConversions,loadReports:input.loadReports});
+  const today=berlinDay(now),hotFrom=shift(today,-1),overlapsHot=window.to>=hotFrom&&window.from<=today,lastHot=Date.parse(state.last_hot_at||''),hotDue=window.mode==='backfill'&&!overlapsHot&&(!Number.isFinite(lastHot)||now.getTime()-lastHot>=6*60*60_000);
+  if(hotDue){const result=await refreshHistoryRange({store:input.store,from:hotFrom,to:today,loadConversions:input.loadConversions,loadReports:input.loadReports}),timestamp=now.toISOString();await input.store.setState({...state,last_hot_at:timestamp,last_success_at:timestamp});return{mode:'backfill' as const,from:hotFrom,to:today,upsertedConversions:result.conversions.length,upsertedMetrics:result.metrics.length,backfillComplete:false,hotRefresh:true,conversionRows:result.conversions}}
   const retentionFrom=shift(today,-364),segments:Array<{from:string;to:string;includeConversions:boolean}>=[];
   if(window.mode==='backfill'&&window.from<retentionFrom){const expiredTo=window.to<retentionFrom?window.to:shift(retentionFrom,-1);segments.push({from:window.from,to:expiredTo,includeConversions:false});if(window.to>=retentionFrom)segments.push({from:retentionFrom,to:window.to,includeConversions:true})}else segments.push({from:window.from,to:window.to,includeConversions:true});
   const conversions:ConversionCacheRow[]=[],metrics:DailyMetricRow[]=[];for(const segment of segments){const result=await refreshHistoryRange({store:input.store,...segment,loadConversions:input.loadConversions,loadReports:input.loadReports});conversions.push(...result.conversions);metrics.push(...result.metrics)};
-  const next=advanceSyncState(state,window,now);
+  const next=advanceSyncState(state,window,now);if(overlapsHot)next.last_hot_at=now.toISOString();
   await input.store.setState(next);
   return{mode:window.mode,from:window.from,to:window.to,upsertedConversions:conversions.length,upsertedMetrics:metrics.length,backfillComplete:next.phase==='rolling',conversionRows:conversions};
 }

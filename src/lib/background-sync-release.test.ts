@@ -8,6 +8,7 @@ describe('automatic Supabase reporting refresh',()=>{
  it('schedules the protected Everflow-to-Supabase sync every hour',()=>{
   const config=JSON.parse(read('vercel.json'))as{crons?:Array<{path:string;schedule:string}>};
   expect(config.crons).toEqual([
+   {path:'/api/sync/fraud',schedule:'7 * * * *'},
    {path:'/api/sync',schedule:'17 * * * *'},
    {path:'/api/sync/reconcile',schedule:'37 3 * * *'},
    {path:'/api/sync/rollups',schedule:'47 * * * *'},
@@ -17,6 +18,8 @@ describe('automatic Supabase reporting refresh',()=>{
   const route=read('src/app/api/sync/route.ts');
   expect(route).toContain('CRON_SECRET');
   expect(route).toContain('runHistorySync');
+  const scheduledGet=route.slice(route.indexOf('export async function GET'),route.indexOf('export async function POST'));
+  expect(scheduledGet).not.toContain('runFraudConversionSync');
   expect(route).toContain('createSupabaseSyncStore');
   expect(route).toContain("refresh==='source-range'");
   expect(route).toContain("refresh==='conversion-range'");
@@ -57,6 +60,12 @@ describe('automatic Supabase reporting refresh',()=>{
   expect(reconcile).not.toContain('includeConversions:false');
   expect(reconcile).toContain('acquireHistorySyncLock');
   expect(reconcile).toContain('finally{await release()}');
+  const fraud=read('src/app/api/sync/fraud/route.ts');
+  expect(fraud).toContain('CRON_SECRET');
+  expect(fraud).toContain('runFraudConversionSync');
+  expect(fraud).toContain('acquireHistorySyncLock');
+  expect(fraud).toContain('finally{await release()}');
+  expect(fraud).toContain('maxDuration=300');
   const cachedSmartlinks=read('src/lib/cached-smartlinks.ts');
   expect(cachedSmartlinks).toContain('Promise.all(snapshotBatches.map');
  });

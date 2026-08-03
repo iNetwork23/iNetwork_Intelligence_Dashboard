@@ -5,7 +5,7 @@ describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
   it('starts a resumable 365-day backfill with a maximum seven-day chunk',()=>{
     const state=initialSyncState(now);
-    expect(state).toEqual({phase:'backfill',backfill_start:'2025-07-23',next_end:'2026-07-22',last_success_at:null,snapshot_version:4});
+    expect(state).toEqual({phase:'backfill',backfill_start:'2025-07-23',next_end:'2026-07-22',last_success_at:null,last_hot_at:null,snapshot_version:4});
     expect(selectSyncWindow(state,now)).toEqual({mode:'backfill',from:'2026-07-16',to:'2026-07-22'});
   });
   it('moves backwards and switches to a two-day hot window after the final chunk',()=>{
@@ -158,6 +158,14 @@ describe('daily metric mapping',()=>{
 });
 
 describe('sync orchestration',()=>{
+  it('drains the conversion/report fan-out before propagating either failure',async()=>{
+    let active=0,writes=0;
+    const store:SyncStore={getState:async()=>null,upsertConversions:async()=>{writes++},upsertMetrics:async()=>{writes++},setState:async()=>{}};
+    const pendingConversions=async()=>{active++;try{await new Promise(resolve=>setTimeout(resolve,30));return[]}finally{active--}};
+    const failingReports=async()=>{await new Promise(resolve=>setTimeout(resolve,1));throw new Error('report failed')};
+    await expect(refreshHistoryRange({store,from:'2026-07-01',to:'2026-07-01',loadConversions:pendingConversions,loadReports:failingReports})).rejects.toThrow('report failed');
+    expect(active).toBe(0);expect(writes).toBe(0);
+  });
   it('refreshes and deduplicates conversion-only history without touching daily metrics',async()=>{
     const calls:string[]=[];
     const conversion:EverflowConversion={conversion_id:'coin',transaction_id:'lead',conversion_unix_timestamp:1784743200,is_event:true,event:'Coin Spend'};
@@ -179,15 +187,16 @@ describe('sync orchestration',()=>{
   });
 
   it('accepts only bounded non-future manual Source ranges',()=>{const now=new Date('2026-07-27T08:30:00Z');expect(resolveManualSourceRange(new URLSearchParams('from=2026-04-29&to=2026-05-28'),now)).toEqual({from:'2026-04-29',to:'2026-05-28'});expect(()=>resolveManualSourceRange(new URLSearchParams('from=2026-04-29&to=2026-05-30'),now)).toThrow('höchstens 31');expect(()=>resolveManualSourceRange(new URLSearchParams('from=2026-07-28&to=2026-07-28'),now)).toThrow('Zukunft');expect(()=>resolveManualSourceRange(new URLSearchParams('from=broken&to=2026-07-27'),now)).toThrow('Ungültiger')});
-  it('refreshes the complete rolling 30-day report window before continuing an older backfill window',async()=>{
+  it('refreshes only the two-day hot window when it is due without advancing the older backfill window',async()=>{
     const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-12-17',last_success_at:'2026-07-23T06:00:00.000Z',snapshot_version:4};
     const loaded:string[]=[],written:string[]=[];
     const store:SyncStore={getState:async()=>state,upsertConversions:async rows=>{written.push(`conversions:${rows.length}`)},upsertMetrics:async rows=>{written.push(`metrics:${rows.length}`)},setState:async()=>{written.push('state')}};
     await runHistorySync({store,now:new Date('2026-07-23T11:00:00Z'),loadConversions:async(from,to)=>{loaded.push(`conversions:${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`reports:${from}:${to}`);return{base:[],events:[]}}});
-    expect(loaded).toEqual(['conversions:2026-06-24:2026-07-23','reports:2026-06-24:2026-07-23','conversions:2025-12-11:2025-12-17','reports:2025-12-11:2025-12-17']);
-    expect(written).toEqual(['conversions:0','metrics:0','conversions:0','metrics:0','state']);
+    expect(loaded).toEqual(['conversions:2026-07-22:2026-07-23','reports:2026-07-22:2026-07-23']);
+    expect(written).toEqual(['conversions:0','metrics:0','state']);
   });
-  it('finishes an expired final backfill day report-only and switches to rolling',async()=>{const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-07-23',last_success_at:'2026-07-25T05:17:32.256Z',snapshot_version:4},loaded:string[]=[],conversionRanges:string[]=[];let saved:typeof state|ReturnType<typeof advanceSyncState>|null=null;const store:SyncStore={getState:async()=>state,upsertConversions:async()=>{},upsertMetrics:async()=>{},setState:async next=>{saved=next}};const result=await runHistorySync({store,now:new Date('2026-07-27T08:30:00Z'),loadConversions:async(from,to)=>{conversionRanges.push(`${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`${from}:${to}`);return{base:[],events:[]}}});expect(conversionRanges).toEqual(['2026-06-28:2026-07-27']);expect(loaded).toEqual(['2026-06-28:2026-07-27','2025-07-23:2025-07-23']);expect(saved).toMatchObject({phase:'rolling'});expect(result).toMatchObject({mode:'backfill',from:'2025-07-23',to:'2025-07-23',upsertedConversions:0})});
+  it('continues an older backfill without a redundant hot refresh while hot data is fresh',async()=>{const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-12-17',last_success_at:'2026-07-23T06:00:00.000Z',last_hot_at:'2026-07-23T06:00:00.000Z',snapshot_version:4},loaded:string[]=[];const store:SyncStore={getState:async()=>state,upsertConversions:async()=>{},upsertMetrics:async()=>{},setState:async()=>{}};await runHistorySync({store,now:new Date('2026-07-23T11:00:00Z'),loadConversions:async(from,to)=>{loaded.push(`c:${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`r:${from}:${to}`);return{base:[],events:[]}}});expect(loaded).toEqual(['c:2025-12-11:2025-12-17','r:2025-12-11:2025-12-17'])});
+  it('finishes an expired final backfill day report-only and switches to rolling',async()=>{const state={phase:'backfill' as const,backfill_start:'2025-07-23',next_end:'2025-07-23',last_success_at:'2026-07-25T05:17:32.256Z',last_hot_at:'2026-07-27T06:00:00.000Z',snapshot_version:4},loaded:string[]=[],conversionRanges:string[]=[];let saved:typeof state|ReturnType<typeof advanceSyncState>|null=null;const store:SyncStore={getState:async()=>state,upsertConversions:async()=>{},upsertMetrics:async()=>{},setState:async next=>{saved=next}};const result=await runHistorySync({store,now:new Date('2026-07-27T08:30:00Z'),loadConversions:async(from,to)=>{conversionRanges.push(`${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`${from}:${to}`);return{base:[],events:[]}}});expect(conversionRanges).toEqual([]);expect(loaded).toEqual(['2025-07-23:2025-07-23']);expect(saved).toMatchObject({phase:'rolling'});expect(result).toMatchObject({mode:'backfill',from:'2025-07-23',to:'2025-07-23',upsertedConversions:0})});
   it('persists conversions, daily metrics and progress only after both writes succeed',async()=>{
     const calls:string[]=[];
     let savedState:ReturnType<typeof initialSyncState>|null=null;
@@ -200,7 +209,7 @@ describe('sync orchestration',()=>{
     const conversion:EverflowConversion={conversion_id:'cv',transaction_id:'lead',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI'};
     const columns=[{column_type:'date',id:'1784692800',label:'1784692800'}];
     const result=await runHistorySync({store,now:new Date('2026-07-22T12:00:00Z'),loadConversions:async()=>[conversion,conversion],loadReports:async()=>({base:[{columns,reporting:{cv:1}}],events:[]})});
-    expect(calls).toEqual(['conversions:1','metrics:1','conversions:1','metrics:1','state']);
+    expect(calls).toEqual(['conversions:1','metrics:1','state']);
     expect(savedState).toMatchObject({phase:'backfill',next_end:'2026-07-15'});
     expect(result).toMatchObject({mode:'backfill',from:'2026-07-16',to:'2026-07-22',upsertedConversions:1,upsertedMetrics:1});
     expect(result.conversionRows).toHaveLength(1);
@@ -223,7 +232,7 @@ describe('sync orchestration',()=>{
     const legacy={phase:'rolling' as const,backfill_start:'2025-07-23',next_end:'2025-07-22',last_success_at:'2026-07-22T11:30:00.000Z'},loaded:string[]=[];let saved:SyncState|null=null;
     const store:SyncStore={getState:async()=>legacy,upsertConversions:async()=>{},upsertMetrics:async()=>{},setState:async state=>{saved=state}};
     const result=await runHistorySync({store,now:new Date('2026-07-22T12:00:00Z'),loadConversions:async(from,to)=>{loaded.push(`c:${from}:${to}`);return[]},loadReports:async(from,to)=>{loaded.push(`r:${from}:${to}`);return{base:[],events:[]}}});
-    expect(loaded).toEqual(['c:2026-06-23:2026-07-22','r:2026-06-23:2026-07-22','c:2026-07-16:2026-07-22','r:2026-07-16:2026-07-22']);
+    expect(loaded).toEqual(['c:2026-07-16:2026-07-22','r:2026-07-16:2026-07-22']);
     expect(saved).toMatchObject({phase:'backfill',snapshot_version:4,next_end:'2026-07-15'});
     expect(result).toMatchObject({mode:'backfill',from:'2026-07-16',to:'2026-07-22'});
   });

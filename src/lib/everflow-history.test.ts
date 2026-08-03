@@ -44,12 +44,56 @@ describe('Everflow fraud source dimensions',()=>{
     await expect(createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01')).rejects.toThrow('10,000-row cap');
   });
 
-  it('partitions a capped daily entity report by discovered affiliate without losing dimensions',async()=>{
-    const capped=Array.from({length:10_000},()=>({columns:[],reporting:{total_click:0}})),affiliate=(id:string)=>({columns:[{column_type:'affiliate',id,label:`Affiliate ${id}`}],reporting:{total_click:1}}),fetcher=vi.fn<typeof fetch>(async(_url,init)=>{const body=JSON.parse(String(init?.body)),columns=body.columns.map((item:{column:string})=>item.column),filter=body.query.filters[0]?.filter_id_value;if(columns.length===1)return json({table:[affiliate('7'),affiliate('8')]});if(!filter)return json({table:capped});return json({table:[{columns:[{column_type:'affiliate',id:filter,label:`Affiliate ${filter}`},{column_type:'sub5',id:`leaf-${filter}`,label:`leaf-${filter}`}],reporting:{total_click:1}}]})});
+  it('partitions a capped daily entity report with bounded affiliate concurrency without losing dimensions or order',async()=>{
+    const capped=Array.from({length:10_000},()=>({columns:[],reporting:{total_click:0}})),ids=['7','8','9','10','11','12'],affiliate=(id:string)=>({columns:[{column_type:'affiliate',id,label:`Affiliate ${id}`}],reporting:{total_click:1}});let active=0,peak=0;
+    const fetcher=vi.fn<typeof fetch>(async(_url,init)=>{const body=JSON.parse(String(init?.body)),columns=body.columns.map((item:{column:string})=>item.column),filter=body.query.filters[0]?.filter_id_value;if(columns.length===1)return json({table:ids.map(affiliate)});if(!filter)return json({table:capped});active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,filter==='7'?8:1));active--;return json({table:[{columns:[{column_type:'affiliate',id:filter,label:`Affiliate ${filter}`},{column_type:'sub5',id:`leaf-${filter}`,label:`leaf-${filter}`}],reporting:{total_click:1}}]})});
     const result=await createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-01');
-    expect(result.base).toHaveLength(2);
-    expect(result.base.map(row=>row.columns.find(column=>column.column_type==='sub5')?.id)).toEqual(['leaf-7','leaf-8']);
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(result.base).toHaveLength(ids.length);
+    expect(result.base.map(row=>row.columns.find(column=>column.column_type==='sub5')?.id)).toEqual(ids.map(id=>`leaf-${id}`));
+    expect(peak).toBe(4);
+    expect(fetcher).toHaveBeenCalledTimes(2+ids.length);
+  });
+
+  it('partitions an individually capped affiliate by offer without accepting truncated rows',async()=>{
+    const capped=Array.from({length:10_000},()=>({columns:[],reporting:{total_click:0}}));
+    const fetcher=vi.fn<typeof fetch>(async(_url,init)=>{const body=JSON.parse(String(init?.body)),columns=body.columns.map((item:{column:string})=>item.column),filters=body.query.filters as Array<{resource_type:string;filter_id_value:string}>,affiliate=filters.find(item=>item.resource_type==='affiliate')?.filter_id_value,offer=filters.find(item=>item.resource_type==='offer')?.filter_id_value;if(columns.length===1&&columns[0]==='affiliate')return json({table:[{columns:[{column_type:'affiliate',id:'488',label:'Large affiliate'}],reporting:{}}]});if(columns.length===1&&columns[0]==='offer')return json({table:['57','58'].map(id=>({columns:[{column_type:'offer',id,label:`Offer ${id}`}],reporting:{}}))});if(!affiliate||affiliate==='488'&&!offer)return json({table:capped});return json({table:[{columns:[{column_type:'affiliate',id:affiliate,label:'Large affiliate'},{column_type:'offer',id:offer,label:`Offer ${offer}`},{column_type:'sub5',id:`leaf-${offer}`,label:`leaf-${offer}`}],reporting:{total_click:1}}]})});
+    const result=await createEverflowHistorySource('key',fetcher).loadReports('2026-08-02','2026-08-02');
+    expect(result.base.map(row=>row.columns.find(column=>column.column_type==='sub5')?.id)).toEqual(['leaf-57','leaf-58']);
+    expect(fetcher).toHaveBeenCalledTimes(6);
+  });
+
+  it('caps nested day, affiliate and offer requests at eight globally',async()=>{
+    const capped=Array.from({length:10_000},()=>({columns:[],reporting:{total_click:0}})),ids=['1','2','3','4'],offers=['57','58'];
+    let active=0,peak=0;
+    const fetcher=vi.fn<typeof fetch>(async(_url,init)=>{
+      active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,4));
+      try{
+        const body=JSON.parse(String(init?.body)),columns=body.columns.map((item:{column:string})=>item.column),filters=body.query.filters as {resource_type:string;filter_id_value:string}[];
+        if(!filters.length&&columns.length>1)return json({table:capped});
+        if(columns.length===1&&columns[0]==='affiliate')return json({table:ids.map(id=>({columns:[{column_type:'affiliate',id,label:id}],reporting:{}}))});
+        if(filters.length===1&&columns.length>1)return json({table:capped});
+        if(columns.length===1&&columns[0]==='offer')return json({table:offers.map(id=>({columns:[{column_type:'offer',id,label:id}],reporting:{}}))});
+        return json({table:[{columns:[{column_type:'affiliate',id:filters[0].filter_id_value,label:'A'},{column_type:'offer',id:filters[1].filter_id_value,label:'O'}],reporting:{total_click:1}}]});
+      }finally{active--}
+    });
+    const result=await createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-02');
+    expect(result.base).toHaveLength(16);
+    expect(peak).toBe(8);
+  });
+
+  it('drains already started requests before propagating a partition failure',async()=>{
+    const capped=Array.from({length:10_000},()=>({columns:[],reporting:{total_click:0}})),ids=['1','2','3','4'];
+    let active=0,failed=false;
+    const fetcher=vi.fn<typeof fetch>(async(_url,init)=>{
+      const body=JSON.parse(String(init?.body)),columns=body.columns.map((item:{column:string})=>item.column),filters=body.query.filters as {filter_id_value:string}[];
+      if(!filters.length&&columns.length>1)return json({table:capped});
+      if(columns.length===1)return json({table:ids.map(id=>({columns:[{column_type:'affiliate',id,label:id}],reporting:{}}))});
+      active++;
+      try{if(filters[0].filter_id_value==='1'&&!failed){failed=true;await new Promise(resolve=>setTimeout(resolve,1));return new Response('{"error":"boom"}',{status:500})}await new Promise(resolve=>setTimeout(resolve,30));return json({table:[]})}
+      finally{active--}
+    });
+    await expect(createEverflowHistorySource('key',fetcher).loadReports('2026-07-01','2026-07-02')).rejects.toThrow('Everflow 500');
+    expect(active).toBe(0);
   });
 
   it('fails closed when conversion pagination returns fewer rows than total_count',async()=>{
