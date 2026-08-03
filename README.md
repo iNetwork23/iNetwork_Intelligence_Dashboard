@@ -12,7 +12,7 @@ Internes Performance- und Intelligence-Dashboard für Everflow-Traffic, Smartlin
 - dauerhafter Everflow-Historiencache in Supabase
 - wiederaufnehmbarer 365-Tage-Backfill und rollierende Aktualisierung
 - LTV-Kohorten nach Quelle und Sub-Source
-- geschützter Dashboard-Zugang
+- geschützter Dashboard-Zugang mit Brute-Force-Bremse am Login
 
 ## Technischer Stack
 
@@ -52,8 +52,10 @@ Echte Werte gehören ausschließlich in `.env.local` oder in die Secret-Verwaltu
 1. Ein Supabase-Projekt anlegen.
 2. Den vollständigen Inhalt von `supabase/migrations/20260722191500_everflow_history_cache.sql` im Supabase SQL-Editor ausführen.
 3. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` und `EVERFLOW_API_KEY` im Hosting setzen.
-4. Optional `CRON_SECRET` setzen.
-5. Neu deployen. `vercel.json` startet `/api/sync` auf Vercel Pro stündlich.
+4. `CRON_SECRET` setzen. Vercel sendet den Wert beim Cron-Aufruf als `Authorization: Bearer <CRON_SECRET>`; ohne den Wert bleibt `/api/sync` nur mit angemeldeter Session erreichbar.
+5. Neu deployen. `vercel.json` startet `/api/sync` über den Cron-Ausdruck `0 * * * *` stündlich (Vercel Pro).
+
+Ohne einen laufenden Cron wird der Historiencache nicht mehr befüllt und sämtliche Auswertungen frieren auf dem Stand des letzten Syncs ein. Bei Betrieb auf Railway muss der Aufruf von `/api/sync` extern eingeplant werden, da `railway.json` nur den Healthcheck definiert.
 
 Der Sync verarbeitet den 365-Tage-Backfill in höchstens sieben Tagen pro Lauf. Nach Abschluss wird das rollierende 30-Tage-Fenster höchstens stündlich aktualisiert.
 
@@ -73,6 +75,10 @@ https://<dashboard-domain>/api/sync
 ```
 
 Alternativ authentifiziert der Vercel-Cron über `Authorization: Bearer <CRON_SECRET>`.
+
+## Login-Schutz
+
+Fehlgeschlagene Anmeldungen werden pro Client-IP in einem 15-Minuten-Fenster gezählt. Ab fünf Fehlversuchen sperrt der Login mit wachsender Wartezeit von 60 Sekunden bis maximal einer Stunde; eine erfolgreiche Anmeldung setzt den Zähler zurück. Der Zustand liegt im Prozessspeicher, sodass jede Serverinstanz eigenständig bremst. Das erschwert automatisiertes Durchprobieren, ersetzt aber kein starkes `DASHBOARD_PASSWORD`.
 
 ## Qualitätsprüfung
 
