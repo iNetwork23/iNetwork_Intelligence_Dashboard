@@ -1,6 +1,7 @@
 import 'server-only';
 import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import type {ConversionCacheRow,DailyMetricRow,SyncState,SyncStore} from './history-cache';
+import type {CohortClient} from './cohorts';
 
 let client:SupabaseClient|null=null;
 export function getSupabaseAdmin(){
@@ -11,6 +12,10 @@ export function getSupabaseAdmin(){
   client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
   return client;
 }
+
+// Die Query-Builder-Generics von supabase-js sind zu tief für strukturelles Matching,
+// daher wird der Client hier einmalig auf die schmale Kohorten-Schnittstelle reduziert.
+export const getCohortClient=()=>getSupabaseAdmin() as unknown as CohortClient;
 
 const throwIfError=(error:{message:string}|null,operation:string)=>{if(error)throw new Error(`Supabase ${operation}: ${error.message}`)};
 async function upsertBatches(table:'conversions'|'daily_metrics',rows:ConversionCacheRow[]|DailyMetricRow[]){
