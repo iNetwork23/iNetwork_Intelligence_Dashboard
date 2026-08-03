@@ -30,7 +30,7 @@ const affiliateId=(row:ReportRow)=>row.columns.find(column=>column.column_type==
 
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
-  const loadConversions=async(from:string,to:string,affiliateId?:string)=>{
+  const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
     const pageSize=2000,unique=new Map<string,EverflowConversion>();
     let expectedTotal:number|undefined,repeatedPage=false;
     for(let pass=1;pass<=3;pass++){
@@ -50,6 +50,11 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     }
     const reason=repeatedPage?'duplicate/repeated page; ':'';
     throw new Error(`Everflow conversion pagination ${reason}total_count unvollständig: ${unique.size}/${expectedTotal??'unknown'}`);
+  };
+  const loadConversions=async(from:string,to:string,affiliateId?:string)=>{
+    if(from===to)return loadConversionSlice(from,to,affiliateId);
+    const rows=await loadDailyReportSlices(from,to,day=>loadConversionSlice(day,day,affiliateId),Number.MAX_SAFE_INTEGER);
+    return Array.from(new Map(rows.map(row=>[row.conversion_id||JSON.stringify(row),row])).values());
   };
 
   const loadReports=async(from:string,to:string)=>{

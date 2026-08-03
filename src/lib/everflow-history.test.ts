@@ -85,6 +85,15 @@ describe('Everflow fraud source dimensions',()=>{
     expect(new Set(rows.map(row=>row.conversion_id)).size).toBe(2002);
   });
 
+  it('loads multi-day conversion ranges as stable daily slices',async()=>{
+    const fetcher=vi.fn<typeof fetch>(async(_url,init)=>{const body=JSON.parse(String(init?.body));return json({conversions:[{conversion_id:`row-${body.from}`}],paging:{total_count:1}})});
+    const rows=await createEverflowHistorySource('key',fetcher).loadConversions('2026-07-01','2026-07-03');
+    expect(rows.map(row=>row.conversion_id)).toEqual(['row-2026-07-01','row-2026-07-02','row-2026-07-03']);
+    expect(fetcher.mock.calls.map(call=>{const body=JSON.parse(String(call[1]?.body));return[body.from,body.to]})).toEqual([
+      ['2026-07-01','2026-07-01'],['2026-07-02','2026-07-02'],['2026-07-03','2026-07-03'],
+    ]);
+  });
+
   it('fails before any provider request when the Everflow key is missing',()=>{
     const fetcher=vi.fn<typeof fetch>();
     expect(()=>createEverflowHistorySource(' ',fetcher)).toThrow('EVERFLOW_API_KEY');
