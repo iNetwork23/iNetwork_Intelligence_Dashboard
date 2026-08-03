@@ -69,6 +69,12 @@ Die Stundenmetriken laufen unabhängig davon: Sie decken bei jedem Lauf die letz
 - `sync_state`: wiederaufnehmbarer Fortschritt
 - `ltv_cohorts`: Registrierungsmonat × kumulierter Umsatz nach 30/60/90/180/365 Tagen
 
+## Automationsjournal
+
+`/automation` liest **keinen Live-Zustand**, sondern `src/data/automation-journal.ts` — eine von `scripts/sync-automation-journal.mjs` erzeugte und eingecheckte Datei. Das Skript liest Zustandsdateien des Automations-Hosts aus fest verdrahteten Pfaden unterhalb von `/home/hermes` und läuft daher nur dort. Aktuell wird die Ansicht also erst durch Skriptlauf, Commit und Deployment aktualisiert.
+
+Damit ein stehengebliebener Schnappschuss nicht als Normalbetrieb erscheint, bewertet `/api/automation` die Frische zur Anfragezeit. Eine Campaign gilt als überfällig, wenn `nextRunAt` länger als ein Viertel ihres beobachteten Prüfintervalls zurückliegt, mindestens jedoch 15 Minuten. Trifft das zu oder ist das Journal älter als ein voller Prüfzyklus, zeigt die Ansicht einen Warnhinweis statt der `LIVE`-Kennzeichnung.
+
 ### Sync prüfen
 
 Angemeldet im Dashboard öffnen:
