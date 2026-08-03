@@ -29,27 +29,25 @@ const datedRows=(day:string,rows:ReportRow[])=>rows.map(row=>({
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
   const loadConversions=async(from:string,to:string,affiliateId?:string)=>{
-    const pageSize=2000,total:EverflowConversion[]=[],seen=new Set<string>();
-    let page=1,expectedTotal:number|undefined;
-    do{
-      const result=await request<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId),apiKey,fetcher);
-      const rows=result.conversions||[],reportedTotal=result.paging?.total_count;
-      if(!Number.isSafeInteger(reportedTotal)||Number(reportedTotal)<0)throw new Error(`Everflow conversion pagination missing or invalid total_count on page ${page}`);
-      if(expectedTotal===undefined)expectedTotal=Number(reportedTotal);
-      else if(Number(reportedTotal)!==expectedTotal)throw new Error(`Everflow conversion pagination total_count changed on page ${page}`);
-      for(const row of rows){
-        const identity=row.conversion_id||JSON.stringify(row);
-        if(seen.has(identity))throw new Error(`Everflow conversion pagination returned duplicate row on page ${page}`);
-        seen.add(identity);
-        total.push(row);
+    const pageSize=2000,unique=new Map<string,EverflowConversion>();
+    let expectedTotal:number|undefined,repeatedPage=false;
+    for(let pass=1;pass<=3;pass++){
+      const fingerprints=new Set<string>();
+      for(let page=1;;page++){
+        const result=await request<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId),apiKey,fetcher);
+        const rows=result.conversions||[],reportedTotal=result.paging?.total_count;
+        if(!Number.isSafeInteger(reportedTotal)||Number(reportedTotal)<0)throw new Error(`Everflow conversion pagination missing or invalid total_count on page ${page}`);
+        expectedTotal=Number(reportedTotal);
+        const identities=rows.map(row=>row.conversion_id||JSON.stringify(row)),fingerprint=JSON.stringify(identities);
+        if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
+        fingerprints.add(fingerprint);
+        for(let index=0;index<rows.length;index++)unique.set(identities[index],rows[index]);
+        if(unique.size>=expectedTotal)return Array.from(unique.values());
+        if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
       }
-      if(total.length>expectedTotal)throw new Error(`Everflow conversion pagination exceeded total_count on page ${page}`);
-      if(total.length>=expectedTotal)break;
-      if(rows.length===0)break;
-      page++;
-    }while(true);
-    if(total.length!==(expectedTotal??0))throw new Error(`Everflow conversion pagination unvollständig: ${total.length}/${expectedTotal??'unknown'}`);
-    return total;
+    }
+    const reason=repeatedPage?'duplicate/repeated page; ':'';
+    throw new Error(`Everflow conversion pagination ${reason}total_count unvollständig: ${unique.size}/${expectedTotal??'unknown'}`);
   };
 
   const loadReports=async(from:string,to:string)=>{

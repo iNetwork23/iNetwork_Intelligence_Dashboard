@@ -59,11 +59,22 @@ describe('Everflow fraud source dimensions',()=>{
     const page=Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`,transaction_id:`lead-${index}`,conversion_unix_timestamp:1784743200,is_event:false,event:'SOI'}));
     const fetcher=vi.fn<typeof fetch>(async()=>json({conversions:page,paging:{total_count:4000}}));
     await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-07-01','2026-07-01')).rejects.toThrow('duplicate');
-    expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual([
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual(Array.from({length:3},()=>[
       'https://api.eflow.team/v1/networks/reporting/conversions?page=1&page_size=2000',
       'https://api.eflow.team/v1/networks/reporting/conversions?page=2&page_size=2000',
-    ]);
+    ]).flat());
     expect(fetcher.mock.calls.map(call=>JSON.parse(String(call[1]?.body)))).not.toEqual(expect.arrayContaining([expect.objectContaining({page:expect.anything()})]));
+  });
+
+  it('converges when live inserts grow total_count and shift one row across page boundaries',async()=>{
+    let call=0;
+    const fetcher=vi.fn<typeof fetch>(async()=>{call++;return call===1
+      ?json({conversions:Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`})),paging:{total_count:2001}})
+      :json({conversions:[{conversion_id:'row-1999'},{conversion_id:'row-2000'},{conversion_id:'row-2001'}],paging:{total_count:2002}})});
+    const rows=await createEverflowHistorySource('key',fetcher).loadConversions('2026-07-01','2026-07-01');
+    expect(rows).toHaveLength(2002);
+    expect(new Set(rows.map(row=>row.conversion_id)).size).toBe(2002);
   });
 
   it('fails before any provider request when the Everflow key is missing',()=>{
