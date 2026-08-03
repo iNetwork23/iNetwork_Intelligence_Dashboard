@@ -18,7 +18,7 @@ export async function GET(request:NextRequest){
   if(!await authorized(request))return NextResponse.json({error:'Nicht autorisiert'},{status:401});
   try{
     const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');
-    const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});
+    const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports,loadHourlyReports:source.loadHourlyReports});
     return NextResponse.json(result);
   }catch(error){
     console.error('Everflow history sync failed',error);
