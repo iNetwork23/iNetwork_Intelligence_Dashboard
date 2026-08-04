@@ -58,7 +58,7 @@ export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
     return{mode:'rolling',from:shift(to,-1),to};
   }
   const to=state.next_end;
-  const candidate=shift(to,-6);
+  const candidate=shift(to,-2);
   return{mode:'backfill',from:candidate<state.backfill_start?state.backfill_start:candidate,to};
 }
 
