@@ -14,12 +14,12 @@ Der historische Campaign-#23-CTA-, Picker-, Source-Preview-Statement-Timeout- un
 
 ## Everflow-Historiencache mit Supabase
 
-Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten dauerhaft in Supabase. Jeder Lauf arbeitet den 365-Tage-Backfill in höchstens sieben Tagen rückwärts ab. Auf Vercel Pro läuft `/api/sync` stündlich um Minute 17. Nach Abschluss des Backfills aktualisiert derselbe Cron das rollierende 30-Tage-Fenster höchstens stündlich.
+Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten dauerhaft in Supabase. Jeder Lauf arbeitet den 365-Tage-Backfill in höchstens drei Tagen rückwärts ab. Auf Vercel Pro läuft `/api/sync` stündlich um Minute 17. Nach Abschluss des Backfills aktualisiert derselbe Cron das rollierende 30-Tage-Fenster höchstens stündlich.
 
 ## Einmalige Einrichtung
 
 1. Ein Supabase-Projekt anlegen.
-2. Die Migrationen bis einschließlich `20260729003000_rebill_concentration_index.sql` einzeln in lexikografischer Reihenfolge aus `supabase/migrations/` ausführen und jeden Schritt per Objekt-Read-back bestätigen. Für die nachfolgenden Fraud-, Identity-, Replacement- und LTV-Schritte ausschließlich `docs/FRAUD-CONTROL-MIGRATION-RUNBOOK.md` verwenden; dessen getrennte `CREATE INDEX CONCURRENTLY`-Dateien dürfen nicht in einen gemeinsamen SQL-Editor-Block aufgenommen werden.
+2. Die Migrationen bis einschließlich `20260729003000_rebill_concentration_index.sql` einzeln in lexikografischer Reihenfolge aus `supabase/migrations/` ausführen und jeden Schritt per Objekt-Read-back bestätigen. Für die nachfolgenden Fraud-, Identity-, Replacement- und LTV-Schritte ausschließlich `docs/FRAUD-CONTROL-MIGRATION-RUNBOOK.md` verwenden; dessen getrennte `CREATE INDEX CONCURRENTLY`-Dateien dürfen nicht in einen gemeinsamen SQL-Editor-Block aufgenommen werden. Abschließend `20260804094837_atomic_metric_window_replacement.sql` anwenden und die RPC-Signatur über PostgREST/OpenAPI prüfen.
 3. In Vercel unter **Project → Settings → Environment Variables** setzen:
 
 ```text

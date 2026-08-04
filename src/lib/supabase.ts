@@ -1,7 +1,7 @@
 import 'server-only';
 import {randomUUID}from'node:crypto';
 import {createClient,type SupabaseClient} from '@supabase/supabase-js';
-import {canonicalMetricRows,staleMetricIds,type ConversionCacheRow,type DailyMetricRow,type SyncState,type SyncStore} from './history-cache';
+import {canonicalMetricRows,type ConversionCacheRow,type DailyMetricRow,type SyncState,type SyncStore} from './history-cache';
 import{encodePortfolioSnapshotRow,encodeSourceSnapshotRow}from'./affiliate-source-cache';
 import{newSnapshotGeneration,snapshotGenerationCreatedAt}from'./snapshot-generation';
 import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecords,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
@@ -33,10 +33,6 @@ async function upsertBatches(table:'conversions'|'daily_metrics',rows:Conversion
   }
 }
 const nextDay=(day:string)=>new Date(Date.parse(`${day}T12:00:00Z`)+86_400_000).toISOString().slice(0,10);
-async function existingMetricIds(from:string,to:string){const ids:string[]=[];for(let start=0;;start+=1000){const{data,error}=await getSupabaseAdmin().from('daily_metrics').select('id').gte('metric_date',from).lte('metric_date',to).order('metric_date').order('id').range(start,start+999);throwIfError(error,'daily_metrics id scan');const batch=(data||[])as{id:string}[];ids.push(...batch.map(row=>row.id));if(batch.length<1000)break}return ids}
-export const postgrestInFilterBytes=(values:string[])=>encodeURIComponent(values.map(value=>`"${value.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`).join(',')).length;
-export function boundedPostgrestInBatches(values:string[],maxEncodedBytes=5_000){const batches:string[][]=[];let batch:string[]=[];for(const value of values){if(postgrestInFilterBytes([value])>maxEncodedBytes)throw new Error('PostgREST filter value exceeds URL budget');if(batch.length&&postgrestInFilterBytes([...batch,value])>maxEncodedBytes){batches.push(batch);batch=[]}batch.push(value)}if(batch.length)batches.push(batch);return batches}
-async function zeroMetrics(ids:string[]){for(const batch of boundedPostgrestInBatches(ids)){const{error}=await getSupabaseAdmin().from('daily_metrics').update({clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0,raw:{tombstone:true}}).in('id',batch);throwIfError(error,'stale metric tombstone')}}
 
 async function markerGeneration(key:string){const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',key).maybeSingle();throwIfError(error,'snapshot marker read');return(data?.value as{generation?:string}|undefined)?.generation||null}
 async function pruneDaySnapshotRange(from:string,to:string,activeGenerations:ReadonlyMap<string,string>){
@@ -91,7 +87,7 @@ export function createSupabaseSyncStore():SyncStore{
     async replaceConversions(from,to,rows){const result=await getSupabaseAdmin().rpc('replace_conversion_window',{p_from:from,p_to:to,p_rows:rows});throwIfError(result.error,'atomic conversion window replacement');if(Number(result.data)!==rows.length)throw new Error('Supabase atomic conversion window replacement: row count mismatch')},
     async upsertMetrics(rows){if(rows.length)await upsertBatches('daily_metrics',rows)},
     async replaceMetrics(from,to,rows){
-      const release=await acquireMetricReplaceLock();try{const [canonical,existing]=[canonicalMetricRows(rows),await existingMetricIds(from,to)];if(canonical.length)await upsertBatches('daily_metrics',canonical);const stale=staleMetricIds(existing,canonical);if(stale.length)await zeroMetrics(stale);await upsertSourceSnapshots(from,to,rows)}finally{await release()}
+      const release=await acquireMetricReplaceLock();try{const canonical=canonicalMetricRows(rows),result=await getSupabaseAdmin().rpc('replace_metric_window',{p_from:from,p_to:to,p_rows:canonical});throwIfError(result.error,'atomic metric window replacement');if(Number(result.data)!==canonical.length)throw new Error('Supabase atomic metric window replacement: row count mismatch');await upsertSourceSnapshots(from,to,rows)}finally{await release()}
     },
     async setState(state){
       const {error}=await getSupabaseAdmin().from('sync_state').upsert({key:'everflow_history',value:state},{onConflict:'key'});
