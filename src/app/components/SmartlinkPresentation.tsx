@@ -3,7 +3,7 @@
 import {useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
 import {nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,type AnalysisTab,type SmartlinkSort} from '../../lib/smartlink-presentation';
 import {rankSourceMatches} from '../../lib/source-search';
-import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown} from '../../lib/smartlink';
+import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown,SmartlinkSourceCoverage} from '../../lib/smartlink';
 import {leadActivityStatus} from '../../lib/source-breakdown';
 import CopyValue from '../affiliates/CopyValue';
 import SourcePairCopy from '../affiliates/SourcePairCopy';
@@ -41,13 +41,14 @@ type SourceSort='loss'|'sois'|'coinSpend'|'profit';
 const share=(value:number,total:number)=>total?`${(100*value/total).toFixed(1).replace('.',',')} %`:'n/a';
 const technicalSourceValue=(technical:string|null|undefined,display:string)=>technical===undefined?(display&&display!=='Nicht übermittelt'?display:null):technical;
 const sourceDimensionLabels=(row:SmartlinkSourceBreakdown)=>({main:row.mode==='api'?'ADV1':'Source',sub:row.mode==='api'?'ADV2':'Sub1'});
+const shortDay=(day:string)=>day?new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(`${day}T12:00:00Z`)):'';
 function SourceActivity({row}:{row:SmartlinkSourceBreakdown}){const status=leadActivityStatus({lastLeadDate:row.lastLeadDate||null,asOf:row.activityAsOf||'',coverageComplete:Boolean(row.activityCoverageComplete),lookbackDays:row.activityLookbackDays||365}),date=row.lastLeadDate?row.lastLeadDate.split('-').reverse().join('.'):null;return <span className={`leadActivity ${status.tone}`} aria-label={`${status.label}. ${date?`Letzter Lead: ${date}. `:''}${status.detail}`}><b>{date||status.label}</b><small>{date?'Letzter Lead':status.detail}</small>{date&&<em>{status.detail}</em>}</span>}
 
 function SourceMetric({label,value,tone='neutral'}:{label:string;value:string;tone?:'positive'|'negative'|'neutral'}){return <span className={`lpSourceMetric ${tone}`}><small>{label}</small><b>{value}</b></span>}
 
 const sourceRowKey=(row:SmartlinkSourceBreakdown)=>`${row.mode}|${row.source}|${row.subSource}`;
 
-export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,onOpenChange,affiliateId='',affiliateName='Affiliate',offerId='',offerName='Offer',campaignId,canManage=false,embedded=false}:{rows:SmartlinkSourceBreakdown[];scope:string;totalSois:number;landingpageId:string;onOpenChange?:(open:boolean)=>void;affiliateId?:string;affiliateName?:string;offerId?:string;offerName?:string;campaignId?:string;canManage?:boolean;embedded?:boolean}){
+export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,coverage,onOpenChange,affiliateId='',affiliateName='Affiliate',offerId='',offerName='Offer',campaignId,canManage=false,embedded=false}:{rows:SmartlinkSourceBreakdown[];scope:string;totalSois:number;landingpageId:string;coverage?:SmartlinkSourceCoverage;onOpenChange?:(open:boolean)=>void;affiliateId?:string;affiliateName?:string;offerId?:string;offerName?:string;campaignId?:string;canManage?:boolean;embedded?:boolean}){
  const [sort,setSort]=useState<SourceSort>('loss');
  const [query,setQuery]=useState('');
  const [visibleCount,setVisibleCount]=useState(12);
@@ -59,12 +60,15 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,o
  const selected=visible.find(row=>sourceRowKey(row)===selectedKey)||visible[0];
  const sourceSois=rows.reduce((sum,row)=>sum+row.sois,0);
  const sourceFirstSales=rows.reduce((sum,row)=>sum+row.firstSales,0);
+ const sourceRebills=rows.reduce((sum,row)=>sum+row.rebills,0);
+ const sourceRevenue=rows.reduce((sum,row)=>sum+row.revenue,0);
  const sourceProfit=rows.reduce((sum,row)=>sum+row.profit,0);
- const reconciled=sourceSois===totalSois;
+ const reconciled=sourceSois===totalSois&&(!coverage||coverage.missingDays.length===0);
  const chooseSort=(next:SourceSort)=>{setSort(next);setVisibleCount(12)};
  const heading=<span><b>LP #{landingpageId} · Woher kommen die Leads?</b><small>{rows.length} Source-Kombination{rows.length===1?'':'en'} · {sourceSois} von {totalSois} SOIs nach Herkunft zugeordnet · {scope}</small></span>;
  const panel=<div className="lpSourcePanel">
-  <section className="lpSourceSummary" aria-label="Zusammenfassung Quellenanalyse"><span><b>{num(rows.length)}</b><small>Quellen</small></span><span><b>{num(sourceSois)}</b><small>SOIs</small></span><span><b>{num(sourceFirstSales)}</b><small>First-Sales</small></span><span className={sourceProfit>=0?'up':'down'}><b>{euro(sourceProfit)}</b><small>Profit</small></span></section>
+  {coverage&&<aside className={`lpSourceCoverage ${coverage.missingDays.length?'incomplete':'complete'}`}><b>Datenabdeckung Quellenanalyse: {coverage.acceptedDays} von {coverage.expectedDays} Tagen</b><span>{coverage.acceptedFrom&&coverage.acceptedTo?`${shortDay(coverage.acceptedFrom).slice(0,6)}–${shortDay(coverage.acceptedTo)}`:'Keine akzeptierten Snapshot-Tage'}</span>{coverage.missingDays.length>0&&<small>Fehlende Tage: {coverage.missingDays.map(shortDay).join(', ')}</small>}</aside>}
+  <section className="lpSourceSummary" aria-label="Zusammenfassung Quellenanalyse"><span><b>{num(rows.length)}</b><small>Quellen</small></span><span><b>{num(sourceSois)}</b><small>SOIs</small></span><span><b>{num(sourceFirstSales)}</b><small>First-Sales</small></span><span><b>{num(sourceRebills)}</b><small>Rebills</small></span><span><b>{euro(sourceRevenue)}</b><small>Umsatz</small></span><span className={sourceProfit>=0?'up':'down'}><b>{euro(sourceProfit)}</b><small>Profit</small></span></section>
   <div className="sourcePanelToolbar"><SourceSearchField value={query} onChange={setQuery} placeholder="Source, Sub1, ADV1 oder ADV2 suchen" scopeId={`landingpage-${instanceKey}`}/><div className="sourceSort" role="group" aria-label="Source-Kombinationen sortieren"><small>Sortieren nach</small>{([['loss','größtem Verlust'],['sois','SOIs'],['coinSpend','Coin-Spend'],['profit','Profit']] as const).map(([id,label])=><button type="button" key={id} className={sort===id?'active':''} aria-pressed={sort===id} onClick={()=>chooseSort(id)}>{label}</button>)}</div></div>
   {visible.length?<div className="lpSourceMasterDetail">
    <section className="lpSourceRanking" aria-label={`Lead-Herkunft für LP #${landingpageId}`}>
@@ -116,7 +120,7 @@ function LandingpageDetail({slot,recommendation,windows,affiliateId,affiliateNam
    <section className="lpEvidenceStrip"><header><b>LP #{slot.id} · Sales und Nachzahlungen</b><span>{windows.maturity}</span></header><div><KpiValue label="SOIs" value={num(slot.metrics14.sois)}/><KpiValue label="First-Sales" value={num(slot.metrics14.firstSales)}/><KpiValue label="Anteil SOI → First-Sale" value={slot.metrics14.sois?pct(slot.metrics14.firstSaleRate):'n/a'} detail={`${num(slot.metrics14.firstSales)} First-Sales aus ${num(slot.metrics14.sois)} SOIs`}/><KpiValue label="Rebills" value={num(slot.metrics14.rebills)} detail="Nachzahlungen bestehender Kunden"/><KpiValue label="Coin-Spend-Events" value={num(slot.metrics14.coinSpend)} detail="Eventanzahl, keine eindeutigen Kunden"/></div></section>
    <section className="lpEconomics"><header><b>LP #{slot.id} · Kosten, Umsatz und Prognose</b><span>Umsatz – SOI-Vergütung = Profit</span></header><div><KpiValue label="Profit je Klick" value={euro(slot.metrics14.profitEpc)} size="s" tone={slot.metrics14.profitEpc>=0?'positive':'negative'}/><KpiValue label={`Umsatz · ${windows.economics}`} value={euro(slot.metrics72.revenue)} size="s"/><KpiValue label={`Payout · ${windows.economics}`} value={euro(slot.metrics72.payout)} size="s"/><KpiValue label="Geschätzte Zeit bis 50 SOIs" value={slot.hoursTo50Sois===null?'Noch keine Prognose':`${slot.hoursTo50Sois} Std.`} size="s"/></div></section>
   </section>
-  <section className="lpDetailTabPanel" role="tabpanel" id={sourcesPanelId} aria-labelledby={sourcesTabId} hidden={mode!=='sources'}><LandingpageSourceBreakdown embedded rows={slot.sourceBreakdown||[]} scope={windows.source||windows.maturity} totalSois={slot.metrics14.sois} landingpageId={slot.id} affiliateId={affiliateId} affiliateName={affiliateName} offerId={slot.offerId} offerName={`Offer #${slot.offerId}`} campaignId={campaignId} canManage={canManage}/></section>
+  <section className="lpDetailTabPanel" role="tabpanel" id={sourcesPanelId} aria-labelledby={sourcesTabId} hidden={mode!=='sources'}><LandingpageSourceBreakdown embedded rows={slot.sourceBreakdown||[]} coverage={slot.sourceCoverage} scope={windows.source||windows.maturity} totalSois={slot.metrics14.sois} landingpageId={slot.id} affiliateId={affiliateId} affiliateName={affiliateName} offerId={slot.offerId} offerName={`Offer #${slot.offerId}`} campaignId={campaignId} canManage={canManage}/></section>
  </article>;
 }
 

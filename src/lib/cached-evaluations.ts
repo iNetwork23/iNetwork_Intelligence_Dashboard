@@ -4,7 +4,7 @@ import type {ReportRow} from './portfolio';
 import type {ConversionRow} from './everflow';
 import {berlinDateRange} from './dashboard';
 import {getSupabaseAdmin} from './supabase';
-import{availableSourceSnapshotDays,decodeSourceSnapshotRow,mapAffiliateSourceRows,type SourceSnapshotRow}from'./affiliate-source-cache';
+import{availableSourceSnapshotDays,decodeSourceSnapshotRow,mapAffiliateSourceRows,resolveSourceSnapshotCoverage,type SourceSnapshotCoverage,type SourceSnapshotGeneration,type SourceSnapshotRow}from'./affiliate-source-cache';
 import{resolveSnapshotFreshness,type SnapshotFreshness}from'./snapshot-generation';
 
 export{mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
@@ -30,7 +30,10 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
   return snapshotRows;
 }
 
-export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const prefix='source_day_generation:',{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`${prefix}${range.from}`).lte('key',`${prefix}${range.to}`).order('key');if(error)throw new Error(`Supabase source freshness: ${error.message}`);return resolveSnapshotFreshness(range.from,range.to,(data||[]).map(item=>{const value=item.value as{date?:string;generation?:string};return{date:value.date||'',generation:value.generation||''}}))}
+const sourceMarkers=(data:Array<{value:unknown}>):SourceSnapshotGeneration[]=>(data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}});
+async function loadSourceMarkers(range:{from:string;to:string}){const prefix='source_day_generation:',{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`${prefix}${range.from}`).lte('key',`${prefix}${range.to}`).order('key');if(error)throw new Error(`Supabase source freshness: ${error.message}`);return sourceMarkers(data||[])}
+export async function loadSourceSnapshotCoverage(range:{from:string;to:string}):Promise<SourceSnapshotCoverage>{return resolveSourceSnapshotCoverage(range,await loadSourceMarkers(range),{minimumVersion:4})}
+export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const accepted=availableSourceSnapshotDays(range,await loadSourceMarkers(range),{minimumVersion:4});return resolveSnapshotFreshness(range.from,range.to,accepted.map(marker=>({date:marker.date,generation:marker.generation})))}
 
 export async function loadAffiliateConversionsFromCache(affiliateId:string,lookbackDays=90,now=new Date()):Promise<Array<ConversionRow&{stableCustomerId?:string}>>{
   const from=new Date(now.getTime()-(lookbackDays-1)*86_400_000).toISOString();

@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{availableSourceSnapshotDays,decodeSourceSnapshotRow,encodeSourceSnapshotRow,mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
+import{availableSourceSnapshotDays,decodeSourceSnapshotRow,encodeSourceSnapshotRow,mapAffiliateSourceRows,resolveSourceSnapshotCoverage,type DailySourceRow}from'./affiliate-source-cache';
 
 const base:DailySourceRow={affiliate_id:'154',affiliate_name:'API Partner',offer_id:'20',offer_name:'XLOVES API',campaign_id:'0',campaign_name:'Direct',offer_url_id:'0',offer_url_name:'API',source_id:'N/A',sub_source:'N/A',clicks:0,sois:4,first_sales:1,rebills:2,coin_spend:3,payout:12,revenue:30,profit:18,raw:{traffic_mode:'api',adv1:'N/A',adv2:'placement-1'}};
 
@@ -62,6 +62,14 @@ describe('Supabase API source mapping',()=>{
   });
   it('keeps legacy v2 snapshots readable only for consumers that explicitly permit them',()=>{
     expect(availableSourceSnapshotDays({from:'2026-07-26',to:'2026-07-27'},[{version:2,date:'2026-07-26',generation:'legacy'},{version:3,date:'2026-07-27',generation:'current'}])).toHaveLength(2);
+  });
+  it('reports the exact accepted source period and every day rejected by the current snapshot contract',()=>{
+    const coverage=resolveSourceSnapshotCoverage({from:'2026-07-31',to:'2026-08-06'},[
+      {version:2,date:'2026-07-31',generation:'legacy-1'},
+      {version:2,date:'2026-08-01',generation:'legacy-2'},
+      ...['02','03','04','05','06'].map(day=>({version:4,date:`2026-08-${day}`,generation:`v4-${day}`})),
+    ],{minimumVersion:4});
+    expect(coverage).toEqual({from:'2026-07-31',to:'2026-08-06',acceptedFrom:'2026-08-02',acceptedTo:'2026-08-06',acceptedDays:5,expectedDays:7,missingDays:['2026-07-31','2026-08-01']});
   });
   it('round-trips compact source snapshots without duplicating canonical cache fields',()=>{
     const metric={...base,clicks:Number(base.clicks),sois:Number(base.sois),first_sales:Number(base.first_sales),rebills:Number(base.rebills),coin_spend:Number(base.coin_spend),payout:Number(base.payout),revenue:Number(base.revenue),profit:Number(base.profit),id:'metric-id',metric_date:'2026-07-23',raw:{...base.raw,sub1:'parent',sub2:'child',sub3:'leaf',sub4:'',sub5:'',canonical_id:'legacy-id'}},encoded=encodeSourceSnapshotRow(metric),decoded=decodeSourceSnapshotRow(encoded,base.affiliate_id,base.affiliate_name);
