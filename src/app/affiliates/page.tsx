@@ -388,7 +388,7 @@ export default async function AffiliateOptimizerPage({
     rebillEvents: RebillEvent[] = [],
     campaignOptions: CampaignOption[] = [],
     campaignDirectoryError = "";
-  if (mode === "smartlinks") {
+  if (mode === "smartlinks" && !selectedCampaignId) {
     try {
       campaignOptions = buildCampaignOptions(await getCampaignDirectory(user.access), associationMappings);
     } catch (cause) {
@@ -534,7 +534,6 @@ export default async function AffiliateOptimizerPage({
         firstSaleCustomerIds: firstSaleCustomerIdsFromIndex(sourceRebillIndex,{trafficMode:row.trafficMode==='api'?'clickless_api':'tracked_direct',campaignId:'0',offerId:row.offerId,offerUrlId:row.offerUrlId,sourceId:row.mainValue||'',subSource:row.subValue||''}),
       }),
     ])),
-    selectedSmartlink = smartlinkInsights.find((item) => item.identity.campaignId === selectedCampaignId),
     smartlinkDirectoryHref = legacySmartlinkRedirectHref({affiliateId:selectedWorkspace?.affiliateId,query:{...query,campaign:undefined,open:undefined,refresh:undefined,ts:undefined}}),
     smartlinkWorkspaceHref = legacySmartlinkRedirectHref({campaignId:selectedCampaignId,affiliateId:selectedWorkspace?.affiliateId,query:{...query,refresh:undefined,ts:undefined}}),
     smartlinkRebillAnalyses: Record<number, RebillConcentration> =
@@ -602,41 +601,41 @@ export default async function AffiliateOptimizerPage({
         <AffiliatePeriodControls period={period} />
       </section>
       {mode === "smartlinks" && (
-        <>
-          <CampaignPicker
-            campaigns={campaignOptions}
-            currentId={selectedCampaignId}
-            affiliateId={selectedWorkspace?.affiliateId}
-            returnTo={smartlinkDirectoryHref}
-            initialQuery={query.q}
-            initialPartner={query.partner || selectedWorkspace?.affiliateId}
-            initialOpen={query.open || query.campaign}
-            associationError={campaignDirectoryError}
-          />
-          <SmartlinkWatchlist
-            current={selectedSmartlink ? {id:selectedSmartlink.identity.campaignId,name:selectedSmartlink.identity.name,affiliateId:selectedWorkspace?.affiliateId} : undefined}
-            affiliateId={selectedWorkspace?.affiliateId}
-            baseHref={smartlinkWorkspaceHref}
-          />
-          {historicalPeriodMappings.length > 0 && (
-            <details className="smartEmpty historicalMappings">
-              <summary>HISTORISCHE ZUORDNUNGEN IM GEWÄHLTEN ZEITRAUM · {historicalPeriodMappings.length}</summary>
-              <p>Diese Affiliate-/Campaign-Paare hatten im gewählten Zeitraum Kennzahlen, gehören aber nicht zur aktuellen 30-Tage-Zuordnung. Sie werden nicht als aktuelle Zuordnung oder zulässiger Affiliate-Deep-Link verwendet.</p>
-              {historicalPeriodMappings.map(item => (
-                <article key={`${item.affiliateId}-${item.campaignId}`}>
-                  <span>Campaign #{item.campaignId} · historische Affiliate-ID #{item.affiliateId}</span>
-                  <strong>{item.campaign} · {eur(item.profit30)} Profit in {period.label}</strong>
-                  <InstantLink href={contextlessSmartlinkFavoriteHref({campaignId:item.campaignId,currentHref:smartlinkDirectoryHref})}>Campaign über sichere Zuordnung öffnen</InstantLink>
-                </article>
-              ))}
-            </details>
-          )}
-          {selectedCampaignId && selectedWorkspace && (
-            <div className="pickerRefresh">
-              <InstantLink className="refreshBtn" href={affiliateCampaignRefreshHref({campaignId:selectedCampaignId,affiliateId:selectedWorkspace.affiliateId,currentHref:smartlinkWorkspaceHref,timestamp:Date.now()})}>Daten jetzt aktualisieren</InstantLink>
-            </div>
-          )}
-        </>
+        !selectedCampaignId ? (
+          <>
+            <CampaignPicker
+              campaigns={campaignOptions}
+              affiliateId={selectedWorkspace?.affiliateId}
+              returnTo={smartlinkDirectoryHref}
+              initialQuery={query.q}
+              initialPartner={query.partner || selectedWorkspace?.affiliateId}
+              initialOpen={query.open || query.campaign}
+              associationError={campaignDirectoryError}
+            />
+            <SmartlinkWatchlist
+              affiliateId={selectedWorkspace?.affiliateId}
+              baseHref={smartlinkDirectoryHref}
+            />
+            {historicalPeriodMappings.length > 0 && (
+              <details className="smartEmpty historicalMappings">
+                <summary>HISTORISCHE ZUORDNUNGEN IM GEWÄHLTEN ZEITRAUM · {historicalPeriodMappings.length}</summary>
+                <p>Diese Affiliate-/Campaign-Paare hatten im gewählten Zeitraum Kennzahlen, gehören aber nicht zur aktuellen 30-Tage-Zuordnung. Sie werden nicht als aktuelle Zuordnung oder zulässiger Affiliate-Deep-Link verwendet.</p>
+                {historicalPeriodMappings.map(item => (
+                  <article key={`${item.affiliateId}-${item.campaignId}`}>
+                    <span>Campaign #{item.campaignId} · historische Affiliate-ID #{item.affiliateId}</span>
+                    <strong>{item.campaign} · {eur(item.profit30)} Profit in {period.label}</strong>
+                    <InstantLink href={contextlessSmartlinkFavoriteHref({campaignId:item.campaignId,currentHref:smartlinkDirectoryHref})}>Campaign über sichere Zuordnung öffnen</InstantLink>
+                  </article>
+                ))}
+              </details>
+            )}
+          </>
+        ) : selectedWorkspace && (
+          <div className="pickerRefresh">
+            <InstantLink className="refreshBtn" href={smartlinkDirectoryHref}>← Anderen Smartlink auswählen</InstantLink>
+            <InstantLink className="refreshBtn" href={affiliateCampaignRefreshHref({campaignId:selectedCampaignId,affiliateId:selectedWorkspace.affiliateId,currentHref:smartlinkWorkspaceHref,timestamp:Date.now()})}>Daten jetzt aktualisieren</InstantLink>
+          </div>
+        )
       )}
       {(sourceError||(sourceFreshness&&!sourceFreshness.complete)) && (
         <SourceCacheNotice period={sourcePeriod.label} freshness={sourceFreshness} blocked={sourceError}/>
