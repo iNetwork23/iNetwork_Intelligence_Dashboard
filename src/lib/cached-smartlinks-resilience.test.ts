@@ -8,6 +8,8 @@ describe('affiliate smartlink enrichment resilience',()=>{
   expect(source).toContain('Promise.allSettled([loadAffiliateSourceRowsRangeFromCache');
   expect(source).toContain('loadSourceSnapshotCoverage(sourceRange)');
   expect(source).toContain('sourceCoverage:effectiveSourceCoverage');
+  expect(source).toContain("from('conversions').select('type,converted_at,offer_url_id,campaign_id,revenue,payout,status,is_scrub')");
+  expect(source).toContain('revenueOrigins:buildSelectedRevenueOrigins');
   expect(source).toContain("console.warn('Affiliate smartlink source enrichment unavailable'");
   expect(source).toContain("console.warn('Affiliate smartlink activity enrichment unavailable'");
   expect(source).toContain('resolveSnapshotFreshness(activityRange.from,activityRange.to,[])');
