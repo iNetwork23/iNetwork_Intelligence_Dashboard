@@ -9,6 +9,7 @@ import CopyValue from '../affiliates/CopyValue';
 import SourcePairCopy from '../affiliates/SourcePairCopy';
 import SourceBlockButton from '../affiliates/SourceBlockButton';
 import SourceSearchField from './SourceSearchField';
+import{buildCampaignSourceRows,type CampaignSourceRow}from'../../lib/smartlink-source-workspace';
 
 const euro=(n:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n);
 const num=(n:number)=>new Intl.NumberFormat('de-DE').format(n);
@@ -95,15 +96,17 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,c
  return <details className="lpSourceBreakdown" onToggle={event=>onOpenChange?.(event.currentTarget.open)}><summary>{heading}<strong className={reconciled?'up':'down'}>{reconciled?'Vollständig zugeordnet':'Abweichung prüfen'}</strong><i aria-hidden="true">›</i></summary>{panel}</details>;
 }
 
-function LandingpageOverviewCard({slot,recommendation,selected,detailId,onSelect}:{slot:SmartSlot;recommendation?:SlotRecommendation;selected:boolean;detailId:string;onSelect:()=>void}){
+function LandingpageOverviewCard({slot,recommendation,selected,detailId,onSelect,windows}:{slot:SmartSlot;recommendation?:SlotRecommendation;selected:boolean;detailId:string;onSelect:()=>void;windows:Windows}){
+ const sources=[...(slot.sourceBreakdown||[])].sort((a,b)=>b.profit-a.profit||b.firstSales-a.firstSales||b.sois-a.sois),sourceSois=sources.reduce((sum,row)=>sum+row.sois,0),coverage=slot.sourceCoverage,sourceComparisonComplete=Boolean(coverage&&coverage.missingDays.length===0&&coverage.acceptedDays===coverage.expectedDays&&sourceSois===slot.metrics14.sois),strongest=sourceComparisonComplete?sources[0]:undefined,weakest=sourceComparisonComplete&&sources.length>1?sources.at(-1):undefined,sourceLabel=(row:SmartlinkSourceBreakdown)=>`${row.source||'Nicht übermittelt'}${row.subSource&&row.subSource!=='Nicht übermittelt'?` / ${row.subSource}`:''}`;
  return <article className={`lpOverviewCard ${recommendation?.severity||'neutral'}${selected?' selected':''}`}>
   <header><div><span>LP #{slot.id} · Offer #{slot.offerId}</span><h3>{slot.name}</h3><small>{slot.weight} % Gewicht · {slot.status}</small></div><StatusBadge recommendation={recommendation}/></header>
   <div className="lpOverviewGrid">
-   <KpiValue label="Profit" value={euro(slot.metrics14.profit)} size="s" tone={slot.metrics14.profit>=0?'positive':'negative'}/>
-   <KpiValue label="CVR" value={pct(slot.metrics24.cvr)} size="s" tone={slot.metrics24.cvr>=1?'positive':slot.metrics24.clicks?'negative':'neutral'}/>
-   <KpiValue label="SOIs" value={num(slot.metrics14.sois)} size="s"/>
-   <KpiValue label="First-Sale-Rate" value={pct(slot.metrics14.firstSaleRate)} size="s"/>
+   <KpiValue label="Profit" value={euro(slot.metrics14.profit)} scope={windows.maturity} size="s" tone={slot.metrics14.profit>=0?'positive':'negative'}/>
+   <KpiValue label="CVR" value={pct(slot.metrics24.cvr)} scope={windows.traffic} size="s" tone={slot.metrics24.cvr>=1?'positive':slot.metrics24.clicks?'negative':'neutral'}/>
+   <KpiValue label="SOIs" value={num(slot.metrics14.sois)} scope={windows.maturity} size="s"/>
+   <KpiValue label="First-Sale-Rate" value={slot.metrics14.sois?pct(slot.metrics14.firstSaleRate):'n/a'} scope={windows.maturity} size="s"/>
   </div>
+  <div className="lpOverviewSources"><header><b>{sources.length} Quellenkombination{sources.length===1?'':'en'}</b>{!sourceComparisonComplete&&sources.length?<em>Quellen unvollständig</em>:null}</header>{strongest?<div><span><small>Stärkste Quelle</small><b>{sourceLabel(strongest)}</b><em className={strongest.profit>=0?'up':'down'}>{euro(strongest.profit)}</em></span>{weakest&&<span><small>Schwächste Quelle</small><b>{sourceLabel(weakest)}</b><em className={weakest.profit>=0?'up':'down'}>{euro(weakest.profit)}</em></span>}</div>:<small>{sources.length?'Source-Vergleich erst nach vollständiger Abdeckung.':'Noch keine Source-Daten'}</small>}</div>
   <button type="button" className="lpOverviewSelect" aria-pressed={selected} aria-controls={detailId} onClick={onSelect}>{selected?'Details ausgewählt':'Details ansehen'}<span aria-hidden="true">→</span></button>
  </article>;
 }
@@ -124,16 +127,37 @@ function LandingpageDetail({slot,recommendation,windows,affiliateId,affiliateNam
  </article>;
 }
 
+function CampaignSourceWorkspace({rows,selectedKey,onSelect,scope}:{rows:CampaignSourceRow[];selectedKey:string;onSelect:(key:string)=>void;scope:string}){
+ const selected=rows.find(row=>row.key===selectedKey)||rows[0];
+ if(!selected)return <section className="campaignSourceWorkspace empty"><h3>Source × Landingpage</h3><p>Noch keine Source-Daten für die aktiven Landingpages.</p></section>;
+ return <section className="campaignSourceWorkspace"><header><div><span>CAMPAIGN-WEITER LP-VERGLEICH</span><h3>Source × Landingpage</h3><p>Zeigt, auf welcher Landingpage dieselbe Source-Kombination Gewinn oder Verlust erzeugt.</p></div><small>{scope}</small></header>
+  <div className="campaignSourceMasterDetail"><nav className="campaignSourceList" aria-label="Sources über Landingpages">{rows.map(row=><button type="button" key={row.key} className={`${row.fit}${row.key===selected.key?' selected':''}`} aria-pressed={row.key===selected.key} onClick={()=>onSelect(row.key)}><span><b>{row.source||'Nicht übermittelt'}</b><small>{row.subLabel} · {row.subSource||'Nicht übermittelt'} · {row.affectedLandingpages} Landingpage{row.affectedLandingpages===1?'':'s'}</small></span><span><b>{num(row.totals.sois)} SOIs</b><small>{num(row.totals.firstSales)} First-Sales · {num(row.totals.rebills)} Rebills</small></span><strong className={row.totals.profit>=0?'up':'down'}>{euro(row.totals.profit)}</strong></button>)}</nav>
+   <article className={`campaignSourceComparison ${selected.fit}`} aria-live="polite"><header><div><span>{selected.mainLabel} / {selected.subLabel}</span><h4>{selected.source||'Nicht übermittelt'} / {selected.subSource||'Nicht übermittelt'}</h4><small>{selected.affectedLandingpages} Landingpage{selected.affectedLandingpages===1?'':'s'} · {selected.observation}</small></div><strong className={selected.totals.profit>=0?'up':'down'}>{euro(selected.totals.profit)}<small>Profit gesamt</small></strong></header>
+    <div className="campaignSourceTotals"><span><small>SOIs</small><b>{num(selected.totals.sois)}</b></span><span><small>First-Sales</small><b>{num(selected.totals.firstSales)} · {selected.totals.firstSaleRate===null?'n/a':pct(selected.totals.firstSaleRate)}</b></span><span><small>Rebills</small><b>{num(selected.totals.rebills)}</b></span><span><small>Umsatz</small><b>{euro(selected.totals.revenue)}</b></span><span><small>Payout</small><b>{euro(selected.totals.payout)}</b></span><span><small>Profit</small><b className={selected.totals.profit>=0?'up':'down'}>{euro(selected.totals.profit)}</b></span></div>
+    <div className="sourceLandingpageCells">{[...selected.cells].sort((a,b)=>(b.metrics?.profit??Number.NEGATIVE_INFINITY)-(a.metrics?.profit??Number.NEGATIVE_INFINITY)).map(cell=><section className={cell.state} key={cell.landingpageId}><header><div><span>LP #{cell.landingpageId} · Offer #{cell.offerId}</span><b>{cell.landingpageName}</b><small>{cell.weight} % Gewicht · {cell.status}</small></div>{cell.metrics?<strong className={cell.metrics.profit>=0?'up':'down'}>{euro(cell.metrics.profit)}</strong>:<strong>Unbekannt</strong>}</header>{cell.metrics?<div><span><small>SOIs</small><b>{num(cell.metrics.sois)}</b></span><span><small>First-Sales</small><b>{num(cell.metrics.firstSales)} · {cell.metrics.firstSaleRate===null?'n/a':pct(cell.metrics.firstSaleRate)}</b></span><span><small>Rebills</small><b>{num(cell.metrics.rebills)}</b></span><span><small>Umsatz</small><b>{euro(cell.metrics.revenue)}</b></span><span><small>Payout</small><b>{euro(cell.metrics.payout)}</b></span><span><small>Profit</small><b className={cell.metrics.profit>=0?'up':'down'}>{euro(cell.metrics.profit)}</b></span></div>:<p>Source-Zelle unbekannt · Snapshot-Abdeckung dieser LP ist unvollständig oder nicht abgestimmt.</p>}</section>)}</div>
+    <p className="campaignSourceRoutingNote"><b>Beobachtung · keine automatische Traffic-Steuerung.</b> Die Ansicht vergleicht Fakten und erzeugt keine Source-Routingentscheidung. Ausschalten sperrt weiterhin Vergütung und Partner-Postback affiliate- und offerweit; eingehenden Traffic steuert der Partner.</p>
+   </article>
+  </div>
+ </section>;
+}
+
 export function SmartlinkRotationCards({slots,recommendations,rotationLabel,windows=defaultWindows,affiliateId,affiliateName,campaignId,canManage=false}:{slots:SmartSlot[];recommendations:SlotRecommendation[];rotationLabel:string;windows?:Windows;affiliateId?:string;affiliateName?:string;campaignId?:string;canManage?:boolean}){
  const [sort,setSort]=useState<SmartlinkSort>('rotation');
+ const [workspace,setWorkspace]=useState<'landingpages'|'sources'>('landingpages');
  const [selectedId,setSelectedId]=useState(slots[0]?.id||'');
  const sorted=useMemo(()=>sortSmartlinkSlots(slots,sort),[slots,sort]);
  const byId=useMemo(()=>new Map(recommendations.map(x=>[x.slotId,x])),[recommendations]);
+ const sourceRows=useMemo(()=>buildCampaignSourceRows(slots),[slots]);
+ const [selectedSourceKey,setSelectedSourceKey]=useState(sourceRows[0]?.key||'');
  const selectedSlot=slots.find(slot=>slot.id===selectedId)||sorted[0];
  const select=(id:string)=>{setSelectedId(id);if(typeof document!=='undefined')requestAnimationFrame(()=>document.getElementById(`lp-detail-${smartlinkInstanceKey(campaignId,id)}`)?.scrollIntoView({behavior:'smooth',block:'start'}))};
  return <section className="sharedRotation">
-  <div className="rotationToolbar"><div><span>AKTUELLE ROTATION</span><b>{slots.length} aktive Landingpages</b><small>{rotationLabel}</small></div>{slots.length>1&&<div className="rotationSort" role="group" aria-label="Landingpages sortieren"><small>Sortieren nach</small>{([['rotation','Rotation'],['profit','Profit'],['cvr','CVR'],['sois','SOIs']] as const).map(([id,label])=><button type="button" key={id} className={sort===id?'active':''} aria-pressed={sort===id} onClick={()=>setSort(id)}>{label}</button>)}</div>}</div>
-  <div className={`sharedLpGrid count-${slots.length}`}>{sorted.map(slot=><LandingpageOverviewCard key={slot.id} slot={slot} recommendation={byId.get(slot.id)} selected={slot.id===selectedSlot?.id} detailId={`lp-detail-${smartlinkInstanceKey(campaignId,slot.id)}`} onSelect={()=>select(slot.id)}/>)}</div>
-  {selectedSlot&&<LandingpageDetail key={smartlinkInstanceKey(campaignId,selectedSlot.id)} slot={selectedSlot} recommendation={byId.get(selectedSlot.id)} windows={windows} affiliateId={affiliateId} affiliateName={affiliateName} campaignId={campaignId} canManage={canManage}/>}
+  <div className="campaignWorkspaceTabs" role="tablist" aria-label="Campaign-Analyse"><button type="button" role="tab" aria-selected={workspace==='landingpages'} aria-controls="campaign-workspace-landingpages" onClick={()=>setWorkspace('landingpages')}>Landingpages</button><button type="button" role="tab" aria-selected={workspace==='sources'} aria-controls="campaign-workspace-sources" onClick={()=>setWorkspace('sources')}>Sources über Landingpages <small>{sourceRows.length}</small></button></div>
+  <div id="campaign-workspace-landingpages" role="tabpanel" hidden={workspace!=='landingpages'}>
+   <div className="rotationToolbar"><div><span>AKTUELLE ROTATION</span><b>{slots.length} aktive Landingpages</b><small>{rotationLabel}</small></div>{slots.length>1&&<div className="rotationSort" role="group" aria-label="Landingpages sortieren"><small>Sortieren nach</small>{([['rotation','Rotation'],['profit','Profit'],['cvr','CVR'],['sois','SOIs']] as const).map(([id,label])=><button type="button" key={id} className={sort===id?'active':''} aria-pressed={sort===id} onClick={()=>setSort(id)}>{label}</button>)}</div>}</div>
+   <div className={`sharedLpGrid count-${slots.length}`}>{sorted.map(slot=><LandingpageOverviewCard key={slot.id} slot={slot} recommendation={byId.get(slot.id)} selected={slot.id===selectedSlot?.id} detailId={`lp-detail-${smartlinkInstanceKey(campaignId,slot.id)}`} onSelect={()=>select(slot.id)} windows={windows}/>)}</div>
+   {selectedSlot&&<LandingpageDetail key={smartlinkInstanceKey(campaignId,selectedSlot.id)} slot={selectedSlot} recommendation={byId.get(selectedSlot.id)} windows={windows} affiliateId={affiliateId} affiliateName={affiliateName} campaignId={campaignId} canManage={canManage}/>}
+  </div>
+  <div id="campaign-workspace-sources" role="tabpanel" hidden={workspace!=='sources'}><CampaignSourceWorkspace rows={sourceRows} selectedKey={selectedSourceKey} onSelect={setSelectedSourceKey} scope={windows.source||windows.maturity}/></div>
  </section>;
 }

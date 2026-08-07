@@ -709,13 +709,13 @@ export default async function AffiliateOptimizerPage({
               <small>{selectedWorkspace.campaigns.length} Campaigns</small>
             </InstantLink>
           </nav>
-          <AffiliateSmartlinkOverview
+          {!selectedCampaignId&&<AffiliateSmartlinkOverview
             affiliateId={selectedWorkspace.affiliateId}
             mappings={selectedWorkspace.campaigns}
             insights={smartlinkInsights}
             rangeLabel={period.label}
             returnTo={smartlinkCurrentHref}
-          />
+          />}
           {selectedCampaignId && (
             smartlinkDetailsError ? (
               <section className="sourceCacheError" role="alert">
