@@ -100,6 +100,11 @@ describe('daily metric mapping',()=>{
     const [row]=metricRows([baseReport],[],conversions);
     expect(row).toMatchObject({clicks:100,sois:1,first_sales:1,rebills:1,payout:5,revenue:12,profit:7,source_id:'src',sub_source:'leaf',raw:{sub_source_dimension:'sub3'}});
   });
+  it('keeps a real Smartlink campaign on Source ID when Everflow also populates incidental ADV fields',()=>{
+    const tracked:EverflowConversion={conversion_id:'sale-169',transaction_id:'sale-169',conversion_unix_timestamp:1784743200,is_event:true,event:'Sale',status:'approved',payout:0,revenue:16.66,source_id:'amcch-adn',sub4:'385985403',adv2:'1356913',relationship:{affiliate:{network_affiliate_id:32,name:'WLX'},offer:{network_offer_id:57,name:'Singles69'},offer_url:{network_offer_url_id:2751,name:'LP'},campaign:{network_campaign_id:169,name:'WLX Smartlink'}}};
+    expect(conversionToCacheRow(tracked)).toMatchObject({traffic_mode:'tracked_smartlink',source_id:'amcch-adn',sub_source:'385985403'});
+    expect(metricRows([],[],[tracked])[0]).toMatchObject({first_sales:1,revenue:16.66,source_id:'amcch-adn',sub_source:'385985403',raw:{traffic_mode:'tracked'}});
+  });
   it('preserves clickless API ADV1 and ADV2 as one event-only raw-conversion fact',()=>{
     const api:EverflowConversion={conversion_id:'api-soi',transaction_id:'api-lead',conversion_unix_timestamp:1784743200,is_event:false,event:'SOI',payout:3,revenue:0,adv1:'publisher-a',adv2:'placement-b',relationship:{affiliate:{network_affiliate_id:30,name:'API Partner'},offer:{network_offer_id:20,name:'API Offer'}}};
     const [row]=metricRows([],[],[api,{...api,conversion_id:'api-sale',transaction_id:'api-sale',is_event:true,event:'Sale',payout:2,revenue:10}]);

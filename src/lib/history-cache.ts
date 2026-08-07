@@ -76,8 +76,8 @@ export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|
   const normalized=row.event.trim().toLowerCase();
   const type=(!row.is_event&&(normalized==='soi'||normalized==='cpl soi'))?'soi':row.is_event&&normalized==='coin spend'?'coin_spend':row.is_event&&normalized==='sale'?'first_sale':row.is_event&&normalized==='rebill'?'rebill':null;
   if(!type)return null;
-  const relationship=row.relationship||{};
-  const traffic_mode=classifyTrafficPath({campaignId:text(relationship.campaign?.network_campaign_id),clicks:row.click_unix_timestamp?1:0,offerName:relationship.offer?.name,offerUrlId:text(relationship.offer_url?.network_offer_url_id),sourceId:row.source_id,adv1:row.adv1,adv2:row.adv2});
+  const relationship=row.relationship||{},campaignId=text(relationship.campaign?.network_campaign_id);
+  const traffic_mode=campaignId&&campaignId!=='0'?'tracked_smartlink':classifyTrafficPath({campaignId,clicks:row.click_unix_timestamp?1:0,offerName:relationship.offer?.name,offerUrlId:text(relationship.offer_url?.network_offer_url_id),sourceId:row.source_id,adv1:row.adv1,adv2:row.adv2});
   const source=normalizeFraudSource({trafficMode:traffic_mode,sourceId:row.source_id,sub1:row.sub1,sub2:row.sub2,sub3:row.sub3,sub4:row.sub4,sub5:row.sub5,adv1:row.adv1,adv2:row.adv2});
   const fallback=[row.transaction_id,type,row.event,row.conversion_unix_timestamp].map(encodeURIComponent).join(':');
   const eventIdentity=text(row.conversion_id)||fallback,apiCustomerIdentity=traffic_mode==='clickless_api'?(row.adv4?.trim().toLowerCase()||row.email?.trim().toLowerCase()||''):'',unjoinable=`unjoinable-sha256:${createHash('sha256').update(`${type}\u0000${eventIdentity}`).digest('hex')}`,customerId=traffic_mode==='clickless_api'?(apiCustomerIdentity?`api-customer-sha256:${createHash('sha256').update(apiCustomerIdentity).digest('hex')}`:unjoinable):traffic_mode==='unknown'?unjoinable:(row.transaction_id?.trim()||unjoinable),rawTrafficMode=traffic_mode==='clickless_api'?'api':traffic_mode==='unknown'?'unknown':'tracked';
@@ -95,7 +95,7 @@ const dim=(row:ReportRow,type:string)=>row.columns.find(column=>column.column_ty
 const metricDimensions=['date','affiliate','offer','campaign','offer_url','source_id','sub1','sub2','sub3','sub4','sub5','adv1','adv2'];
 const legacyMetricDimensions=['date','affiliate','offer','campaign','offer_url','source_id','sub1'];
 const metricDimensionId=(row:ReportRow,type:string)=>{const value=String(dim(row,type).id||'').trim();return!value||value.toUpperCase()==='N/A'?'' : value};
-const reportTrafficMode=(row:ReportRow)=>classifyTrafficPath({campaignId:metricDimensionId(row,'campaign'),clicks:amount(row.reporting.total_click),offerName:dim(row,'offer').label,offerUrlId:metricDimensionId(row,'offer_url'),sourceId:metricDimensionId(row,'source_id'),adv1:metricDimensionId(row,'adv1'),adv2:metricDimensionId(row,'adv2')});
+const reportTrafficMode=(row:ReportRow)=>{const campaignId=metricDimensionId(row,'campaign');return campaignId&&campaignId!=='0'?'tracked_smartlink':classifyTrafficPath({campaignId,clicks:amount(row.reporting.total_click),offerName:dim(row,'offer').label,offerUrlId:metricDimensionId(row,'offer_url'),sourceId:metricDimensionId(row,'source_id'),adv1:metricDimensionId(row,'adv1'),adv2:metricDimensionId(row,'adv2')})};
 const reportSource=(row:ReportRow)=>normalizeFraudSource({trafficMode:reportTrafficMode(row),sourceId:metricDimensionId(row,'source_id'),sub1:metricDimensionId(row,'sub1'),sub2:metricDimensionId(row,'sub2'),sub3:metricDimensionId(row,'sub3'),sub4:metricDimensionId(row,'sub4'),sub5:metricDimensionId(row,'sub5'),adv1:metricDimensionId(row,'adv1'),adv2:metricDimensionId(row,'adv2')});
 const dayFromDimension=(row:ReportRow)=>new Date(Number(dim(row,'date').id)*1000).toISOString().slice(0,10);
 const stableDimensionId=(row:ReportRow,type:string)=>type==='date'?dayFromDimension(row):metricDimensionId(row,type);
