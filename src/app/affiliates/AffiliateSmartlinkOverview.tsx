@@ -27,7 +27,7 @@ export default function AffiliateSmartlinkOverview({affiliateId,mappings,insight
   const decisions=sortCampaignDecisions(mappings.map(mapping=>buildAffiliateCampaignDecision(mapping,byId.get(mapping.campaignId))));
   const campaigns=decisions.map(decision=>({...decision,attention:campaignAttention(decision.insight)}));
   const totals=mappings.reduce((sum,item)=>({revenue:sum.revenue+item.revenue30,payout:sum.payout+item.payout30,profit:sum.profit+item.profit30,sois:sum.sois+item.sois30}),{revenue:0,payout:0,profit:0,sois:0});
-  const firstSales=decisions.every(item=>item.firstSales===null)?null:decisions.reduce((sum,item)=>sum+(item.firstSales||0),0);
+  const firstSales=decisions.some(item=>item.firstSales===null||item.status==='daten_unvollständig')?null:decisions.reduce((sum,item)=>sum+(item.firstSales||0),0);
   const critical=campaigns.filter(item=>item.action==='stoppen'||item.attention.severity==='critical').length;
   const review=campaigns.filter(item=>item.action==='prüfen'||item.action==='stoppen'||item.attention.severity==='critical'||item.attention.severity==='warning').length;
   const status=critical?`${critical} dringend prüfen`:review?`${review} Campaign${review===1?'':'s'} mit Prüfhinweis`:'Keine Campaign mit Prüfhinweis';

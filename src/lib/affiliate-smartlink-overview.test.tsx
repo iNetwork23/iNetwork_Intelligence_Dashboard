@@ -42,6 +42,13 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
     expect(html).not.toContain('Auto-Rotation freigeben');
   });
 
+  it('does not publish a partial First-Sales portfolio total when one Campaign lacks complete details',()=>{
+    const missing={...mapping,campaignId:136,campaign:'Ohne Details',profit30:10,revenue30:20,payout30:10};
+    const html=renderToStaticMarkup(<AffiliateSmartlinkOverview affiliateId="436" mappings={[mapping,missing]} insights={[insight]} rangeLabel="30 Tage" returnTo="/affiliates?affiliate=436&mode=smartlinks&period=30d"/>).replaceAll('\u00a0',' ');
+    expect(html).toContain('<small>First-Sales</small><b>–</b>');
+    expect(html).toContain('Daten unvollständig');
+  });
+
   it('erklärt Campaign-Umsatz ohne First-Sales und warnt bei unmonetarisierter aktueller Rotation',()=>{
     const empty={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0};
     const campaign23={...insight,
