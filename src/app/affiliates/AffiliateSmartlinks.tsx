@@ -57,6 +57,7 @@ export default function AffiliateSmartlinks({affiliateId,returnTo,mappings,insig
  {!selectionMismatch&&(mappings.length===0?<div className="emptyDetail"><b>KEIN SMARTLINK-TRAFFIC</b><p>Für diesen Partner wurde im Zeitraum {rangeLabel} keine Campaign-ID ungleich 0 beobachtet.</p></div>:<div className="affiliateCampaignList">{visibleMappings.map(mapping=>{
   const data=byId.get(mapping.campaignId);
   if(!data)return <article className="affiliateCampaign unavailable" key={mapping.campaignId}><b>Campaign #{mapping.campaignId} · {mapping.campaign}</b><p>Detaildaten konnten nicht geladen werden.</p></article>;
+  if(data.selectedRange.eventCoverageComplete!==true)return <article className="affiliateCampaign unavailable" data-event-coverage="incomplete" key={mapping.campaignId}><b>Campaign #{mapping.campaignId} · {mapping.campaign}</b><h3>Eventdaten unvollständig</h3><p>{euro(mapping.revenue30)} Umsatz – {euro(mapping.payout30)} Payout = {euro(mapping.profit30)} Profit · {rangeLabel}.</p><p>Keine Handlungsempfehlung wird aus unvollständigen Eventdaten abgeleitet.</p></article>;
   const primary=primarySmartlinkRecommendation(data.recommendations);
   const rotation=data.rotationStartEpoch?`Campaign zuletzt gespeichert am ${new Date(data.rotationStartEpoch*1000).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · als Rotationsreferenz verwendet`:'Campaign-Speicherzeitpunkt unbekannt · Reifefenster maximal 14 Tage';
   const recentAttribution=buildMonetizationAttribution(data.money72,data.currentSlots,data.legacySlots);

@@ -3,7 +3,7 @@ import type {buildSmartlinkInsight} from './smartlink';
 import type {SelectedRangeAttribution} from './smartlink-transparency';
 
 export type SmartlinkInsight=ReturnType<typeof buildSmartlinkInsight> & {
-  selectedRange?: {from:string;to:string;attribution:SelectedRangeAttribution};
+  selectedRange?: {from:string;to:string;eventCoverageComplete:boolean;attribution:SelectedRangeAttribution};
 };
 
 const severityRank:Record<SlotRecommendation['severity'],number>={

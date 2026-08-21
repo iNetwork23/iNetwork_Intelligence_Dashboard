@@ -7,7 +7,7 @@ const mapping=(profit30:number,sois30=80):CampaignAffiliateMapping=>({campaignId
 const insight=(overrides:Partial<SmartlinkInsight>={}):SmartlinkInsight=>({
   identity:{campaignId:177,name:'Referenz',status:'active',affiliateId:460,affiliate:'Partner',offerIds:['57']},
   currentSlots:[],legacySlots:[],recommendations:[],traffic24:{clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0},money72:{clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0},mature14:{clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0},legacy14:{clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0},hourly24:[],rotationStartEpoch:null,generatedAt:'2026-08-21T00:00:00.000Z',windows:{traffic:'Heute',economics:'3 Tage',maturity:'14 Tage',granularity:'daily'},
-  selectedRange:{from:'2026-07-23',to:'2026-08-21',attribution:{total:{clicks:1000,sois:80,cvr:8,firstSales:4,firstSaleRate:5,rebills:2,coinSpend:0,revenue:190,payout:240,profit:-50,profitEpc:-.05},current:{},legacy:{},beforeRotation:{},transitionDay:{},unassigned:{},rotationDay:null,reconciled:true}},
+  selectedRange:{from:'2026-07-23',to:'2026-08-21',eventCoverageComplete:true,attribution:{total:{clicks:1000,sois:80,cvr:8,firstSales:4,firstSaleRate:5,rebills:2,coinSpend:0,revenue:190,payout:240,profit:-50,profitEpc:-.05},current:{},legacy:{},beforeRotation:{},transitionDay:{},unassigned:{},rotationDay:null,reconciled:true}},
   ...overrides,
 } as SmartlinkInsight);
 
@@ -33,6 +33,12 @@ describe('Affiliate Campaign decision model',()=>{
     const data=insight();
     data.selectedRange!.attribution.total={...data.selectedRange!.attribution.total,profit:-70,revenue:170,payout:240};
     expect(buildAffiliateCampaignDecision(mapping(-50),data)).toMatchObject({status:'daten_unvollständig',action:'prüfen'});
+  });
+
+  it('fails closed when independent conversion events do not cover the selected range',()=>{
+    const data=insight();
+    data.selectedRange!.eventCoverageComplete=false;
+    expect(buildAffiliateCampaignDecision(mapping(-50),data)).toMatchObject({status:'daten_unvollständig',action:'prüfen',firstSales:null,rebills:null});
   });
 
   it('maps robust positive evidence to Ausbau without changing the financial status',()=>{

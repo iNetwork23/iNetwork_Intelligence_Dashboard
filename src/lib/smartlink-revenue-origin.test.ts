@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{alignRevenueOriginSections,buildSelectedRevenueOrigins,type RevenueOriginFact}from'./smartlink-revenue-origin';
+import{alignRevenueOriginSections,buildSelectedRevenueOrigins,smartlinkEventCoverageComplete,type RevenueOriginFact}from'./smartlink-revenue-origin';
 
 const metric=(revenue:number,payout:number)=>({revenue,payout});
 const fact=(type:RevenueOriginFact['type'],revenue:number,payout:number,offerUrlId='2749',convertedAt='2026-08-03T10:00:00Z'):RevenueOriginFact=>({type,revenue,payout,offerUrlId,convertedAt});
@@ -15,6 +15,13 @@ describe('selected-range revenue origins',()=>{
   const origins=buildSelectedRevenueOrigins({facts:[fact('first_sale',20,0)],currentSlotIds:new Set(['2749']),rotationDay:'2026-07-30',metrics:{total:metric(33,9),current:metric(33,9),legacy:metric(0,0),beforeRotation:metric(0,0),transitionDay:metric(0,0),unassigned:metric(0,0)}});
   expect(origins.current.unattributedRevenue).toBe(13);
   expect(origins.current.unattributedPayout).toBe(9);
+ });
+ it('fails closed when conversion facts omit any selected-range event type',()=>{
+  const facts=[fact('soi',0,3),fact('first_sale',10,0),fact('rebill',5,0),fact('coin_spend',2,0)];
+  const totals={sois:1,firstSales:1,rebills:1,coinSpend:1};
+  expect(smartlinkEventCoverageComplete(facts,totals)).toBe(true);
+  expect(smartlinkEventCoverageComplete(facts.filter(item=>item.type!=='first_sale'),totals)).toBe(false);
+  expect(smartlinkEventCoverageComplete([], {sois:0,firstSales:0,rebills:0,coinSpend:0})).toBe(true);
  });
  it('moves a changed headline amount into the visible unattributed remainder',()=>{
   const origins=buildSelectedRevenueOrigins({facts:[fact('rebill',20,0)],currentSlotIds:new Set(['2749']),rotationDay:'2026-07-30',metrics:{total:metric(20,0),current:metric(20,0),legacy:metric(0,0),beforeRotation:metric(0,0),transitionDay:metric(0,0),unassigned:metric(0,0)}});

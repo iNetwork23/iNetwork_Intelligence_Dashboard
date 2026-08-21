@@ -33,7 +33,7 @@ const num=(value:number)=>new Intl.NumberFormat('de-DE').format(value);
 const euro=(value:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(value);
 
 export function buildAffiliateCampaignDecision(mapping:CampaignAffiliateMapping,insight?:SmartlinkInsight):AffiliateCampaignDecision{
-  const selected=insight?.selectedRange?.attribution;
+  const selectedRange=insight?.selectedRange,selected=selectedRange?.attribution,eventCoverageComplete=selectedRange?.eventCoverageComplete===true;
   const controlMismatch=Boolean(selected&&(
     Math.abs(selected.total.revenue-mapping.revenue30)>=0.01||
     Math.abs(selected.total.payout-mapping.payout30)>=0.01||
@@ -43,17 +43,17 @@ export function buildAffiliateCampaignDecision(mapping:CampaignAffiliateMapping,
   let status:CampaignEconomicStatus;
   let action:CampaignAction;
   let reason:string;
-  if(!selected||!selected.reconciled||controlMismatch){
+  if(!selected||!selected.reconciled||controlMismatch||!eventCoverageComplete){
     status='daten_unvollständig';
     action='prüfen';
-    reason=controlMismatch?'Campaign-Summe und sichtbare Detailwerte stimmen nicht überein.':selected?'Campaign-Summe und Detailwerte sind noch nicht abgestimmt.':'Detail- und Eventdaten für den Zeitraum fehlen.';
+    reason=!eventCoverageComplete&&selected?'Eventdaten für den Zeitraum sind nicht vollständig belegt.':controlMismatch?'Campaign-Summe und sichtbare Detailwerte stimmen nicht überein.':selected?'Campaign-Summe und Detailwerte sind noch nicht abgestimmt.':'Detail- und Eventdaten für den Zeitraum fehlen.';
   }else if(selected.total.sois<50){
     status='noch_nicht_bewertbar';
     action='beobachten';
     reason=`${num(selected.total.sois)} SOIs · noch keine belastbare Mindestmenge.`;
   }else{
     status=mapping.profit30>=0?'profitabel':'unprofitabel';
-    const recommendation=primarySmartlinkRecommendation(insight.recommendations);
+    const recommendation=primarySmartlinkRecommendation(insight?.recommendations||[]);
     if(recommendation?.action==='scale')action='ausbauen';
     else if(recommendation?.action==='stop')action='stoppen';
     else if(recommendation?.action==='rotate')action='prüfen';
@@ -69,8 +69,8 @@ export function buildAffiliateCampaignDecision(mapping:CampaignAffiliateMapping,
     action,
     actionLabel:actionLabels[action],
     reason,
-    firstSales:selected?.total.firstSales??null,
-    rebills:selected?.total.rebills??null,
+    firstSales:eventCoverageComplete&&selected?selected.total.firstSales:null,
+    rebills:eventCoverageComplete&&selected?selected.total.rebills:null,
   };
 }
 

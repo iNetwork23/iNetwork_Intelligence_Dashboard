@@ -10,7 +10,8 @@ type AttentionSeverity='critical'|'warning'|'positive'|'neutral'|'missing';
 const joinOrigins=(values:string[])=>values.length<2?values[0]||'':`${values.slice(0,-1).join(', ')} und ${values.at(-1)}`;
 
 function campaignAttention(insight:SmartlinkInsight|undefined){
-  const recommendation=primarySmartlinkRecommendation(insight?.recommendations||[]);
+  if(insight?.selectedRange?.eventCoverageComplete!==true)return{severity:'missing' as const,detail:'Eventdaten für den Zeitraum sind nicht vollständig belegt.'};
+  const recommendation=primarySmartlinkRecommendation(insight.recommendations);
   const attribution=insight?.selectedRange?.attribution,current=attribution?.current;
   const currentMonetizationGap=Boolean(current&&current.sois>=50&&current.firstSales===0&&current.revenue<=0&&current.profit<0);
   if(recommendation?.severity==='critical')return{severity:'critical' as const,detail:recommendation.detail};
@@ -41,7 +42,7 @@ export default function AffiliateSmartlinkOverview({affiliateId,mappings,insight
       <span><small>First-Sales</small><b>{firstSales===null?'–':num(firstSales)}</b></span>
     </div>
     <div className={styles.campaignList}>{campaigns.map(({mapping,insight,statusLabel,status:financialStatus,actionLabel,reason,attention})=>{
-      const href=affiliateCampaignHref({campaignId:mapping.campaignId,affiliateId,currentHref:returnTo}),eventTotals=insight?.selectedRange?.attribution.total,saleRate=eventTotals?.sois?100*eventTotals.firstSales/eventTotals.sois:null;
+      const href=affiliateCampaignHref({campaignId:mapping.campaignId,affiliateId,currentHref:returnTo}),eventTotals=insight?.selectedRange?.eventCoverageComplete===true?insight.selectedRange.attribution.total:undefined,saleRate=eventTotals?.sois?100*eventTotals.firstSales/eventTotals.sois:null;
       const revenueWithoutFirstSale=Boolean(eventTotals&&eventTotals.firstSales===0&&eventTotals.revenue>0&&(eventTotals.rebills>0||eventTotals.coinSpend>0));
       return <article key={mapping.campaignId} className={`${styles.campaignRow} ${styles[financialStatus]}`}>
         <div className={styles.identity}><span>CAMPAIGN #{mapping.campaignId} · {mapping.status}</span><h3>{mapping.campaign}</h3><small>{insight?.currentSlots.length||0} aktive LPs · {insight?.legacySlots.length||0} Frühere LPs · Offer {insight?.identity.offerIds.map(id=>`#${id}`).join(', ')||'nicht zugeordnet'}</small></div>

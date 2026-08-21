@@ -17,7 +17,7 @@ const insight={
   legacy14:{clicks:20,sois:1,cvr:5,firstSales:1,firstSaleRate:100,rebills:1,coinSpend:0,revenue:50,payout:3,profit:47,profitEpc:2.35},
   hourly24:[],rotationStartEpoch:null,generatedAt:'2026-07-29T00:00:00.000Z',
   windows:{traffic:'Heute',economics:'3 Kalendertage',maturity:'14 Tage',granularity:'daily' as const},
-  selectedRange:{from:'2026-07-08',to:'2026-07-29',attribution:{total:{clicks:4477,sois:667,cvr:14.9,firstSales:8,firstSaleRate:1.2,rebills:0,coinSpend:165,revenue:133.28,payout:3766,profit:-3632.72,profitEpc:-.811},current:{},legacy:{},beforeRotation:{},transitionDay:{},unassigned:{},rotationDay:null,reconciled:true}},
+  selectedRange:{from:'2026-07-08',to:'2026-07-29',eventCoverageComplete:true,attribution:{total:{clicks:4477,sois:667,cvr:14.9,firstSales:8,firstSaleRate:1.2,rebills:0,coinSpend:165,revenue:133.28,payout:3766,profit:-3632.72,profitEpc:-.811},current:{},legacy:{},beforeRotation:{},transitionDay:{},unassigned:{},rotationDay:null,reconciled:true}},
 } as unknown as SmartlinkInsight;
 
 describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
@@ -54,7 +54,7 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
     const campaign23={...insight,
       identity:{...insight.identity,campaignId:23,name:'TrafficHunt - SOI XLOVES',affiliateId:20,affiliate:'TrafficHunt'},
       recommendations:[{slotId:'2946',action:'hold',severity:'neutral',reasonCode:'insufficient_evidence',title:'Beobachten',detail:'Noch keine belastbare Stop- oder Scale-Evidenz.'}],
-      selectedRange:{from:'2026-07-03',to:'2026-08-01',attribution:{
+      selectedRange:{eventCoverageComplete:true,from:'2026-07-03',to:'2026-08-01',attribution:{
         total:{clicks:1447,sois:115,cvr:7.95,firstSales:0,firstSaleRate:0,rebills:24,coinSpend:0,revenue:491.55,payout:342,profit:149.55,profitEpc:.103},
         current:{clicks:1225,sois:113,cvr:9.22,firstSales:0,firstSaleRate:0,rebills:9,coinSpend:0,revenue:0,payout:336,profit:-336,profitEpc:-.274},
         legacy:{...empty,rebills:7,revenue:320.77,profit:320.77},
@@ -79,7 +79,7 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
 
   it('behauptet bei Null-Gesamtumsatz trotz gegenläufiger Buckets keinen Legacy-Umsatz',()=>{
     const empty={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0};
-    const offsetting={...insight,recommendations:[],selectedRange:{from:'2026-07-03',to:'2026-08-01',attribution:{
+    const offsetting={...insight,recommendations:[],selectedRange:{eventCoverageComplete:true,from:'2026-07-03',to:'2026-08-01',attribution:{
       total:{...empty,sois:60,payout:180,profit:-180},
       current:{...empty,sois:60,payout:180,profit:-180},
       legacy:{...empty,revenue:20,profit:20},beforeRotation:empty,transitionDay:empty,unassigned:{...empty,revenue:-20,profit:-20},rotationDay:'2026-07-22',reconciled:true,
@@ -93,7 +93,7 @@ describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
     const empty={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0};
     const unattributed={...insight,
       recommendations:[],
-      selectedRange:{from:'2026-07-03',to:'2026-08-01',attribution:{
+      selectedRange:{eventCoverageComplete:true,from:'2026-07-03',to:'2026-08-01',attribution:{
         total:{...empty,sois:60,payout:180,profit:-130,revenue:50},
         current:{...empty,sois:60,payout:180,profit:-180},
         legacy:empty,beforeRotation:empty,transitionDay:{...empty,revenue:20,profit:20},unassigned:{...empty,revenue:30,profit:30},rotationDay:'2026-07-22',reconciled:true,
