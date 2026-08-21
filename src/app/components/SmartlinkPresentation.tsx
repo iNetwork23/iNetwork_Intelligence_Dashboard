@@ -1,7 +1,7 @@
 'use client';
 
 import {useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
-import {nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,type AnalysisTab,type SmartlinkSort} from '../../lib/smartlink-presentation';
+import {nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
 import {rankSourceMatches} from '../../lib/source-search';
 import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown,SmartlinkSourceCoverage} from '../../lib/smartlink';
 import {leadActivityStatus} from '../../lib/source-breakdown';
@@ -38,7 +38,7 @@ export function StatusBadge({recommendation}:{recommendation?:SlotRecommendation
  return <span role="status" tabIndex={0} className={`sharedStatusBadge ${rec.severity}`} data-tooltip={tip} aria-label={`Empfehlung: ${statusActionLabel[rec.action]}. ${tip}`}>Empfehlung: {statusActionLabel[rec.action]}</span>;
 }
 
-type SourceSort='loss'|'sois'|'coinSpend'|'profit';
+const sourceSortOptions:[SourceMetricSort,string][]=[['clicks','Klicks'],['sois','SOIs'],['cvr','CVR'],['firstSales','First-Sales'],['rebills','Rebills'],['coinSpend','Coin-Spend'],['revenue','Umsatz'],['payout','Payout'],['profit','Profit']];
 const share=(value:number,total:number)=>total?`${(100*value/total).toFixed(1).replace('.',',')} %`:'n/a';
 const technicalSourceValue=(technical:string|null|undefined,display:string)=>technical===undefined?(display&&display!=='Nicht übermittelt'?display:null):technical;
 const sourceDimensionLabels=(row:SmartlinkSourceBreakdown)=>({main:row.mode==='api'?'ADV1':'Source',sub:row.mode==='api'?'ADV2':'Sub1'});
@@ -52,12 +52,13 @@ function SourceMetric({label,value,tone='neutral'}:{label:string;value:string;to
 const sourceRowKey=(row:SmartlinkSourceBreakdown)=>`${row.mode}|${row.source}|${row.subSource}`;
 
 export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,coverage,onOpenChange,affiliateId='',affiliateName='Affiliate',offerId='',offerName='Offer',campaignId,canManage=false,embedded=false}:{rows:SmartlinkSourceBreakdown[];scope:string;totalSois:number;landingpageId:string;coverage?:SmartlinkSourceCoverage;onOpenChange?:(open:boolean)=>void;affiliateId?:string;affiliateName?:string;offerId?:string;offerName?:string;campaignId?:string;canManage?:boolean;embedded?:boolean}){
- const [sort,setSort]=useState<SourceSort>('loss');
+ const [sort,setSort]=useState<SourceMetricSort>('profit');
+ const [direction,setDirection]=useState<SortDirection>('asc');
  const [query,setQuery]=useState('');
  const [visibleCount,setVisibleCount]=useState(12);
  const [selectedKey,setSelectedKey]=useState('');
  const instanceKey=smartlinkInstanceKey(campaignId,landingpageId);
- const sorted=useMemo(()=>[...rows].sort((a,b)=>sort==='sois'?b.sois-a.sois:sort==='coinSpend'?b.coinSpend-a.coinSpend:sort==='profit'?b.profit-a.profit:a.profit-b.profit),[rows,sort]);
+ const sorted=useMemo(()=>sortSourceBreakdownRows(rows,sort,direction),[rows,sort,direction]);
  const matched=useMemo(()=>rankSourceMatches(sorted,query,row=>[row.source,row.subSource]),[sorted,query]);
  const visible=matched.slice(0,visibleCount);
  const selected=visible.find(row=>sourceRowKey(row)===selectedKey)||visible[0];
@@ -68,12 +69,12 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,c
  const sourceRevenue=rows.reduce((sum,row)=>sum+row.revenue,0);
  const sourceProfit=rows.reduce((sum,row)=>sum+row.profit,0);
  const reconciled=sourceSois===totalSois&&(!coverage||coverage.missingDays.length===0);
- const chooseSort=(next:SourceSort)=>{setSort(next);setVisibleCount(12)};
+ const chooseSort=(next:SourceMetricSort)=>{if(next===sort)setDirection(current=>current==='asc'?'desc':'asc');else{setSort(next);setDirection('desc')}setVisibleCount(12)};
  const heading=<span><b>LP #{landingpageId} · Woher kommen die Leads?</b><small>{rows.length} Source-Kombination{rows.length===1?'':'en'} · {sourceSois} von {totalSois} SOIs nach Herkunft zugeordnet · {scope}</small></span>;
  const panel=<div className="lpSourcePanel">
   {coverage&&<aside className={`lpSourceCoverage ${coverage.missingDays.length?'incomplete':'complete'}`}><b>Datenabdeckung Quellenanalyse: {coverage.acceptedDays} von {coverage.expectedDays} Tagen</b><span>{coverage.acceptedFrom&&coverage.acceptedTo?`${shortDay(coverage.acceptedFrom).slice(0,6)}–${shortDay(coverage.acceptedTo)}`:'Keine akzeptierten Snapshot-Tage'}</span>{coverage.missingDays.length>0&&<small>Fehlende Tage: {coverage.missingDays.map(shortDay).join(', ')}</small>}</aside>}
   <section className="lpSourceSummary" aria-label="Zusammenfassung Quellenanalyse"><span><b>{num(rows.length)}</b><small>Quellen</small></span><span><b>{num(sourceSois)}</b><small>SOIs</small></span><span><b>{num(sourceFirstSales)}</b><small>First-Sales</small></span><span><b>{num(sourceRebills)}</b><small>Rebills</small></span><span><b>{euro(sourceRevenue)}</b><small>Umsatz</small></span><span className={sourceProfit>=0?'up':'down'}><b>{euro(sourceProfit)}</b><small>Profit</small></span></section>
-  <div className="sourcePanelToolbar"><SourceSearchField value={query} onChange={setQuery} placeholder="Source, Sub1, ADV1 oder ADV2 suchen" scopeId={`landingpage-${instanceKey}`}/><div className="sourceSort" role="group" aria-label="Source-Kombinationen sortieren"><small>Sortieren nach</small>{([['loss','größtem Verlust'],['sois','SOIs'],['coinSpend','Coin-Spend'],['profit','Profit']] as const).map(([id,label])=><button type="button" key={id} className={sort===id?'active':''} aria-pressed={sort===id} onClick={()=>chooseSort(id)}>{label}</button>)}</div></div>
+  <div className="sourcePanelToolbar"><SourceSearchField value={query} onChange={setQuery} placeholder="Source, Sub1, ADV1 oder ADV2 suchen" scopeId={`landingpage-${instanceKey}`}/><div className="sourceSort" role="group" aria-label="Source-Kombinationen nach Zahlenwert sortieren"><small>Sortieren nach</small>{sourceSortOptions.map(([id,label])=>{const active=sort===id,current=direction==='asc'?'niedrigste zuerst':'höchste zuerst',next=direction==='asc'?'höchste zuerst':'niedrigste zuerst';return <button type="button" key={id} className={active?'active':''} aria-pressed={active} aria-label={`Nach ${label} sortieren${active?`: derzeit ${current}; klicken für ${next}`:': höchste zuerst'}`} onClick={()=>chooseSort(id)}>{label}{active?` ${direction==='asc'?'↑':'↓'}`:''}</button>})}</div></div>
   {visible.length?<div className="lpSourceMasterDetail">
    <section className="lpSourceRanking" aria-label={`Lead-Herkunft für LP #${landingpageId}`}>
     <header><span>Source / Sub1</span><span>SOIs</span><span>First-Sales</span><span>Umsatz / Payout</span><span>Profit</span></header>
