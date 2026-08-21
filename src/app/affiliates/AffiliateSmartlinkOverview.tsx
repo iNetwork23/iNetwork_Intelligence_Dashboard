@@ -1,60 +1,54 @@
 import LiveCampaignDeepDiveLink from './LiveCampaignDeepDiveLink';
 import type {CampaignAffiliateMapping} from '@/lib/affiliate-smartlinks';
+import {buildAffiliateCampaignDecision,sortCampaignDecisions} from '@/lib/affiliate-campaign-decision';
 import {affiliateCampaignHref,primarySmartlinkRecommendation,type SmartlinkInsight} from '@/lib/optimization-workflow';
 import styles from './AffiliateSmartlinkOverview.module.css';
 
 const euro=(value:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(value);
 const num=(value:number)=>new Intl.NumberFormat('de-DE').format(value);
-const rank={critical:0,warning:1,positive:2,neutral:3,missing:4} as const;
-type AttentionSeverity=keyof typeof rank;
-
+type AttentionSeverity='critical'|'warning'|'positive'|'neutral'|'missing';
 const joinOrigins=(values:string[])=>values.length<2?values[0]||'':`${values.slice(0,-1).join(', ')} und ${values.at(-1)}`;
 
 function campaignAttention(insight:SmartlinkInsight|undefined){
   const recommendation=primarySmartlinkRecommendation(insight?.recommendations||[]);
   const attribution=insight?.selectedRange?.attribution,current=attribution?.current;
   const currentMonetizationGap=Boolean(current&&current.sois>=50&&current.firstSales===0&&current.revenue<=0&&current.profit<0);
-  if(recommendation?.severity==='critical')return{severity:'critical' as const,title:recommendation.title,detail:recommendation.detail};
+  if(recommendation?.severity==='critical')return{severity:'critical' as const,detail:recommendation.detail};
   if(currentMonetizationGap&&current&&attribution){
-    const origins=[
-      attribution.legacy.revenue>0?'frühere LPs':'',
-      attribution.beforeRotation.revenue>0?'Zeitraum vor aktueller Rotation':'',
-      attribution.transitionDay.revenue>0?'Campaign-Speichertag':'',
-      attribution.unassigned.revenue>0?'nicht eindeutig zugeordnete Events':'',
-    ].filter(Boolean);
+    const origins=[attribution.legacy.revenue>0?'frühere LPs':'',attribution.beforeRotation.revenue>0?'Zeitraum vor aktueller Rotation':'',attribution.transitionDay.revenue>0?'Campaign-Speichertag':'',attribution.unassigned.revenue>0?'nicht eindeutig zugeordnete Events':''].filter(Boolean);
     const originDetail=attribution.total.revenue<=0?'Auch die Campaign gesamt hat noch keinen Umsatz.':origins.length?`Umsatzbeiträge: ${joinOrigins(origins)}.`:'Die Umsatzherkunft ist nicht vollständig zugeordnet.';
-    return{
-      severity:'warning' as const,
-      title:'Aktuelle Rotation noch ohne Umsatz',
-      detail:`${num(current.sois)} SOIs der aktuellen LPs · ${euro(current.revenue)} Umsatz · ${euro(current.profit)} Profit. ${originDetail} Einzelne LPs bleiben bis zu ihrer Reifeschwelle auf Beobachten.`,
-    };
+    return{severity:'warning' as const,detail:`${num(current.sois)} SOIs der aktuellen LPs · ${euro(current.revenue)} Umsatz · ${euro(current.profit)} Profit. ${originDetail} Einzelne LPs bleiben bis zu ihrer Reifeschwelle auf Beobachten.`};
   }
-  return{severity:(recommendation?.severity||'missing') as AttentionSeverity,title:recommendation?.title||'Daten prüfen',detail:recommendation?.detail||'Keine gemeinsame Campaign-Empfehlung verfügbar.'};
+  return{severity:(recommendation?.severity||'missing') as AttentionSeverity,detail:recommendation?.detail||'Keine gemeinsame Campaign-Empfehlung verfügbar.'};
 }
 
 export default function AffiliateSmartlinkOverview({affiliateId,mappings,insights,rangeLabel,returnTo}:{affiliateId:string;mappings:CampaignAffiliateMapping[];insights:SmartlinkInsight[];rangeLabel:string;returnTo:string}){
   const byId=new Map(insights.map(insight=>[insight.identity.campaignId,insight]));
-  const campaigns=mappings.map(mapping=>{
-    const insight=byId.get(mapping.campaignId),attention=campaignAttention(insight);
-    return{mapping,insight,attention};
-  }).sort((a,b)=>rank[a.attention.severity]-rank[b.attention.severity]||a.mapping.profit30-b.mapping.profit30);
-  const critical=campaigns.filter(item=>item.attention.severity==='critical').length;
-  const review=campaigns.filter(item=>item.attention.severity==='critical'||item.attention.severity==='warning').length;
+  const decisions=sortCampaignDecisions(mappings.map(mapping=>buildAffiliateCampaignDecision(mapping,byId.get(mapping.campaignId))));
+  const campaigns=decisions.map(decision=>({...decision,attention:campaignAttention(decision.insight)}));
+  const totals=mappings.reduce((sum,item)=>({revenue:sum.revenue+item.revenue30,payout:sum.payout+item.payout30,profit:sum.profit+item.profit30,sois:sum.sois+item.sois30}),{revenue:0,payout:0,profit:0,sois:0});
+  const firstSales=decisions.every(item=>item.firstSales===null)?null:decisions.reduce((sum,item)=>sum+(item.firstSales||0),0);
+  const critical=campaigns.filter(item=>item.action==='stoppen'||item.attention.severity==='critical').length;
+  const review=campaigns.filter(item=>item.action==='prüfen'||item.action==='stoppen'||item.attention.severity==='critical'||item.attention.severity==='warning').length;
   const status=critical?`${critical} dringend prüfen`:review?`${review} Campaign${review===1?'':'s'} mit Prüfhinweis`:'Keine Campaign mit Prüfhinweis';
   return <section className={styles.overview} aria-labelledby="smartlink-actions-title">
-    <header>
-      <div><span>SMARTLINK-HANDLUNGSÜBERSICHT</span><h2 id="smartlink-actions-title">Was heute geprüft werden muss</h2><p>Der Affiliate Optimizer priorisiert Campaigns. Routing, Testreife und LP-Begründung werden in der Campaign-Tiefenanalyse geprüft.</p></div>
-      <strong className={critical?styles.critical:review?styles.notice:styles.clear}>{status}</strong>
-    </header>
-    <div className={styles.cards}>{campaigns.map(({mapping,insight,attention})=>{
-      const href=affiliateCampaignHref({campaignId:mapping.campaignId,affiliateId,currentHref:returnTo}),totals=insight?.selectedRange?.attribution.total,saleRate=totals?.sois?100*totals.firstSales/totals.sois:0;
-      const revenueWithoutFirstSale=Boolean(totals&&totals.firstSales===0&&totals.revenue>0&&(totals.rebills>0||totals.coinSpend>0));
-      return <article key={mapping.campaignId} className={styles[attention.severity]}>
+    <header><div><span>SMARTLINK-ERGEBNIS · {rangeLabel}</span><h2 id="smartlink-actions-title">Ergebnis und nächste Maßnahme</h2></div><strong className={critical?styles.critical:review?styles.notice:styles.clear}>{status}</strong></header>
+    <div className={styles.portfolioKpis} aria-label="Gesamtergebnis Smartlinks">
+      <span><small>Umsatz</small><b>{euro(totals.revenue)}</b></span>
+      <span><small>Payout</small><b>{euro(totals.payout)}</b></span>
+      <span><small>Profit</small><b className={totals.profit>=0?styles.up:styles.down}>{euro(totals.profit)}</b></span>
+      <span><small>SOIs</small><b>{num(totals.sois)}</b></span>
+      <span><small>First-Sales</small><b>{firstSales===null?'–':num(firstSales)}</b></span>
+    </div>
+    <div className={styles.campaignList}>{campaigns.map(({mapping,insight,statusLabel,status:financialStatus,actionLabel,reason,attention})=>{
+      const href=affiliateCampaignHref({campaignId:mapping.campaignId,affiliateId,currentHref:returnTo}),eventTotals=insight?.selectedRange?.attribution.total,saleRate=eventTotals?.sois?100*eventTotals.firstSales/eventTotals.sois:null;
+      const revenueWithoutFirstSale=Boolean(eventTotals&&eventTotals.firstSales===0&&eventTotals.revenue>0&&(eventTotals.rebills>0||eventTotals.coinSpend>0));
+      return <article key={mapping.campaignId} className={`${styles.campaignRow} ${styles[financialStatus]}`}>
         <div className={styles.identity}><span>CAMPAIGN #{mapping.campaignId} · {mapping.status}</span><h3>{mapping.campaign}</h3><small>{insight?.currentSlots.length||0} aktive LPs · {insight?.legacySlots.length||0} Frühere LPs · Offer {insight?.identity.offerIds.map(id=>`#${id}`).join(', ')||'nicht zugeordnet'}</small></div>
-        <div className={styles.periodResult}><span>Ausgewählter Zeitraum · {rangeLabel}</span><strong>{totals?`${num(totals.firstSales)} First-Sales · ${num(totals.rebills)} Rebills · ${num(totals.coinSpend)} Coin-Spend-Events`:'Monetarisierung nicht verfügbar'}</strong><small>{totals?`${saleRate.toFixed(2).replace('.',',')} % First-Sales je SOI · ${euro(totals.revenue)} Umsatz`:'Für diesen Zeitraum fehlen Eventdaten.'}</small>{revenueWithoutFirstSale&&totals&&<small className={styles.explanation}>Im gleichen Zeitraum wurden {totals.rebills?`${num(totals.rebills)} Rebills`:''}{totals.rebills&&totals.coinSpend?' und ':''}{totals.coinSpend?`${num(totals.coinSpend)} Coin-Spend-Events`:''} erfasst. Diese Events können Umsatz erklären; eine direkte Umsatzzuordnung liegt hier nicht vor.</small>}</div>
-        <div className={styles.decision}><span>NÄCHSTE PRÜFUNG</span><b>{attention.title}</b><small>{attention.detail}</small></div>
-        <div className={styles.metrics}><span><b className={mapping.profit30>=0?styles.up:styles.down}>{euro(mapping.profit30)}</b><small>Profit · {rangeLabel}</small></span><span><b>{num(mapping.sois30)}</b><small>SOIs · {rangeLabel}</small></span><span><b>{insight?`${insight.traffic24.cvr.toFixed(2).replace('.',',')} %`:'–'}</b><small>CVR · {insight?.windows.traffic||'Daten fehlen'}</small></span></div>
-        <LiveCampaignDeepDiveLink campaignId={mapping.campaignId} affiliateId={affiliateId} initialHref={href}/>
+        <div className={styles.statusCell}><small>STATUS</small><b>{statusLabel}</b><span>Ausgewählter Zeitraum · {rangeLabel}</span></div>
+        <div className={styles.resultCell}><small>ERGEBNIS</small><b className={mapping.profit30>=0?styles.up:styles.down}>{euro(mapping.profit30)}</b><span>{euro(mapping.revenue30)} Umsatz · {euro(mapping.payout30)} Payout</span><span>{num(mapping.sois30)} SOIs{eventTotals?` · ${num(eventTotals.firstSales)} First-Sales · ${num(eventTotals.rebills)} Rebills · ${num(eventTotals.coinSpend)} Coin-Spend-Events`:''}</span>{eventTotals&&<span>{saleRate===null?'First-Sale-Rate nicht berechenbar':`${saleRate.toFixed(2).replace('.',',')} % First-Sales je SOI`}</span>}</div>
+        <div className={styles.actionCell}><small>NÄCHSTE MASSNAHME</small><b>{actionLabel}</b><strong>{euro(mapping.profit30)} bei {num(mapping.sois30)} SOIs</strong><span>{reason}</span>{attention.detail!==reason&&<span>{attention.detail}</span>}{revenueWithoutFirstSale&&eventTotals&&<span className={styles.explanation}>Im gleichen Zeitraum wurden {eventTotals.rebills?`${num(eventTotals.rebills)} Rebills`:''}{eventTotals.rebills&&eventTotals.coinSpend?' und ':''}{eventTotals.coinSpend?`${num(eventTotals.coinSpend)} Coin-Spend-Events`:''} erfasst. Diese Events können Umsatz erklären; eine direkte Umsatzzuordnung liegt hier nicht vor.</span>}</div>
+        <LiveCampaignDeepDiveLink campaignId={mapping.campaignId} affiliateId={affiliateId} initialHref={href} label="Campaign öffnen"/>
       </article>;
     })}</div>
   </section>;

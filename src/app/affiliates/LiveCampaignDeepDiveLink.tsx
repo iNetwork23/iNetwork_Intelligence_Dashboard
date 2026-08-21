@@ -5,7 +5,7 @@ import{affiliateCampaignHref}from'@/lib/optimization-workflow';
 
 const liveHref=(campaignId:number,affiliateId:string)=>affiliateCampaignHref({campaignId,affiliateId,currentHref:window.location.href});
 
-export default function LiveCampaignDeepDiveLink({campaignId,affiliateId,initialHref}:{campaignId:number;affiliateId:string;initialHref:string}){
+export default function LiveCampaignDeepDiveLink({campaignId,affiliateId,initialHref,label='Campaign-Tiefenanalyse öffnen'}:{campaignId:number;affiliateId:string;initialHref:string;label?:string}){
  const[href,setHref]=useState(initialHref);
  const sync=useCallback(()=>setHref(liveHref(campaignId,affiliateId)),[campaignId,affiliateId]);
  useEffect(()=>{
@@ -21,5 +21,5 @@ export default function LiveCampaignDeepDiveLink({campaignId,affiliateId,initial
   event.preventDefault();
   window.location.assign(current);
  };
- return <Link href={href} prefetch={false} onPointerDown={sync} onFocus={sync} onClick={click}>Campaign-Tiefenanalyse öffnen <span aria-hidden="true">→</span></Link>;
+ return <Link href={href} prefetch={false} onPointerDown={sync} onFocus={sync} onClick={click}>{label} <span aria-hidden="true">→</span></Link>;
 }

@@ -5,7 +5,7 @@ import AffiliateSmartlinkOverview from '@/app/affiliates/AffiliateSmartlinkOverv
 import type {CampaignAffiliateMapping} from './affiliate-smartlinks';
 import type {SmartlinkInsight} from './optimization-workflow';
 
-const mapping:CampaignAffiliateMapping={campaignId:135,campaign:'Sale First',affiliateId:'436',affiliate:'Traffic Company',clicks30:1000,sois30:40,revenue30:70,payout30:120,profit30:-50,status:'active'};
+const mapping:CampaignAffiliateMapping={campaignId:135,campaign:'Sale First',affiliateId:'436',affiliate:'Traffic Company',clicks30:4477,sois30:667,revenue30:133.28,payout30:3766,profit30:-3632.72,status:'active'};
 const insight={
   identity:{campaignId:135,name:'Sale First',status:'active',affiliateId:436,affiliate:'Traffic Company',offerIds:['57']},
   currentSlots:[{id:'901',name:'LP A',offerId:'57',weight:34,status:'active',metrics24:{clicks:100,sois:2,cvr:2,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:6,profit:-6,profitEpc:-.06},metrics72:{clicks:100,sois:2,cvr:2,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:6,profit:-6,profitEpc:-.06},metrics14:{clicks:100,sois:40,cvr:40,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:120,profit:-120,profitEpc:-1.2},hoursTo50Sois:12}],
@@ -23,9 +23,12 @@ const insight={
 describe('Affiliate Smartlink Entscheidungsübersicht',()=>{
   it('führt mit Handlung und öffnet die Campaign-Tiefenanalyse im Affiliate Optimizer',()=>{
     const html=renderToStaticMarkup(<AffiliateSmartlinkOverview affiliateId="436" mappings={[mapping]} insights={[insight]} rangeLabel="30 Tage" returnTo="/affiliates?affiliate=436&mode=smartlinks&period=30d"/>).replaceAll('\u00a0',' ');
-    expect(html).toContain('Was heute geprüft werden muss');
-    expect(html).toContain('Austausch prüfen');
-    expect(html).toContain('Campaign-Tiefenanalyse öffnen');
+    expect(html).toContain('Ergebnis und nächste Maßnahme');
+    for(const label of ['Umsatz','Payout','Profit','SOIs','First-Sales'])expect(html).toContain(label);
+    expect(html).toContain('Unprofitabel');
+    expect(html).toContain('Prüfen');
+    expect(html).toContain('-3.632,72 € bei 667 SOIs');
+    expect(html).toContain('Campaign öffnen');
     expect(html).toContain('/affiliates?affiliate=436');
     expect(html).toContain('mode=smartlinks');
     expect(html).toContain('campaign=135');
