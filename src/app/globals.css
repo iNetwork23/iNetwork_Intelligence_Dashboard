@@ -278,3 +278,33 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
  .lpSourceRanking>.lpSourceGroupRow{grid-template-columns:1fr 1fr;row-gap:6px}
  .lpSourceRanking>button.lpSourceSubRow{padding-left:18px}
 }
+
+/* Vorläufige Quellen: eine Source-ID je Block statt je Sub1-Kombination.
+   Ersetzt fünf gestapelte Blöcke pro Kombination durch eine Zeile. */
+.incompleteSourceSort{flex-wrap:wrap;row-gap:5px}
+.provisionalSourceGroup{margin-top:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);overflow:hidden}
+.provisionalSourceGroup.verdient{box-shadow:inset 4px 0 var(--positive)}
+.provisionalSourceGroup.verbrennt{box-shadow:inset 4px 0 var(--negative)}
+.provisionalSourceGroup.neutral{box-shadow:inset 4px 0 var(--text-muted)}
+.provisionalSourceHead{display:grid;grid-template-columns:minmax(120px,1.4fr) repeat(5,minmax(70px,1fr)) auto;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-3)}
+.provisionalSourceHead>span{min-width:0}
+.provisionalSourceHead>span>small,.provisionalSourceHead>span>b{display:block}
+.provisionalSourceHead>span>small{color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.04em}
+.provisionalSourceHead>span>b{margin-top:2px;font-size:13px;font-weight:800;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.provisionalSourceHead>.provisionalIdentity>b{font-size:15px}
+.provisionalVerdict{justify-self:end;padding:5px 8px;border:1px solid currentColor;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+.provisionalSourceGroup.verdient .provisionalVerdict{color:var(--positive)}
+.provisionalSourceGroup.verbrennt .provisionalVerdict{color:var(--negative)}
+.provisionalSourceGroup.neutral .provisionalVerdict{color:var(--text-muted)}
+.provisionalSubRows{list-style:none;margin:0;padding:0}
+.provisionalSubRows>li{display:grid;grid-template-columns:minmax(120px,1.4fr) repeat(4,minmax(70px,1fr));align-items:center;gap:10px;padding:7px 12px 7px 26px;border-top:1px solid var(--line-faint);font-size:11px;font-variant-numeric:tabular-nums}
+.provisionalSubRows>li>.sub{font-weight:700;overflow-wrap:anywhere}
+.provisionalSubRows>li>.sub:before{content:"└ ";color:var(--text-muted);font-weight:400}
+.provisionalSubRows>li>b{font-weight:800}
+.provisionalSubRows>li>small{grid-column:1/-1;color:var(--text-muted);font-size:9px}
+.provisionalSourceGroup>.incompleteSourceEvents{display:block;padding:6px 12px;border-top:1px solid var(--line-faint);color:var(--warning);font-size:9px}
+@media(max-width:900px){
+ .provisionalSourceHead{grid-template-columns:1fr 1fr;row-gap:7px}
+ .provisionalVerdict{grid-column:1/-1;justify-self:start}
+ .provisionalSubRows>li{grid-template-columns:1fr 1fr;row-gap:4px;padding-left:16px}
+}

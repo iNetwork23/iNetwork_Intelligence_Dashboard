@@ -19,3 +19,26 @@ describe('Campaign executive decision surface',()=>{
  it('sorts provisional Source rows by every numeric value in both directions',()=>{const rows=[{mode:'tracked' as const,source:'18744',subSource:'LOW',clicks:10,sois:2,cvr:20,firstSales:0,rebills:0,coinSpend:1,payout:13,revenue:0,profit:-13},{mode:'tracked' as const,source:'18744',subSource:'HIGH',clicks:20,sois:14,cvr:70,firstSales:1,rebills:2,coinSpend:6,payout:140,revenue:25,profit:-115}],html=renderToStaticMarkup(<ProvisionalSourceList rows={rows}/>);for(const label of['Klicks','SOIs','CVR','First-Sales','Rebills','Coin-Spend','Umsatz','Payout','Profit'])expect(html).toContain(`aria-label="Nach ${label} sortieren`);expect(html).toContain('aria-label="Nach SOIs sortieren: derzeit höchste zuerst; klicken für niedrigste zuerst"');expect(html.indexOf('HIGH')).toBeLessThan(html.indexOf('LOW'))});
  it('keeps Landingpage and Source identities visible while suppressing unverified event metrics and actions',()=>{const current={...slot('101',-46),name:'Current LP',sourceBreakdown:[{mode:'tracked' as const,source:'SRC-77',subSource:'SUB-9',clicks:20,sois:3,cvr:15,firstSales:2,rebills:1,coinSpend:3,payout:9,revenue:20,profit:11}],sourceCoverage:{from:'2026-08-08',to:'2026-08-21',acceptedFrom:'2026-08-10',acceptedTo:'2026-08-21',acceptedDays:12,expectedDays:14,missingDays:['2026-08-08','2026-08-09']}},legacy={id:'88',name:'Former LP',offerId:'57',metrics14:money(0),sourceBreakdown:[{mode:'api' as const,source:'ADV-A',subSource:'ADV-B',clicks:0,sois:2,cvr:null,firstSales:0,rebills:0,coinSpend:0,payout:6,revenue:0,profit:-6}]},html=renderToStaticMarkup(<IncompleteEventCampaignDetail campaignId={177} campaignName="Trinity" rangeLabel="30 Tage" revenue={363.26} payout={2623.5} profit={-2260.24} currentSlots={[current]} legacySlots={[legacy]}/>);for(const text of['Eventdaten unvollständig','Landingpages und Quellen bleiben sichtbar','LP #101','Current LP','Offer #57','Source','SRC-77','Sub1','SUB-9','FRÜHERE LANDINGPAGES','LP #88','ADV1','ADV-A','ADV2','ADV-B'])expect(html).toContain(text);expect(html).toContain('class="incompleteLpDisclosure"');expect(html).toContain('<summary>');expect(html).toContain('Quellen anzeigen');expect(html).not.toContain('open=""');for(const text of['20,00 €','Umsatz','9,00 €','Payout','11,00 €','Profit','2 First-Sales','1 Rebills','3 Coin-Spend','vorläufiger Source-Snapshot','akzeptiert: 10.08.2026–21.08.2026','angefordert: 08.08.2026–21.08.2026','fehlende Tage: 08.08.2026, 09.08.2026'])expect(html).toContain(text);for(const text of['Ausbauen','Stoppen','Austausch empfohlen'])expect(html).not.toContain(text)});
 });
+
+describe('provisional source compaction',()=>{
+ const row=(subSource:string,sois:number,profit:number)=>({mode:'tracked' as const,source:'18744',subSource,mainValue:'18744',subValue:subSource,clicks:10,sois,cvr:20,firstSales:0,rebills:0,coinSpend:1,payout:Math.abs(profit),revenue:0,profit});
+ const rows=[row('NICHTMEHR_CH',14,-140),row('LUZERN_CH',9,-90),row('GRETA_DACH',2,-16)];
+ const html=()=>renderToStaticMarkup(<ProvisionalSourceList rows={rows}/>);
+
+ it('names the source id once instead of once per sub value',()=>{
+  expect(html().match(/>18744</g)?.length).toBe(1);
+ });
+ it('states the summed result and the verdict for the source',()=>{
+  const markup=html();
+  expect(markup).toContain('-246,00');
+  expect(markup).toContain('Verbrennt Geld');
+ });
+ it('drops the repeated event block per sub value',()=>{
+  expect(html()).not.toContain('snapshotEventBlock');
+ });
+ it('keeps every sub value and its numbers reachable',()=>{
+  const markup=html();
+  for(const sub of ['NICHTMEHR_CH','LUZERN_CH','GRETA_DACH'])expect(markup).toContain(sub);
+  expect(markup).toContain('data-scope="source-events-18744-LUZERN_CH"');
+ });
+});
