@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{mergeCanonicalSourceConversions}from'./smartlink-source-conversions';
+import{canonicalSmartlinkSubSource,mergeCanonicalSourceConversions}from'./smartlink-source-conversions';
 import type{SmartlinkSourceFact}from'./smartlink-transparency';
 
 const snapshot:SmartlinkSourceFact[]=[
@@ -8,6 +8,20 @@ const snapshot:SmartlinkSourceFact[]=[
 ];
 
 describe('canonical Smartlink source conversion overlay',()=>{
+ it('collapses Source 255 click IDs into its real DG and tutu Sub1 groups',()=>{
+  expect(canonicalSmartlinkSubSource('255',{sub1:'2g520o04blrhm',sub2:'tutu',sub4:'5d1b72d184064e42aa7af8f80f721958'})).toBe('tutu');
+  expect(canonicalSmartlinkSubSource('255',{sub1:'DG',sub4:'d227029ec1ca496fa9fbca917422d34c'})).toBe('DG');
+  expect(canonicalSmartlinkSubSource('255',{sub1:'2g520o04blrhm',sub4:'5d1b72d184064e42aa7af8f80f721958'})).toBe('');
+  expect(canonicalSmartlinkSubSource('other',{sub1:'real-sub',sub2:'deeper'})).toBe('real-sub');
+ });
+ it('assigns Source 255 conversion events to the same real Sub1 groups',()=>{
+  const rows=mergeCanonicalSourceConversions([], [
+   {type:'soi',converted_at:'2026-08-02T10:00:00Z',offer_url_id:'2751',offer_id:'57',offer_name:'Singles69',revenue:0,payout:3,status:'approved',is_scrub:false,raw:{source_id:'255',sub1:'2g520o04blrhm',sub2:'tutu',sub4:'5d1b72d184064e42aa7af8f80f721958'}},
+   {type:'first_sale',converted_at:'2026-08-02T12:00:00Z',offer_url_id:'2751',offer_id:'57',offer_name:'Singles69',revenue:16.66,payout:0,status:'approved',is_scrub:false,raw:{source_id:'255',sub1:'DG',sub4:'d227029ec1ca496fa9fbca917422d34c'}},
+  ],new Set(['2026-08-02']));
+  expect(rows.map(row=>row.sub_source).sort()).toEqual(['DG','tutu']);
+  expect(rows.some(row=>/^[a-f0-9]{32}$/.test(row.sub_source)||row.sub_source==='2g520o04blrhm')).toBe(false);
+ });
  it('replaces unattributed snapshot money with the tracked source carried by canonical conversions',()=>{
   const rows=mergeCanonicalSourceConversions(snapshot,[
    {type:'soi',converted_at:'2026-08-02T10:00:00Z',offer_url_id:'2751',offer_id:'57',offer_name:'Singles69',revenue:0,payout:3,status:'approved',is_scrub:false,raw:{source_id:'amcch-adn',sub1:'dir_de48ee39',sub4:'385985403'}},
