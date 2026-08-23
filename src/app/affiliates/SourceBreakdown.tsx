@@ -1,5 +1,5 @@
 "use client";
-import LazyDetails from "./LazyDetails";
+import SourceGroupPanel from "./SourceTable";
 import CopyValue from "./CopyValue";
 import SourcePairCopy from "./SourcePairCopy";
 import SourcePeriodControls from "./SourcePeriodControls";
@@ -68,7 +68,6 @@ export default function SourceBreakdown({
   freshness,
   initialSort='sois',
   disclosureScope = "source",
-  openSourceDetails = new Set<string>(),
   canManage = false,
   affiliateName = "Affiliate",
   offerName = "Offer",
@@ -81,7 +80,6 @@ export default function SourceBreakdown({
   freshness?: SnapshotFreshness | null;
   initialSort?: BreakdownSort;
   disclosureScope?: string;
-  openSourceDetails?: ReadonlySet<string>;
   canManage?: boolean;
   affiliateName?: string;
   offerName?: string;
@@ -196,11 +194,10 @@ export default function SourceBreakdown({
               identity = rows.find((row) => row.sourceId === group.sourceId),
               mainValue = identity?.mainValue ?? null;
             return (
-              <LazyDetails
+              <SourceGroupPanel
                 id={disclosureId}
-                defaultOpen={openSourceDetails.has(disclosureId)}
                 key={group.sourceId}
-                summary={
+                head={
                   <>
                     <span>
                       <CopyValue
@@ -350,7 +347,7 @@ export default function SourceBreakdown({
                     </article>
                   ))}
                 </div>
-              </LazyDetails>
+              </SourceGroupPanel>
             );
           })}
         </div>

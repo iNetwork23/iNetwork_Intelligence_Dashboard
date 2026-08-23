@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
 import { can, foreignScopeRequested } from "@/lib/rbac";
 import {
-  getAffiliateOptimizations,
+  getAffiliateOptimizationsWithTrend,
   getAffiliateLeadLatency,
   getAffiliateSourceBreakdown,
   getAffiliateSourceFreshness,
@@ -12,8 +12,7 @@ import {
   type AffiliateVariant,
 } from "@/lib/affiliate-optimizer";
 import { NO_SUB_SOURCE, type SourceBreakdownRow } from "@/lib/source-breakdown";
-import type { LeadLatencyAnalysis, UrlLeadMaturity } from "@/lib/lead-latency";
-import type { SnapshotFreshness } from "@/lib/snapshot-generation";
+import type { LeadLatencyAnalysis } from "@/lib/lead-latency";
 import {
   getCampaignAffiliateMappings,
   getCampaignDirectory,
@@ -37,134 +36,16 @@ import SourceBreakdown from "./SourceBreakdown";
 import { sourceRebillKey } from "@/lib/source-rebill-key";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import OptimizationFlow from "../components/OptimizationFlow";
+import AffiliateCockpit from "./AffiliateCockpit";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
 import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
-const eur = (n: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
-    n,
-  );
-const num = (n: number) => new Intl.NumberFormat("de-DE").format(n);
-const pct = (n: number) => `${n.toFixed(2).replace(".", ",")} %`;
-const cr = (m: { clicks: number; sois: number; cvr: number }, api = false) =>
-  api ? "n/a – clickless" : m.clicks ? pct(m.cvr) : "nicht berechenbar";
-function ProfitPeriod({
-  label,
-  m,
-}: {
-  label: string;
-  m: AffiliateVariant["today"];
-}) {
-  return (
-    <article className="profitPeriod">
-      <span>{label}</span>
-      <b className={m.profit >= 0 ? "up" : "down"}>{eur(m.profit)} Profit</b>
-      <small>
-        {eur(m.revenue)} Umsatz – {eur(m.payout)} SOI-Vergütung ={" "}
-        {eur(m.profit)} Profit
-      </small>
-      <small>
-        {num(m.firstSales)} First-Sales · {num(m.rebills)} Rebills
-        {m.coinSpend ? ` · ${num(m.coinSpend)} Coin-Spend-Events` : ""}
-      </small>
-      <small>
-        {m.clicks
-          ? `${cr(m)} CVR · ${num(m.sois)} SOIs aus ${num(m.clicks)} Klicks`
-          : `Keine Klicks · ${num(m.sois)} SOIs`}
-      </small>
-    </article>
-  );
-}
+import { cr, duration, eur, num } from "./affiliate-format";
+import { ProfitPeriod, SourceCacheNotice, UrlLeadMaturityPanel } from "./AffiliatePanels";
+
 const recClass = (v: AffiliateVariant) => v.recommendation.severity;
-const duration = (hours: number | null) =>
-  hours === null
-    ? "–"
-    : hours < 48
-      ? `${hours.toFixed(1).replace(".", ",")} Std.`
-      : `${(hours / 24).toFixed(1).replace(".", ",")} Tage`;
-function UrlLeadMaturityPanel({
-  data,
-  benchmark,
-}: {
-  data?: UrlLeadMaturity;
-  benchmark: LeadLatencyAnalysis;
-}) {
-  if (!data?.pending)
-    return (
-      <div className="urlMaturity clear">
-        <div>
-          <span>LEAD-REIFE · LETZTE {benchmark.pendingWindowDays} TAGE</span>
-          <b>Keine aktuell offenen Leads</b>
-        </div>
-        <small>Kein unverkaufter SOI in diesem Fenster.</small>
-      </div>
-    );
-  return (
-    <div className={`urlMaturity ${data.overdue ? "late" : ""}`}>
-      <div>
-        <span>LEAD-REIFE · LETZTE {benchmark.pendingWindowDays} TAGE</span>
-        <b>
-          {data.pending} offene Leads · Ø Alter {duration(data.averageAgeHours)}
-        </b>
-        <small>
-          Partner-Ø bis First-Sale: {duration(benchmark.averageHours)} · 75 %
-          bis {duration(benchmark.p75Hours)}
-        </small>
-      </div>
-      <div>
-        <article>
-          <b>{data.youngerThanAverage}</b>
-          <small>jünger als Ø</small>
-        </article>
-        <article>
-          <b>{data.betweenAverageAndP75}</b>
-          <small>über Ø, noch im 75%-Fenster</small>
-        </article>
-        <article className={data.overdue ? "danger" : ""}>
-          <b>{data.overdue}</b>
-          <small>älter als 75%-Grenze</small>
-        </article>
-      </div>
-    </div>
-  );
-}
-function SourceCacheNotice({
-  period,
-  freshness,
-  blocked = false,
-}: {
-  period: string;
-  freshness: SnapshotFreshness | null;
-  blocked?: boolean;
-}) {
-  return (
-    <section className="sourceCacheError" role={blocked ? "alert" : "status"}>
-      <h3>
-        {blocked
-          ? `Quelldaten für ${period} konnten nicht geladen werden`
-          : `Quelldaten für ${period} teilweise verfügbar`}
-      </h3>
-      <p>
-        {blocked
-          ? "Es werden bewusst keine leeren oder geschätzten Quellen angezeigt."
-          : "Vorhandene Quellen werden trotzdem angezeigt. Fehlende Tage werden nach dem nächsten Snapshot ergänzt."}
-      </p>
-      {freshness ? (
-        <small>
-          Datenstand:{" "}
-          {freshness.maxDate
-            ? `bis ${freshness.maxDate.split("-").reverse().join(".")}`
-            : "noch kein Tag verfügbar"}{" "}
-          · {freshness.availableDays} von {freshness.expectedDays} Tagen
-        </small>
-      ) : (
-        <small>Datenstand konnte nicht geladen werden.</small>
-      )}
-    </section>
-  );
-}
 export default async function AffiliateOptimizerPage({
   searchParams,
 }: {
@@ -277,10 +158,11 @@ export default async function AffiliateOptimizerPage({
   try {
     [analyses, periodMappings, associationMappings] = await Promise.all([
       mayPartners
-        ? getAffiliateOptimizations(
+        ? getAffiliateOptimizationsWithTrend(
             period.servicePeriod,
             period.custom,
             user.access,
+            { from: period.from, to: period.to },
           )
         : Promise.resolve([]),
       getCampaignAffiliateMappings(
@@ -837,7 +719,7 @@ export default async function AffiliateOptimizerPage({
                 <small>größter wirtschaftlicher Hebel zuerst</small>
               </header>
               <div>
-                {[...stopVariants, ...scaleVariants].slice(0, 4).map((v) => (
+                {[...stopVariants, ...scaleVariants].map((v) => (
                   <InstantLink
                     key={v.key}
                     href={`/affiliates?affiliate=${selected.affiliateId}&offer=${v.offerId}&${rangeParams}#url-${v.offerUrlId}`}
@@ -1144,7 +1026,6 @@ export default async function AffiliateOptimizerPage({
                             : "sois"
                         }
                         disclosureScope={`${v.offerId}-${v.offerUrlId}`}
-                        openSourceDetails={openSourceDetails}
                         canManage={
                           user.access.role !== "partner" &&
                           can(user.access, "landingpages.manage") &&
@@ -1173,6 +1054,13 @@ export default async function AffiliateOptimizerPage({
         </>
       ) : (
         <>
+          <AffiliateCockpit
+            analyses={analyses}
+            rangeParams={rangeParams}
+            comparisonAvailable={
+              period.period !== "12m" && period.period !== "all"
+            }
+          />
           <section className="sectionHead">
             <div>
               <span>PARTNER-ÜBERSICHT</span>
