@@ -9,6 +9,7 @@ import{attachSourceActivity,mergeSourceWindows}from'./source-breakdown';
 import{resolveActivityCoverage,sourceScopeCoverageComplete}from'./snapshot-generation';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess,sourceRowsForAccess}from'./service-scopes';
+import{previousWindow,variantTrend,type AffiliateAnalysisWithTrend,type TrendVerdict}from'./affiliate-trend';
 
 export async function getAffiliateOptimizations(period:ReportingPeriod='30d',custom:{from:string;to:string}|undefined,access:AccessMetadata){
  assertAffiliateOptimizerAggregateAccess(access);
@@ -52,3 +53,18 @@ export const getAffiliateLeadLatency=(affiliateId:string,access:AccessMetadata)=
  assertScopesSupported(access,['affiliate']);
  return unstable_cache(async()=>analyzeLeadLatency(await loadAffiliateConversionsFromCache(affiliateId,90)),['affiliate-lead-latency-cache',affiliateId,scopeFingerprint(access),'90d'],{revalidate:900,tags:[`affiliate-latency-${affiliateId}`]})();
 };
+
+const NO_COMPARISON:TrendVerdict={status:'insufficient',reason:'Kein Vergleichszeitraum in der 365-Tage-Historie'};
+
+export async function getAffiliateOptimizationsWithTrend(period:ReportingPeriod,custom:{from:string;to:string}|undefined,access:AccessMetadata,range:{from:string;to:string}):Promise<AffiliateAnalysisWithTrend[]>{
+ assertAffiliateOptimizerAggregateAccess(access);
+ const current=await getDashboard(period,custom,access),
+  analyses=analyzeAffiliateTraffic(current,current,current);
+ if(period==='12m'||period==='all')
+  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:NO_COMPARISON}))}));
+ const prev=previousWindow(range.from,range.to),
+  previousPortfolio=await getDashboard('custom',prev,access),
+  before=new Map(analyzeAffiliateTraffic(previousPortfolio,previousPortfolio,previousPortfolio)
+   .flatMap(a=>a.variants.map(v=>[`${a.affiliateId}|${v.key}`,v.days30] as const)));
+ return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:variantTrend(v.days30,before.get(`${a.affiliateId}|${v.key}`))}))}));
+}
