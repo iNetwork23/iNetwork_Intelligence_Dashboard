@@ -256,3 +256,25 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
 .cockpitList li a b.down{color:var(--negative)}
 .cockpitEmpty{margin:0;padding:14px;color:var(--text-secondary);font-size:11px;line-height:1.5}
 @media(max-width:1050px){.affiliateCockpit{grid-template-columns:1fr}}
+
+/* Quellen nach Source-ID gruppiert: auf einen Blick erkennbar, welche Source
+   Geld verdient und welche Geld verbrennt. Sub1-Werte stehen eingerückt darunter. */
+.lpSourceRanking>.lpSourceGroupRow{display:grid;grid-template-columns:minmax(170px,1.35fr) .45fr .55fr .45fr .55fr .9fr .75fr;align-items:center;gap:8px;width:100%;padding:12px;border-bottom:1px solid var(--line-faint);background:var(--surface-3)}
+.lpSourceRanking>.lpSourceGroupRow span{min-width:0}
+.lpSourceRanking>.lpSourceGroupRow span b,.lpSourceRanking>.lpSourceGroupRow span small{display:block}
+.lpSourceRanking>.lpSourceGroupRow span b{font-size:13px;font-weight:800;overflow-wrap:anywhere}
+.lpSourceRanking>.lpSourceGroupRow span small{margin-top:3px;color:var(--text-muted);font-size:10px}
+.lpSourceRanking>.lpSourceGroupRow.verdient{box-shadow:inset 4px 0 var(--positive)}
+.lpSourceRanking>.lpSourceGroupRow.verbrennt{box-shadow:inset 4px 0 var(--negative)}
+.lpSourceRanking>.lpSourceGroupRow.neutral{box-shadow:inset 4px 0 var(--text-muted)}
+.lpSourceRanking>.lpSourceGroupRow>span:last-child b{font-size:15px;font-weight:800}
+.lpSourceRanking>.lpSourceGroupRow>span:last-child small{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.lpSourceRanking>.lpSourceGroupRow.verdient>span:last-child small{color:var(--positive)}
+.lpSourceRanking>.lpSourceGroupRow.verbrennt>span:last-child small{color:var(--negative)}
+.lpSourceRanking>button.lpSourceSubRow{min-height:46px;padding-left:30px;background:var(--surface-2)}
+.lpSourceRanking>button.lpSourceSubRow>span:first-child b{font-size:11px;font-weight:600;color:var(--text-secondary)}
+.lpSourceRanking>button.lpSourceSubRow>span:first-child:before{content:"└ ";color:var(--text-muted)}
+@media(max-width:900px){
+ .lpSourceRanking>.lpSourceGroupRow{grid-template-columns:1fr 1fr;row-gap:6px}
+ .lpSourceRanking>button.lpSourceSubRow{padding-left:18px}
+}

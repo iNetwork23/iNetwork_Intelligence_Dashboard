@@ -8,3 +8,36 @@ describe('Source numeric sorting',()=>{const row=(source:string,values:Partial<S
 describe('Smartlink analysis tabs',()=>{it('moves between both tabs with arrows, Home and End',()=>{expect(nextAnalysisTab('overview','ArrowRight')).toBe('sources');expect(nextAnalysisTab('sources','ArrowLeft')).toBe('overview');expect(nextAnalysisTab('sources','Home')).toBe('overview');expect(nextAnalysisTab('overview','End')).toBe('sources');expect(nextAnalysisTab('overview','Enter')).toBe(null)});it('isolates repeated LP IDs by campaign',()=>{expect(smartlinkInstanceKey('146','2673')).toBe('146-2673');expect(smartlinkInstanceKey('147','2673')).not.toBe(smartlinkInstanceKey('146','2673'))})});
 describe('shared Smartlink presentation system',()=>{it('keeps the canonical LP cards in the central Affiliate Optimizer',()=>{const root=join(process.cwd(),'src/app'),component=join(root,'components/SmartlinkPresentation.tsx');expect(existsSync(component)).toBe(true);const shared=readFileSync(component,'utf8'),partner=readFileSync(join(root,'affiliates/AffiliateSmartlinks.tsx'),'utf8'),legacy=readFileSync(join(root,'smartlinks/page.tsx'),'utf8');for(const name of['KpiValue','RecommendationBanner','TimeWindowSection','SmartlinkRotationCards'])expect(shared).toContain(`export function ${name}`);expect(partner).toContain("from'../components/SmartlinkPresentation'");expect(partner).toContain('<SmartlinkRotationCards');expect(legacy).toContain('redirect(');expect(legacy).not.toContain('<SmartlinkRotationCards')})});
 describe('shared Smartlink visual hierarchy',()=>{it('styles primary KPIs, comparison sorting, accessible badges and mobile cards',()=>{const css=readFileSync(join(process.cwd(),'src/app/globals.css'),'utf8');expect(css).toMatch(/\.sharedLpCard\{/);expect(css).toMatch(/\.primaryKpis\{/);expect(css).toMatch(/\.rotationSort\{/);expect(css).toMatch(/\.sharedStatusBadge:focus/);expect(css).toMatch(/@media\(max-width:600px\)[^{]*\{[^}]*\.sharedLpGrid/);expect(css).toMatch(/\.size-l>strong\{[^}]*font-size/)});});
+
+import{groupSmartlinkSourcesByMain}from'./smartlink-presentation';
+describe('Source grouping by main source',()=>{
+ const row=(source:string,subSource:string,profit:number,revenue:number,sois:number):SmartlinkSourceBreakdown=>({mode:'tracked',source,subSource,mainValue:source,subValue:subSource,clicks:100,sois,cvr:1,firstSales:0,rebills:0,coinSpend:0,revenue,payout:0,profit});
+ const rows=[
+  row('P-100','a',-50,10,5),
+  row('P-100','b',-70,20,7),
+  row('P-200','x',300,900,60),
+  row('P-300','y',0,0,0),
+ ];
+ it('collapses every sub source under one entry per source id',()=>{
+  const groups=groupSmartlinkSourcesByMain(rows,'profit','desc');
+  expect(groups.map(g=>g.source)).toEqual(['P-200','P-300','P-100']);
+  expect(groups.find(g=>g.source==='P-100')?.rows).toHaveLength(2);
+ });
+ it('sums the money of every sub source onto its source',()=>{
+  const group=groupSmartlinkSourcesByMain(rows,'profit','desc').find(g=>g.source==='P-100');
+  expect(group?.totals.profit).toBe(-120);
+  expect(group?.totals.revenue).toBe(30);
+  expect(group?.totals.sois).toBe(12);
+ });
+ it('says plainly which source earns and which burns money',()=>{
+  const verdicts=Object.fromEntries(groupSmartlinkSourcesByMain(rows,'profit','desc').map(g=>[g.source,g.verdict]));
+  expect(verdicts).toEqual({'P-200':'verdient','P-100':'verbrennt','P-300':'neutral'});
+ });
+ it('sorts ascending so the worst burner comes first',()=>{
+  expect(groupSmartlinkSourcesByMain(rows,'profit','asc').map(g=>g.source)).toEqual(['P-100','P-300','P-200']);
+ });
+ it('orders the sub sources inside a group by the same metric',()=>{
+  const group=groupSmartlinkSourcesByMain(rows,'profit','asc').find(g=>g.source==='P-100');
+  expect(group?.rows.map(r=>r.subSource)).toEqual(['b','a']);
+ });
+});

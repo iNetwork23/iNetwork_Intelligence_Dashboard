@@ -46,3 +46,31 @@ describe('SmartlinkRotationCards visual hierarchy',()=>{
 
  it('places the same contextual lead-origin disclosure on former landingpages',()=>{const affiliate=readFileSync(join(process.cwd(),'src/app/affiliates/AffiliateSmartlinks.tsx'),'utf8'),cache=readFileSync(join(process.cwd(),'src/lib/cached-smartlinks.ts'),'utf8');expect(affiliate).toContain('LandingpageSourceBreakdown');expect(affiliate).toContain('landingpageId={slot.id}');expect(cache).toContain('attachSmartlinkSourceBreakdowns')});
 });
+
+describe('grouped source ranking',()=>{
+ const src=(source:string,subSource:string,profit:number,revenue:number)=>({mode:'tracked' as const,source,subSource,mainValue:source,subValue:subSource,clicks:100,sois:10,cvr:10,firstSales:1,rebills:0,coinSpend:0,revenue,payout:0,profit});
+ const rows=[src('P-100','a',-50,10),src('P-100','b',-70,20),src('P-200','x',300,900)];
+ const html=()=>renderToStaticMarkup(<LandingpageSourceBreakdown rows={rows} scope="Test" totalSois={30} landingpageId="2673" embedded/>);
+ // Nur die Rangliste prüfen; das Detail-Panel rechts nennt die gewählte Source bewusst erneut.
+ const ranking=()=>html().split('lpSourceDetail')[0];
+
+ it('shows each source id once with its summed result',()=>{
+  const markup=ranking();
+  expect(markup.match(/P-100/g)?.length).toBe(1);
+  expect(markup).toContain('2 Sub1-Werte zusammengefasst');
+ });
+ it('states in words which source earns and which burns money',()=>{
+  const markup=html();
+  expect(markup).toContain('Verbrennt Geld');
+  expect(markup).toContain('lpSourceGroupRow verbrennt');
+ });
+ it('keeps every sub source reachable underneath its source',()=>{
+  const markup=ranking();
+  for(const sub of ['a','b'])expect(markup).toContain(`>${sub}</b>`);
+ });
+ it('renders a single-sub source as one plain row without a group header',()=>{
+  const markup=renderToStaticMarkup(<LandingpageSourceBreakdown rows={[src('P-200','x',300,900)]} scope="Test" totalSois={10} landingpageId="2673" embedded/>);
+  expect(markup).not.toContain('lpSourceGroupRow');
+  expect(markup).toContain('P-200');
+ });
+});
