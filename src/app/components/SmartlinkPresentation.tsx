@@ -1,7 +1,7 @@
 'use client';
 
-import {useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
-import {nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
+import {Fragment,useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
+import {groupSmartlinkSourcesByMain,nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SmartlinkSourceGroup,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
 import {rankSourceMatches} from '../../lib/source-search';
 import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown,SmartlinkSourceCoverage} from '../../lib/smartlink';
 import {leadActivityStatus} from '../../lib/source-breakdown';
@@ -60,7 +60,9 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,c
  const instanceKey=smartlinkInstanceKey(campaignId,landingpageId);
  const sorted=useMemo(()=>sortSourceBreakdownRows(rows,sort,direction),[rows,sort,direction]);
  const matched=useMemo(()=>rankSourceMatches(sorted,query,row=>[row.source,row.subSource]),[sorted,query]);
- const visible=matched.slice(0,visibleCount);
+ const groups=useMemo(()=>groupSmartlinkSourcesByMain(matched,sort,direction),[matched,sort,direction]);
+ const visibleGroups:SmartlinkSourceGroup[]=groups.slice(0,visibleCount);
+ const visible=visibleGroups.flatMap((group:SmartlinkSourceGroup)=>group.rows);
  const selected=visible.find(row=>sourceRowKey(row)===selectedKey)||visible[0];
  const selectedLabels=selected?sourceDimensionLabels(selected):{main:'Source',sub:'Sub1'},selectedIdentity=sourcePresentation({source:selected?.source,subSource:selected?.subSource,mainLabel:selectedLabels.main,subLabel:selectedLabels.sub}),selectedMainValue=selected?technicalSourceValue(selected.mainValue,selected.source):null,selectedSubValue=selected?technicalSourceValue(selected.subValue,selected.subSource):null;
  const sourceSois=rows.reduce((sum,row)=>sum+row.sois,0);
@@ -79,15 +81,29 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,c
   {visible.length?<div className="lpSourceMasterDetail">
    <section className="lpSourceRanking" aria-label={`Lead-Herkunft für LP #${landingpageId}`}>
     <header><span>Source / Sub1</span><span>SOIs</span><span>First-Sales</span><span>Rebills</span><span>Coin-Spend</span><span>Umsatz / Payout</span><span>Profit</span></header>
-    {visible.map(row=>{const key=sourceRowKey(row),active=sourceRowKey(selected)===key,labels=sourceDimensionLabels(row),identity=sourcePresentation({source:row.source,subSource:row.subSource,mainLabel:labels.main,subLabel:labels.sub});return <button type="button" key={key} className={active?'selected':''} aria-pressed={active} onClick={()=>setSelectedKey(key)}>
-     <span><b>{identity.primary}</b><small>{identity.missingMain||`${identity.secondaryLabel} · ${identity.secondary||'Nicht übermittelt'}`}</small></span>
-     <span><b>{num(row.sois)}</b><small>{share(row.sois,totalSois)}</small></span>
-     <span><b>{num(row.firstSales)}</b><small>{share(row.firstSales,row.sois)}</small></span>
-     <span><b>{num(row.rebills)}</b><small>Rebills</small></span>
-     <span><b>{num(row.coinSpend)}</b><small>Coin-Spend</small></span>
-     <span><b>{euro(row.revenue)}</b><small>{euro(row.payout)} Payout</small></span>
-     <span className={row.profit>=0?'up':'down'}><b>{euro(row.profit)}</b><small>{row.profit>0?'Positiver Profit':row.profit<0?'Verlust im Zeitraum':'Ausgeglichen'}</small></span>
-    </button>})}
+    {visibleGroups.map((group:SmartlinkSourceGroup)=>{const groupKey=`${group.mode}|${group.source}`,single=group.rows.length===1;
+     const leafButton=(row:SmartlinkSourceBreakdown,nested:boolean)=>{const key=sourceRowKey(row),active=sourceRowKey(selected)===key,labels=sourceDimensionLabels(row),identity=sourcePresentation({source:row.source,subSource:row.subSource,mainLabel:labels.main,subLabel:labels.sub});return <button type="button" key={key} className={`${nested?'lpSourceSubRow ':''}${active?'selected':''}`.trim()} aria-pressed={active} onClick={()=>setSelectedKey(key)}>
+      <span><b>{nested?(identity.secondary||'Nicht übermittelt'):identity.primary}</b><small>{nested?identity.secondaryLabel:(identity.missingMain||`${identity.secondaryLabel} · ${identity.secondary||'Nicht übermittelt'}`)}</small></span>
+      <span><b>{num(row.sois)}</b><small>{share(row.sois,totalSois)}</small></span>
+      <span><b>{num(row.firstSales)}</b><small>{share(row.firstSales,row.sois)}</small></span>
+      <span><b>{num(row.rebills)}</b><small>Rebills</small></span>
+      <span><b>{num(row.coinSpend)}</b><small>Coin-Spend</small></span>
+      <span><b>{euro(row.revenue)}</b><small>{euro(row.payout)} Payout</small></span>
+      <span className={row.profit>=0?'up':'down'}><b>{euro(row.profit)}</b><small>{row.profit>0?'Positiver Profit':row.profit<0?'Verlust im Zeitraum':'Ausgeglichen'}</small></span>
+     </button>};
+     if(single)return <Fragment key={groupKey}>{leafButton(group.rows[0],false)}</Fragment>;
+     return <Fragment key={groupKey}>
+      <div className={`lpSourceGroupRow ${group.verdict}`}>
+       <span><b>{group.source}</b><small>{group.rows.length} Sub1-Werte zusammengefasst</small></span>
+       <span><b>{num(group.totals.sois)}</b><small>{share(group.totals.sois,totalSois)}</small></span>
+       <span><b>{num(group.totals.firstSales)}</b><small>{share(group.totals.firstSales,group.totals.sois)}</small></span>
+       <span><b>{num(group.totals.rebills)}</b><small>Rebills</small></span>
+       <span><b>{num(group.totals.coinSpend)}</b><small>Coin-Spend</small></span>
+       <span><b>{euro(group.totals.revenue)}</b><small>{euro(group.totals.payout)} Payout</small></span>
+       <span className={group.totals.profit>=0?'up':'down'}><b>{euro(group.totals.profit)}</b><small>{group.verdict==='verdient'?'Verdient Geld':group.verdict==='verbrennt'?'Verbrennt Geld':'Ausgeglichen'}</small></span>
+      </div>
+      {group.rows.map((row:SmartlinkSourceBreakdown)=>leafButton(row,true))}
+     </Fragment>})}
    </section>
    <article className="lpSourceDetail" aria-live="polite">
     <header><div className="lpSourceIdentity">{selectedIdentity.missingMain&&<span className="lpSourceIdentityNote">{selectedIdentity.missingMain}</span>}{transmitted(selected.source)&&<CopyValue label={selectedLabels.main} value={selected.source}/>}<CopyValue label={selectedLabels.sub} value={selected.subSource||'Nicht übermittelt'}/></div>{transmitted(selected.source)&&<SourcePairCopy mode={selected.mode==='api'?'api':'tracked'} source={selected.source} subSource={selected.subSource||'Nicht übermittelt'}/>}</header>
@@ -97,7 +113,7 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,c
     <small className="coinSpendDefinition">Eventquote, keine Kundenquote. Ein Kunde kann mehrere Coin-Spend-Events verursachen.</small>
    </article>
   </div>:<p className="emptyInline">{query.trim()?`Keine Quelle passt zu „${query.trim()}“.`:'Keine Source-Daten in diesem Zeitraum. Fehlende Werte werden als „Nicht übermittelt“ ausgewiesen.'}</p>}
-  {visibleCount<matched.length&&<button type="button" className="showMoreSources" onClick={()=>setVisibleCount(count=>Math.min(count+12,matched.length))}>Weitere {num(Math.min(12,matched.length-visibleCount))} Quellen anzeigen</button>}
+  {visibleCount<groups.length&&<button type="button" className="showMoreSources" onClick={()=>setVisibleCount(count=>Math.min(count+12,groups.length))}>Weitere {num(Math.min(12,groups.length-visibleCount))} Quellen anzeigen</button>}
  </div>;
  if(embedded)return <section className="lpSourceBreakdown embedded"><header className="lpSourceEmbeddedHeader">{heading}<strong className={reconciled?'up':'down'}>{reconciled?'Vollständig zugeordnet':'Abweichung prüfen'}</strong></header>{panel}</section>;
  return <details className="lpSourceBreakdown" onToggle={event=>onOpenChange?.(event.currentTarget.open)}><summary>{heading}<strong className={reconciled?'up':'down'}>{reconciled?'Vollständig zugeordnet':'Abweichung prüfen'}</strong><i aria-hidden="true">›</i></summary>{panel}</details>;
