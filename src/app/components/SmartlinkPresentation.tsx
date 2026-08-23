@@ -122,10 +122,35 @@ export function LandingpageSourceBreakdown({rows,scope,totalSois,landingpageId,c
 export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
  const [sort,setSort]=useState<SourceMetricSort>('sois');
  const [direction,setDirection]=useState<SortDirection>('desc');
- const sorted=useMemo(()=>sortSourceBreakdownRows(rows,sort,direction),[rows,sort,direction]);
+ const groups=useMemo(()=>groupSmartlinkSourcesByMain(rows,sort,direction),[rows,sort,direction]);
  const chooseSort=(next:SourceMetricSort)=>{if(next===sort)setDirection(current=>current==='asc'?'desc':'asc');else{setSort(next);setDirection('desc')}};
  if(!rows.length)return <p>Keine Source-ID im verfügbaren Snapshot.</p>;
- return <div className="incompleteSourceList"><div className="incompleteSourceSort" role="group" aria-label="Vorläufige Quellen nach Zahlenwert sortieren"><small>Sortieren nach</small>{sourceSortOptions.map(([id,label])=>{const active=id===sort,current=direction==='asc'?'niedrigste zuerst':'höchste zuerst',next=direction==='asc'?'höchste zuerst':'niedrigste zuerst';return <button type="button" key={id} className={active?'active':''} aria-pressed={active} aria-label={`Nach ${label} sortieren${active?`: derzeit ${current}; klicken für ${next}`:': höchste zuerst'}`} onClick={()=>chooseSort(id)}>{label}{active?` ${direction==='asc'?'↑':'↓'}`:''}</button>})}</div>{sorted.map((row,index)=>{const labels=sourceDimensionLabels(row);return <div key={`${sourceRowKey(row)}-${index}`}><div className="incompleteSourceIdentity"><span><small>{labels.main}</small><b>{row.mainValue||row.source||'Nicht übermittelt'}</b></span><span><small>{labels.sub}</small><b>{row.subValue||row.subSource||'Nicht übermittelt'}</b></span></div><section className="snapshotEventBlock"><b>Vorläufige Source-Events</b><div className="snapshotEventGrid" data-scope={`source-events-${row.source}-${row.subSource}`}><span><b>{num(row.firstSales)}</b><small>First-Sales</small></span><span><b>{num(row.rebills)}</b><small>Rebills</small></span><span><b>{num(row.coinSpend)}</b><small>Coin-Spend-Events</small></span></div></section><div className="incompleteSourceEconomics"><span><small>SOIs</small><b>{num(row.sois)}</b></span><span><small>Umsatz</small><b>{euro(row.revenue)}</b></span><span><small>Payout</small><b>{euro(row.payout)}</b></span><span><small>Profit</small><b className={row.profit>=0?'up':'down'}>{euro(row.profit)}</b></span></div><small className="incompleteSourceEvents">vorläufiger Source-Snapshot · {num(row.firstSales)} First-Sales · {num(row.rebills)} Rebills · {num(row.coinSpend)} Coin-Spend-Events</small></div>})}</div>;
+ const events=(row:SmartlinkSourceBreakdown)=>`${num(row.firstSales)} First-Sales · ${num(row.rebills)} Rebills · ${num(row.coinSpend)} Coin-Spend-Events`;
+ const verdictText=(group:SmartlinkSourceGroup)=>group.verdict==='verdient'?'Verdient Geld':group.verdict==='verbrennt'?'Verbrennt Geld':'Ausgeglichen';
+ return <div className="incompleteSourceList"><div className="incompleteSourceSort" role="group" aria-label="Vorläufige Quellen nach Zahlenwert sortieren"><small>Sortieren nach</small>{sourceSortOptions.map(([id,label])=>{const active=id===sort,current=direction==='asc'?'niedrigste zuerst':'höchste zuerst',next=direction==='asc'?'höchste zuerst':'niedrigste zuerst';return <button type="button" key={id} className={active?'active':''} aria-pressed={active} aria-label={`Nach ${label} sortieren${active?`: derzeit ${current}; klicken für ${next}`:': höchste zuerst'}`} onClick={()=>chooseSort(id)}>{label}{active?` ${direction==='asc'?'↑':'↓'}`:''}</button>})}</div>{groups.map((group:SmartlinkSourceGroup)=>{
+  const first=group.rows[0],labels=sourceDimensionLabels(first),single=group.rows.length===1;
+  return <section className={`provisionalSourceGroup ${group.verdict}`} key={`${group.mode}|${group.source}`}>
+   <header className="provisionalSourceHead">
+    <span className="provisionalIdentity"><small>{labels.main}</small><b>{group.mainValue||group.source||'Nicht übermittelt'}</b></span>
+    <span><small>{single?labels.sub:`${labels.sub}-Werte`}</small><b>{single?(first.subValue||first.subSource||'Nicht übermittelt'):num(group.rows.length)}</b></span>
+    <span><small>SOIs</small><b>{num(group.totals.sois)}</b></span>
+    <span><small>Umsatz</small><b>{euro(group.totals.revenue)}</b></span>
+    <span><small>Payout</small><b>{euro(group.totals.payout)}</b></span>
+    <span><small>Profit</small><b className={group.totals.profit>=0?'up':'down'}>{euro(group.totals.profit)}</b></span>
+    <strong className="provisionalVerdict">{verdictText(group)}</strong>
+   </header>
+   {single
+    ?<small className="incompleteSourceEvents" data-scope={`source-events-${first.source}-${first.subSource}`}>vorläufiger Source-Snapshot · {events(first)}</small>
+    :<><ul className="provisionalSubRows">{group.rows.map((row:SmartlinkSourceBreakdown)=><li key={sourceRowKey(row)}>
+       <span className="sub">{row.subValue||row.subSource||'Nicht übermittelt'}</span>
+       <span>{num(row.sois)} SOIs</span>
+       <span>{euro(row.revenue)}</span>
+       <span>{euro(row.payout)}</span>
+       <b className={row.profit>=0?'up':'down'}>{euro(row.profit)}</b>
+       <small data-scope={`source-events-${row.source}-${row.subSource}`}>{events(row)}</small>
+      </li>)}</ul>
+      <small className="incompleteSourceEvents">vorläufiger Source-Snapshot · {num(group.rows.length)} {labels.sub}-Werte zusammengefasst</small></>}
+  </section>})}</div>;
 }
 
 function LandingpageOverviewCard({slot,recommendation,selected,detailId,onSelect,windows}:{slot:SmartSlot;recommendation?:SlotRecommendation;selected:boolean;detailId:string;onSelect:()=>void;windows:Windows}){
