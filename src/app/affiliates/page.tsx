@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
 import { can, foreignScopeRequested } from "@/lib/rbac";
 import {
-  getAffiliateOptimizations,
+  getAffiliateOptimizationsWithTrend,
   getAffiliateLeadLatency,
   getAffiliateSourceBreakdown,
   getAffiliateSourceFreshness,
@@ -37,6 +37,7 @@ import SourceBreakdown from "./SourceBreakdown";
 import { sourceRebillKey } from "@/lib/source-rebill-key";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import OptimizationFlow from "../components/OptimizationFlow";
+import AffiliateCockpit from "./AffiliateCockpit";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
 import CampaignPicker from "../smartlinks/CampaignPicker";
@@ -277,10 +278,11 @@ export default async function AffiliateOptimizerPage({
   try {
     [analyses, periodMappings, associationMappings] = await Promise.all([
       mayPartners
-        ? getAffiliateOptimizations(
+        ? getAffiliateOptimizationsWithTrend(
             period.servicePeriod,
             period.custom,
             user.access,
+            { from: period.from, to: period.to },
           )
         : Promise.resolve([]),
       getCampaignAffiliateMappings(
@@ -837,7 +839,7 @@ export default async function AffiliateOptimizerPage({
                 <small>größter wirtschaftlicher Hebel zuerst</small>
               </header>
               <div>
-                {[...stopVariants, ...scaleVariants].slice(0, 4).map((v) => (
+                {[...stopVariants, ...scaleVariants].map((v) => (
                   <InstantLink
                     key={v.key}
                     href={`/affiliates?affiliate=${selected.affiliateId}&offer=${v.offerId}&${rangeParams}#url-${v.offerUrlId}`}
@@ -1173,6 +1175,13 @@ export default async function AffiliateOptimizerPage({
         </>
       ) : (
         <>
+          <AffiliateCockpit
+            analyses={analyses}
+            rangeParams={rangeParams}
+            comparisonAvailable={
+              period.period !== "12m" && period.period !== "all"
+            }
+          />
           <section className="sectionHead">
             <div>
               <span>PARTNER-ÜBERSICHT</span>

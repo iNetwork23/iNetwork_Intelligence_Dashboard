@@ -21,3 +21,21 @@ describe('TrendList',()=>{
     expect(html).toContain('Keine Position unter der Reifeschwelle');
   });
 });
+
+import AffiliateCockpit from '@/app/affiliates/AffiliateCockpit';
+import type {AffiliateAnalysisWithTrend} from '@/lib/affiliate-trend';
+
+const analyses:AffiliateAnalysisWithTrend[]=[];
+
+describe('AffiliateCockpit',()=>{
+  it('renders all three lists',()=>{
+    const html=renderToStaticMarkup(<AffiliateCockpit analyses={analyses} rangeParams="period=30d" comparisonAvailable/>);
+    expect(html).toContain('Verluste');
+    expect(html).toContain('Skalieren');
+    expect(html).toContain('Veränderung');
+  });
+  it('states why the change list is missing for the 365 day period',()=>{
+    const html=renderToStaticMarkup(<AffiliateCockpit analyses={analyses} rangeParams="period=all" comparisonAvailable={false}/>);
+    expect(html).toContain('Kein Vergleichszeitraum in der 365-Tage-Historie');
+  });
+});
