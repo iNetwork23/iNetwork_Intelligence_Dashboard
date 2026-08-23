@@ -1146,7 +1146,6 @@ export default async function AffiliateOptimizerPage({
                             : "sois"
                         }
                         disclosureScope={`${v.offerId}-${v.offerUrlId}`}
-                        openSourceDetails={openSourceDetails}
                         canManage={
                           user.access.role !== "partner" &&
                           can(user.access, "landingpages.manage") &&
