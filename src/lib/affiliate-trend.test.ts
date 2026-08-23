@@ -40,3 +40,38 @@ describe('variantTrend',()=>{
     expect(variantTrend(m({clicks:200,profit:80}),m({clicks:200,profit:0}))).toEqual({status:'ok',profitDelta:80,profitPercent:null,direction:'steigend'});
   });
 });
+
+import {buildCockpitLists,type AffiliateAnalysisWithTrend,type VariantWithTrend} from './affiliate-trend';
+import type {AffiliateVariant} from './affiliate-optimizer';
+
+const variant=(key:string,action:AffiliateVariant['recommendation']['action'],profit:number,trendDelta:number|null):VariantWithTrend=>({
+ key,offerId:'20',offer:'Offer 20',offerUrlId:key,offerUrl:`URL ${key}`,trafficType:'Direkt',trafficMode:'tracked',
+ today:m({}),days7:m({}),days30:m({profit,sois:30}),
+ efficiency:{label:'Profit je Klick',days7:0,days30:0},trend:'neu/zu wenig Daten',
+ recommendation:{action,severity:'neutral',reason:`Grund ${key}`,evidence:[]},
+ trendVerdict:trendDelta===null?{status:'insufficient',reason:'Kein Vergleichszeitraum verfügbar'}:{status:'ok',profitDelta:trendDelta,profitPercent:10,direction:trendDelta>0?'steigend':'fallend'},
+});
+const analysis=(affiliateId:string,variants:VariantWithTrend[]):AffiliateAnalysisWithTrend=>({affiliateId,affiliate:`Partner ${affiliateId}`,variants,totals30:m({}),bestVariantKey:variants[0]?.key||'',summary:''});
+
+describe('buildCockpitLists',()=>{
+  const lists=()=>buildCockpitLists([
+    analysis('154',[variant('a','AUSSCHALTEN',-500,-40),variant('b','SKALIEREN',900,120)]),
+    analysis('200',[variant('c','AUSSCHALTEN',-120,null),variant('d','SKALIEREN',300,-800)]),
+  ]);
+  it('lists every loss across all partners, worst first',()=>{
+    expect(lists().losses.map(r=>r.variantKey)).toEqual(['a','c']);
+  });
+  it('lists every scale candidate, best first',()=>{
+    expect(lists().scales.map(r=>r.variantKey)).toEqual(['b','d']);
+  });
+  it('sums the lists',()=>{
+    expect(lists().lossTotal).toBe(-620);
+    expect(lists().scaleTotal).toBe(1200);
+  });
+  it('ranks changes by absolute delta and excludes immature verdicts',()=>{
+    expect(lists().changes.map(r=>r.variantKey)).toEqual(['d','b','a']);
+  });
+  it('carries the partner identity onto every row',()=>{
+    expect(lists().losses[1]).toMatchObject({affiliateId:'200',affiliate:'Partner 200',reason:'Grund c'});
+  });
+});
