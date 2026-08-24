@@ -14,7 +14,7 @@ import{previousWindow,variantTrend,type AffiliateAnalysisWithTrend,type TrendVer
 export async function getAffiliateOptimizations(period:ReportingPeriod='30d',custom:{from:string;to:string}|undefined,access:AccessMetadata){
  assertAffiliateOptimizerAggregateAccess(access);
  const selected=await getDashboard(period,custom,access);
- return analyzeAffiliateTraffic(selected,selected,selected).map(affiliate=>({...affiliate,variants:affiliate.variants.map(variant=>({...variant,trend:'neu/zu wenig Daten' as const}))}));
+ return analyzeAffiliateTraffic(selected);
 }
 
 const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();
@@ -59,12 +59,12 @@ const NO_COMPARISON:TrendVerdict={status:'insufficient',reason:'Kein Vergleichsz
 export async function getAffiliateOptimizationsWithTrend(period:ReportingPeriod,custom:{from:string;to:string}|undefined,access:AccessMetadata,range:{from:string;to:string}):Promise<AffiliateAnalysisWithTrend[]>{
  assertAffiliateOptimizerAggregateAccess(access);
  const current=await getDashboard(period,custom,access),
-  analyses=analyzeAffiliateTraffic(current,current,current);
+  analyses=analyzeAffiliateTraffic(current);
  if(period==='12m'||period==='all')
   return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:NO_COMPARISON}))}));
  const prev=previousWindow(range.from,range.to),
   previousPortfolio=await getDashboard('custom',prev,access),
-  before=new Map(analyzeAffiliateTraffic(previousPortfolio,previousPortfolio,previousPortfolio)
+  before=new Map(analyzeAffiliateTraffic(previousPortfolio)
    .flatMap(a=>a.variants.map(v=>[`${a.affiliateId}|${v.key}`,v.days30] as const)));
  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:variantTrend(v.days30,before.get(`${a.affiliateId}|${v.key}`))}))}));
 }

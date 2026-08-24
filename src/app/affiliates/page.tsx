@@ -953,7 +953,6 @@ export default async function AffiliateOptimizerPage({
                         {v.days30.firstSales} <small>First-Sales</small>
                       </span>
                       <span>
-                        {v.trend}
                         <i>Details</i>
                       </span>
                     </>
