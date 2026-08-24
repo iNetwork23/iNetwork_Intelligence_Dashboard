@@ -620,6 +620,7 @@ export default async function AffiliateOptimizerPage({
                 <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
               </section>
                 <AffiliateSmartlinks
+                periodControls={<AffiliatePeriodControls period={period} compact/>}
                 affiliateId={selectedWorkspace.affiliateId}
                 returnTo={smartlinkCurrentHref}
                 mappings={selectedWorkspace.campaigns}
