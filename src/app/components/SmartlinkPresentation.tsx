@@ -130,26 +130,29 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
  return <div className="incompleteSourceList"><div className="incompleteSourceSort" role="group" aria-label="Vorläufige Quellen nach Zahlenwert sortieren"><small>Sortieren nach</small>{sourceSortOptions.map(([id,label])=>{const active=id===sort,current=direction==='asc'?'niedrigste zuerst':'höchste zuerst',next=direction==='asc'?'höchste zuerst':'niedrigste zuerst';return <button type="button" key={id} className={active?'active':''} aria-pressed={active} aria-label={`Nach ${label} sortieren${active?`: derzeit ${current}; klicken für ${next}`:': höchste zuerst'}`} onClick={()=>chooseSort(id)}>{label}{active?` ${direction==='asc'?'↑':'↓'}`:''}</button>})}</div>{groups.map((group:SmartlinkSourceGroup)=>{
   const first=group.rows[0],labels=sourceDimensionLabels(first),single=group.rows.length===1;
   return <section className={`provisionalSourceGroup ${group.verdict}`} key={`${group.mode}|${group.source}`}>
-   <header className="provisionalSourceHead">
-    <span className="provisionalIdentity"><small>{labels.main}</small><b>{group.mainValue||group.source||'Nicht übermittelt'}</b></span>
-    <span><small>{single?labels.sub:`${labels.sub}-Werte`}</small><b>{single?(first.subValue||first.subSource||'Nicht übermittelt'):num(group.rows.length)}</b></span>
+   <header className="provisionalSourceHead columns">
+    <span className="provisionalIdentity"><small>{labels.main}</small><b>{group.mainValue||group.source||'Nicht übermittelt'}</b><em>{single?`${labels.sub}: ${first.subValue||first.subSource||'Nicht übermittelt'}`:`${num(group.rows.length)} ${labels.sub}-Werte`}</em></span>
     <span><small>SOIs</small><b>{num(group.totals.sois)}</b></span>
+    <span><small>First-Sales</small><b>{num(group.totals.firstSales)}</b></span>
+    <span><small>Rebills</small><b>{num(group.totals.rebills)}</b></span>
+    <span><small>Coin-Spend</small><b>{num(group.totals.coinSpend)}</b></span>
     <span><small>Umsatz</small><b>{euro(group.totals.revenue)}</b></span>
     <span><small>Payout</small><b>{euro(group.totals.payout)}</b></span>
     <span><small>Profit</small><b className={group.totals.profit>=0?'up':'down'}>{euro(group.totals.profit)}</b></span>
     <strong className="provisionalVerdict">{verdictText(group)}</strong>
    </header>
-   {single
-    ?<small className="incompleteSourceEvents" data-scope={`source-events-${first.source}-${first.subSource}`}>vorläufiger Source-Snapshot · {events(first)}</small>
-    :<><ul className="provisionalSubRows">{group.rows.map((row:SmartlinkSourceBreakdown)=><li key={sourceRowKey(row)}>
-       <span className="sub">{row.subValue||row.subSource||'Nicht übermittelt'}</span>
-       <span>{num(row.sois)} SOIs</span>
-       <span>{euro(row.revenue)}</span>
-       <span>{euro(row.payout)}</span>
-       <b className={row.profit>=0?'up':'down'}>{euro(row.profit)}</b>
-       <small data-scope={`source-events-${row.source}-${row.subSource}`}>{events(row)}</small>
-      </li>)}</ul>
-      <small className="incompleteSourceEvents">vorläufiger Source-Snapshot · {num(group.rows.length)} {labels.sub}-Werte zusammengefasst</small></>}
+   {!single&&<ul className="provisionalSubRows columns">{group.rows.map((row:SmartlinkSourceBreakdown)=><li key={sourceRowKey(row)} data-scope={`source-events-${row.source}-${row.subSource}`}>
+     <span className="sub">{row.subValue||row.subSource||'Nicht übermittelt'}</span>
+     <span>{num(row.sois)}</span>
+     <span>{num(row.firstSales)}</span>
+     <span>{num(row.rebills)}</span>
+     <span>{num(row.coinSpend)}</span>
+     <span>{euro(row.revenue)}</span>
+     <span>{euro(row.payout)}</span>
+     <b className={row.profit>=0?'up':'down'}>{euro(row.profit)}</b>
+     <span aria-hidden="true"/>
+    </li>)}</ul>}
+   <small className="incompleteSourceEvents" data-scope={single?`source-events-${first.source}-${first.subSource}`:undefined}>{single?`vorläufiger Source-Snapshot · ${events(first)}`:`vorläufiger Source-Snapshot · ${num(group.rows.length)} ${labels.sub}-Werte zusammengefasst`}</small>
   </section>})}</div>;
 }
 

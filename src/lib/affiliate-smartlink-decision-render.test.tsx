@@ -42,3 +42,20 @@ describe('provisional source compaction',()=>{
   expect(markup).toContain('data-scope="source-events-18744-LUZERN_CH"');
  });
 });
+
+describe('provisional event columns',()=>{
+ const row2=(subSource:string,sois:number,profit:number,firstSales:number,rebills:number,coinSpend:number)=>({mode:'tracked' as const,source:'255',subSource,mainValue:'255',subValue:subSource,clicks:10,sois,cvr:20,firstSales,rebills,coinSpend,payout:Math.abs(profit),revenue:0,profit});
+ it('shows the event totals as aligned columns in the group head',()=>{
+  const html=renderToStaticMarkup(<ProvisionalSourceList rows={[row2('tutu',123,-505,1,4,34),row2('DG',41,-225,0,0,7)]}/>);
+  expect(html).toContain('provisionalSourceHead columns');
+  expect(html).toContain('<small>First-Sales</small><b>1</b>');
+  expect(html).toContain('<small>Rebills</small><b>4</b>');
+  expect(html).toContain('<small>Coin-Spend</small><b>41</b>');
+ });
+ it('renders each sub row on the same column grid with its own event numbers',()=>{
+  const html=renderToStaticMarkup(<ProvisionalSourceList rows={[row2('tutu',123,-505,1,4,34),row2('DG',41,-225,0,0,7)]}/>);
+  expect(html).toContain('provisionalSubRows columns');
+  expect(html).toContain('data-scope="source-events-255-tutu"');
+  expect(html).not.toContain('First-Sales ·');
+ });
+});
