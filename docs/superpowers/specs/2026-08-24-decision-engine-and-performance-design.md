@@ -88,3 +88,14 @@ geänderten Source-Semantiken festschreiben — diese werden auf die neue,
 dokumentierte Semantik umgeschrieben (gleiche Intention: Urteil zu Datenlage).
 Neue Tests: Wilson-Funktionen, Regelmatrix der Engine, Parität URL/Source,
 Benchmark-Härtung (kleine Stichprobe überlebt, große fällt).
+
+## Erratum zum Audit (nach Umsetzung)
+
+- Befund B2 (Wasserfall Quellen/Smartlinks) war teilweise falsch: Der
+  Direct-Pfad war bereits eager parallelisiert; die echten Sequenzen waren das
+  Campaign-Verzeichnis und das Trend-Vorfenster — beide behoben.
+- Befund C2 (EN-Toggle als Fassade) war falsch: Die Lokalisierung übersetzt per
+  MutationObserver und zentralem Wörterbuch den gesamten Seitentext. Kein
+  Handlungsbedarf.
+- Die Restzerlegung von page.tsx (Paket 4) wird bewusst zurückgestellt:
+  kein konkreter Anlass, reines Umbaurisiko.
