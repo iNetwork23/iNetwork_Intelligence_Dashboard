@@ -38,7 +38,7 @@ describe('source 32 end to end',()=>{
     expect(canonicalSmartlinkSubSource('255',{sub1:'x-trans-1',sub2:'tutu'})).toBe('tutu');
   });
   it('the affiliates breakdown merges click-id rows into their geo group',async()=>{
-    const {aggregateSourceRows,groupSources,mergeSourceWindows}=await import('./source-breakdown');
+    const {groupSources,mergeSourceWindows}=await import('./source-breakdown');
     const row=(sub1:string,sub2:string,sois:number)=>({columns:[
       {column_type:'affiliate',id:'460',label:'Trinity'},{column_type:'offer',id:'57',label:'Offer'},
       {column_type:'campaign',id:'0',label:'N/A'},{column_type:'offer_url',id:'2749',label:'LP'},
