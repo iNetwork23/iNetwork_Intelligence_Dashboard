@@ -2,10 +2,10 @@ import{unstable_cache}from'next/cache';
 import{getDashboard}from'./dashboard-service';
 import type{ReportingPeriod}from'./supabase-reporting';
 import{analyzeAffiliateTraffic}from'./affiliate-optimizer';
-import{loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
+import{loadAffiliateActivityIndex,loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
 import{analyzeLeadLatency}from'./lead-latency';
 import{resolveSourcePeriod}from'./source-period';
-import{attachSourceActivity,mergeSourceWindows}from'./source-breakdown';
+import{attachSourceActivityFromIndex,mergeSourceWindows}from'./source-breakdown';
 import{resolveActivityCoverage,sourceScopeCoverageComplete}from'./snapshot-generation';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess,sourceRowsForAccess}from'./service-scopes';
@@ -20,12 +20,10 @@ export async function getAffiliateOptimizations(period:ReportingPeriod='30d',cus
 const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();
 const sourceWindow=(affiliateId:string,range:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access),['affiliate-source-supabase-v5',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
 const sourceEvaluation=(affiliateId:string,range:{from:string;to:string},activityRange:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>{
- const sameRange=range.from===activityRange.from&&range.to===activityRange.to;
- const activityWindow=unstable_cache(()=>sourceWindow(affiliateId,activityRange,access),['affiliate-source-activity-v1',affiliateId,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:3600,tags:[`affiliate-source-${affiliateId}`]});
- const [history,freshness]=await Promise.all([sameRange?sourceWindow(affiliateId,activityRange,access):activityWindow(),freshnessWindow(activityRange)]);
- const selected=sameRange?history:await sourceWindow(affiliateId,range,access);
- return attachSourceActivity(mergeSourceWindows(selected,selected,selected),history,resolveActivityCoverage(activityRange.from,freshness));
-},['affiliate-source-evaluation-v6',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source-freshness']})();
+ // Aktivität kommt aus dem persistierten Index (eine kleine Abfrage) statt aus 365 Tages-Snapshots.
+ const [selected,index,freshness]=await Promise.all([sourceWindow(affiliateId,range,access),loadAffiliateActivityIndex(affiliateId,activityRange),freshnessWindow(activityRange)]);
+ return attachSourceActivityFromIndex(mergeSourceWindows(selected,selected,selected),index,resolveActivityCoverage(activityRange.from,freshness));
+},['affiliate-source-evaluation-v7',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source']})();
 
 export async function getAffiliateSourceBreakdown(affiliateId:string,range:{from:string;to:string},access:AccessMetadata,now=new Date()){
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
