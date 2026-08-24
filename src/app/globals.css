@@ -378,3 +378,15 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .incompleteSourceSort button:hover{background:var(--fill-emphasis);color:var(--text-primary)}
 .incompleteSourceSort button.active{background:var(--accent);color:var(--on-accent)}
 @media(max-width:700px){.incompleteSourceList>div.incompleteSourceSort{border-radius:12px}.incompleteSourceSort button{min-height:34px}}
+
+/* Letzter-Lead-Badges: zeigt auf Campaign-, LP- und Source-Ebene, ob noch Leads einlaufen */
+.provisionalLead{display:inline-block;margin-top:3px;font-size:10px;font-style:normal;font-weight:700}
+.provisionalLead.active{color:var(--positive)}
+.provisionalLead.recent{color:var(--accent)}
+.provisionalLead.stale{color:var(--negative)}
+.provisionalLead.unknown{color:var(--warning)}
+.campaignLeadBadge{margin-left:10px;padding:3px 9px;border:1px solid currentColor;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
+.campaignLeadBadge.active{color:var(--positive)}
+.campaignLeadBadge.recent{color:var(--accent)}
+.campaignLeadBadge.stale{color:var(--negative)}
+.campaignLeadBadge.unknown{color:var(--warning)}

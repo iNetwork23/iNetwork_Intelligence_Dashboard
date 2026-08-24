@@ -74,3 +74,16 @@ describe('provisional clicks and cvr',()=>{
   expect(html).toContain('<small>CVR</small><b>—</b>');
  });
 });
+
+describe('last lead badges',()=>{
+ const row4=(subSource:string,lastLeadDate:string|null)=>({mode:'tracked' as const,source:'32',subSource,mainValue:'32',subValue:subSource,clicks:10,sois:1,cvr:10,firstSales:0,rebills:0,coinSpend:0,payout:5,revenue:0,profit:-5,lastLeadDate,activityAsOf:'2026-08-24',activityCoverageComplete:true,activityLookbackDays:365});
+ it('shows the freshest lead date on the source group head',()=>{
+  const html=renderToStaticMarkup(<ProvisionalSourceList rows={[row4('de','2026-08-23'),row4('nl','2026-08-01')]}/>);
+  expect(html).toContain('Letzter Lead 23.08.');
+  expect(html).toContain('provisionalLead recent');
+ });
+ it('marks a dried-up source as stale instead of showing nothing',()=>{
+  const html=renderToStaticMarkup(<ProvisionalSourceList rows={[row4('de','2026-07-01')]}/>);
+  expect(html).toContain('provisionalLead stale');
+ });
+});
