@@ -96,3 +96,12 @@ describe('activity memo invalidation',()=>{
     expect(isValidActivityMemo({fingerprint:fp},fp)).toBe(false);
   });
 });
+
+import{decodeActivityEntries,encodeActivityEntries}from'./cached-evaluations';
+describe('activity memo tuple codec',()=>{
+  it('round-trips identity and last lead date',()=>{
+    const entries=[{identity:{pathKey:'20|460|0|2762',offerId:'20',affiliateId:'460',offerUrlId:'2762',sourceId:'32',subSource:'de',trafficMode:'tracked' as const,mainValue:'32',subValue:'de'},lastLeadDate:'2026-08-23'},
+                   {identity:{pathKey:'20|460|0|2762',offerId:'20',affiliateId:'460',offerUrlId:'2762',sourceId:'Ohne Source-ID',subSource:'Ohne Sub-Source',trafficMode:'api' as const,mainValue:null,subValue:null},lastLeadDate:null}];
+    expect(decodeActivityEntries(encodeActivityEntries(entries))).toEqual(entries);
+  });
+});

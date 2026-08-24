@@ -42,15 +42,19 @@ function buildSmartlinkActivityEntries(rows:SmartlinkReportRow[]):SmartlinkActiv
  return[...map.values()];
 }
 const entryToFact=(entry:SmartlinkActivityEntry):SmartlinkSourceFact=>({...entry.fact,metric_date:entry.lastLeadDate||'',sois:entry.lastLeadDate?1:0});
+/** Tupel: [campaignId,offer_url_id,traffic_mode,source_id,sub_source,adv1,adv2,lastLeadDate] */
+type SmartlinkMemoTuple=[string,string,string,string,string,string,string,string|null];
+const encodeSmartlinkEntries=(entries:SmartlinkActivityEntry[]):SmartlinkMemoTuple[]=>entries.map(e=>[e.campaignId,e.fact.offer_url_id,String(e.fact.raw?.traffic_mode||'tracked'),e.fact.source_id,e.fact.sub_source,String(e.fact.raw?.adv1||''),String(e.fact.raw?.adv2||''),e.lastLeadDate]);
+const decodeSmartlinkEntries=(tuples:unknown[]):SmartlinkActivityEntry[]=>(tuples as SmartlinkMemoTuple[]).map(([campaignId,url,mode,source,sub,adv1,adv2,lastLeadDate])=>({campaignId,lastLeadDate,fact:{metric_date:'',offer_url_id:url,offer_id:'',offer_name:'',source_id:source,sub_source:sub,clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0,raw:{traffic_mode:mode==='api'?'api':'tracked',adv1,adv2}}}));
 async function loadSmartlinkActivityEntries(affiliateId:string,range:{from:string;to:string}):Promise<SmartlinkActivityEntry[]>{
  const markerQuery=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`source_day_generation:${range.from}`).lte('key',`source_day_generation:${range.to}`).order('key');
  if(markerQuery.error)throw new Error(`Supabase smartlink activity markers: ${markerQuery.error.message}`);
  const markers=(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}});
  const available=availableSourceSnapshotDays(range,markers,{minimumVersion:4}),fingerprint=activityMemoFingerprint(available),memoKey=`smartlink_activity_memo:v1:${affiliateId}:${range.from}:${range.to}`;
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
- if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return memo.data!.value.entries as unknown as SmartlinkActivityEntry[];
+ if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeSmartlinkEntries(memo.data!.value.entries);
  const entries=buildSmartlinkActivityEntries(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId));
- const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries}},{onConflict:'key'});
+ const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries:encodeSmartlinkEntries(entries)}},{onConflict:'key'});
  if(write.error)console.warn('Smartlink activity memo write failed',write.error.message);
  return entries;
 }
