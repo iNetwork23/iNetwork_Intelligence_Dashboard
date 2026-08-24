@@ -30,7 +30,7 @@ const analyses:AffiliateAnalysisWithTrend[]=[];
 describe('AffiliateCockpit',()=>{
   it('renders all three lists',()=>{
     const html=renderToStaticMarkup(<AffiliateCockpit analyses={analyses} rangeParams="period=30d" comparisonAvailable/>);
-    expect(html).toContain('Verluste');
+    expect(html).toContain('Abschalten');
     expect(html).toContain('Skalieren');
     expect(html).toContain('Veränderung');
   });

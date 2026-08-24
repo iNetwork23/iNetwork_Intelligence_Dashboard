@@ -54,3 +54,14 @@ describe('source 32 end to end',()=>{
     expect(group.leaves).toHaveLength(2);
   });
 });
+
+describe('bare token detection',()=>{
+  it('catches long single-segment tokens with digits',()=>{
+    for(const id of ['18df42r49bdk0','4ip88s449q9a3','6agno0xkm9dtlg6w0ko4kgk4s'])
+      expect(isClickIdLike(id)).toBe(true);
+  });
+  it('never flags real names, geos or campaign labels',()=>{
+    for(const value of ['de','CLIMBING_DACH','kat-nl_2502_nl_23','newsletterkampagne','sonderplatzierung'])
+      expect(isClickIdLike(value)).toBe(false);
+  });
+});

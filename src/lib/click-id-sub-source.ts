@@ -12,11 +12,14 @@ export const CLICK_ID_BUCKET = 'Klick-IDs (einzeln)';
 
 const BASE36_TRIPLE = /^[0-9a-z]{2,12}\.[0-9a-z]{2,6}\.[0-9a-z]{2,8}$/;
 const BARE_HEX_HASH = /^[0-9a-f]{24,40}$/;
+// Einteilige lange Tokens ohne Trennzeichen, mit Ziffernanteil (z. B. 18df42r49bdk0)
+const BARE_BASE36_TOKEN = /^(?=(?:.*\d){2})[0-9a-z]{12,}$/;
 
 export function isClickIdLike(value: string): boolean {
   const text = value.trim();
   if (!text) return false;
   if (BARE_HEX_HASH.test(text)) return true;
+  if (BARE_BASE36_TOKEN.test(text)) return true;
   if (!BASE36_TRIPLE.test(text)) return false;
   // Echte Namen tragen Trennzeichen oder Großschreibung; Tokens sind rein base36.
   // Domains (`sub.domain.tld`) fallen durch die TLD-Heuristik heraus:

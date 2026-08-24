@@ -18,10 +18,10 @@ export default function AffiliateCockpit({
     <section className="affiliateCockpit">
       <TrendList
         kicker="PROFIT-PRIORITÄT"
-        title="Verluste"
+        title="Abschalten"
         rows={lists.losses}
         total={lists.lossTotal}
-        totalLabel="Gesamtverlust"
+        totalLabel={lists.lossTotal < 0 ? "Gesamtverlust" : "Saldo der Kandidaten"}
         emptyReason="Keine Position erfüllt die Abschalt-Kriterien."
         rangeParams={rangeParams}
         mode="profit"

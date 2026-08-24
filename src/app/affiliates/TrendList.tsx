@@ -3,6 +3,8 @@ import type { CockpitRow } from "../../lib/affiliate-trend";
 
 const eur = (n: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
+const pctCapped = (n: number) =>
+  Math.abs(n) > 999 ? `${n > 0 ? ">" : "<"}${n > 0 ? "" : "-"}999 %` : `${n.toFixed(0)} %`;
 
 export default function TrendList({
   title,
@@ -46,9 +48,9 @@ export default function TrendList({
               <InstantLink
                 href={`/affiliates?affiliate=${r.affiliateId}&offer=${r.offerId}&${rangeParams}#url-${r.offerUrlId}`}
               >
-                <strong>{r.offerUrl}</strong>
+                <strong>{r.affiliate}</strong>
                 <small>
-                  {r.affiliate} · Offer #{r.offerId} · URL #{r.offerUrlId}
+                  {r.offerUrl} · Offer #{r.offerId} · URL #{r.offerUrlId}
                 </small>
                 <em>{r.reason}</em>
                 {mode === "profit" ? (
@@ -58,7 +60,7 @@ export default function TrendList({
                     <b className={r.trendVerdict.profitDelta >= 0 ? "up" : "down"}>
                       {eur(r.trendVerdict.profitDelta)}
                       {r.trendVerdict.profitPercent !== null &&
-                        ` · ${r.trendVerdict.profitPercent.toFixed(0)} %`}
+                        ` · ${pctCapped(r.trendVerdict.profitPercent)}`}
                     </b>
                   )
                 )}
