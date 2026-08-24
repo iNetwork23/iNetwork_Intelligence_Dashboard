@@ -50,8 +50,8 @@ describe('informative cockpit rows',()=>{
   });
   it('explains the change as previous to current',()=>{
     const html=renderToStaticMarkup(<TrendList title="Veränderung" kicker="VERGLEICH" rows={[richRow('a',1000,80,200)]} emptyReason="x" rangeParams="period=30d" mode="change" detail="delta"/>);
-    expect(html).toContain('Vorperiode');
     expect(html).toContain('800,00');
+    expect(html).toContain('→');
   });
   it('drops meaningless Default and URL #0 from the identity line',()=>{
     const html=renderToStaticMarkup(<TrendList title="Skalieren" kicker="WACHSTUM" rows={[richRow('a',1000,80,200)]} emptyReason="x" rangeParams="period=30d" mode="profit" detail="facts"/>);

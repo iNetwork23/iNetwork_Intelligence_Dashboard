@@ -61,14 +61,15 @@ export default function TrendList({
                 href={`/affiliates?affiliate=${r.affiliateId}&offer=${r.offerId}&${rangeParams}#url-${r.offerUrlId}`}
               >
                 <strong>{r.affiliate}</strong>
-                <small>{identityLine(r)}</small>
-                <em>
+                <small>
+                  {identityLine(r)}
                   {detail === "facts"
-                    ? `${num(r.sois)} SOIs · ${r.sois > 0 ? `${eur(r.profit / r.sois)} je SOI` : "ohne SOI"}`
+                    ? ` · ${num(r.sois)} SOIs · ${r.sois > 0 ? `${eur(r.profit / r.sois)} je SOI` : "ohne SOI"}`
                     : detail === "delta" && r.trendVerdict.status === "ok"
-                      ? `Vorperiode ${eur(r.profit - r.trendVerdict.profitDelta)} → ${eur(r.profit)}`
-                      : r.reason}
-                </em>
+                      ? ` · ${eur(r.profit - r.trendVerdict.profitDelta)} → ${eur(r.profit)}`
+                      : ""}
+                </small>
+                {detail === "reason" && <em>{r.reason}</em>}
                 {mode === "profit" ? (
                   <b className={r.profit >= 0 ? "up" : "down"}>{eur(r.profit)}</b>
                 ) : (
