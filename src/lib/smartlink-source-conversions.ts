@@ -1,4 +1,5 @@
 import type{SmartlinkSourceFact}from'./smartlink-transparency';
+import{canonicalTrackedSub}from'./click-id-sub-source';
 
 export type CanonicalSourceConversion={
  type:'soi'|'coin_spend'|'first_sale'|'rebill';converted_at:string;offer_url_id:string|null;offer_id:string|null;offer_name:string|null;campaign_id?:string|null;
@@ -7,7 +8,7 @@ export type CanonicalSourceConversion={
 const number=(value:unknown)=>Number.isFinite(Number(value))?Number(value):0;
 const clean=(value:unknown)=>{const text=String(value??'').trim();return!text||text.toUpperCase()==='N/A'?'':text};
 const source255SubSources=new Map([['dg','DG'],['tutu','tutu']]);
-export function canonicalSmartlinkSubSource(sourceId:unknown,raw:Record<string,unknown>){const source=clean(sourceId),sub1=clean(raw.sub1);if(source!=='255')return sub1;for(const value of[sub1,clean(raw.sub2)]){const canonical=source255SubSources.get(value.toLowerCase());if(canonical)return canonical}return''}
+export function canonicalSmartlinkSubSource(sourceId:unknown,raw:Record<string,unknown>){const source=clean(sourceId),sub1=clean(raw.sub1);if(source!=='255'){const canonical=canonicalTrackedSub(sub1,clean(raw.sub2));return canonical.value}for(const value of[sub1,clean(raw.sub2)]){const canonical=source255SubSources.get(value.toLowerCase());if(canonical)return canonical}return''}
 const berlinDay=(value:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
 const key=(row:Pick<SmartlinkSourceFact,'metric_date'|'offer_url_id'|'offer_id'|'source_id'|'sub_source'>)=>JSON.stringify([row.metric_date||'',row.offer_url_id,row.offer_id,row.source_id,row.sub_source]);
 const blankMetrics=()=>({clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0});
