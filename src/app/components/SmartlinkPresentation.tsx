@@ -1,7 +1,7 @@
 'use client';
 
 import {Fragment,useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
-import {groupSmartlinkSourcesByMain,nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SmartlinkSourceGroup,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
+import {groupSmartlinkSourcesByMain,latestLeadActivity,leadBadge,nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SmartlinkSourceGroup,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
 import {rankSourceMatches} from '../../lib/source-search';
 import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown,SmartlinkSourceCoverage} from '../../lib/smartlink';
 import {leadActivityStatus} from '../../lib/source-breakdown';
@@ -132,7 +132,7 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
   const first=group.rows[0],labels=sourceDimensionLabels(first),single=group.rows.length===1;
   return <section className={`provisionalSourceGroup ${group.verdict}`} key={`${group.mode}|${group.source}`}>
    <header className="provisionalSourceHead columns">
-    <span className="provisionalIdentity"><small>{labels.main}</small><b>{group.mainValue||group.source||'Nicht übermittelt'}</b><em>{single?`${labels.sub}: ${first.subValue||first.subSource||'Nicht übermittelt'}`:`${num(group.rows.length)} ${labels.sub}-Werte`}</em></span>
+    <span className="provisionalIdentity"><small>{labels.main}</small><b>{group.mainValue||group.source||'Nicht übermittelt'}</b><em>{single?`${labels.sub}: ${first.subValue||first.subSource||'Nicht übermittelt'}`:`${num(group.rows.length)} ${labels.sub}-Werte`}</em>{(()=>{const badge=leadBadge(latestLeadActivity(group.rows));return <em className={`provisionalLead ${badge.tone}`} title={badge.detail}>{badge.text}</em>})()}</span>
     <span><small>Klicks</small><b>{num(group.totals.clicks)}</b></span>
     <span><small>SOIs</small><b>{num(group.totals.sois)}</b></span>
     <span><small>CVR</small><b>{cvrText(group.totals.clicks,group.totals.sois)}</b></span>

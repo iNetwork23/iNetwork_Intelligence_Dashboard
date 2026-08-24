@@ -29,3 +29,22 @@ export function groupSmartlinkSourcesByMain(rows:SmartlinkSourceBreakdown[],metr
   return multiplier*(value(a)-value(b))||a.source.localeCompare(b.source);
  });
 }
+
+import{leadActivityStatus,type LeadActivity}from'./source-breakdown';
+
+/** Jüngste Lead-Aktivität über eine Zeilenmenge (Quelle, LP oder Campaign). */
+export function latestLeadActivity(rows:SmartlinkSourceBreakdown[]):LeadActivity{
+ return{
+  lastLeadDate:rows.map(row=>row.lastLeadDate||null).filter((value):value is string=>Boolean(value)).sort().at(-1)||null,
+  asOf:rows.map(row=>row.activityAsOf||'').filter(Boolean).sort().at(-1)||'',
+  coverageComplete:rows.length>0&&rows.every(row=>Boolean(row.activityCoverageComplete)),
+  lookbackDays:Math.max(365,...rows.map(row=>row.activityLookbackDays||0)),
+ };
+}
+
+/** Kompakter Badge-Text: Status plus Datum des letzten Leads. */
+export function leadBadge(activity:LeadActivity){
+ const status=leadActivityStatus(activity),
+  date=activity.lastLeadDate?activity.lastLeadDate.split('-').reverse().join('.').replace(/\.\d{4}$/,'.'):null;
+ return{tone:status.tone,text:date?`Letzter Lead ${date}`:status.label,detail:status.detail};
+}

@@ -41,3 +41,25 @@ describe('Source grouping by main source',()=>{
   expect(group?.rows.map(r=>r.subSource)).toEqual(['b','a']);
  });
 });
+
+import{latestLeadActivity,leadBadge}from'./smartlink-presentation';
+describe('last lead visibility',()=>{
+ const row2=(subSource:string,lastLeadDate:string|null):SmartlinkSourceBreakdown=>({mode:'tracked',source:'32',subSource,clicks:10,sois:1,cvr:10,firstSales:0,rebills:0,coinSpend:0,payout:5,revenue:0,profit:-5,lastLeadDate,activityAsOf:'2026-08-24',activityCoverageComplete:true,activityLookbackDays:365});
+ it('aggregates the newest lead date across rows',()=>{
+  const activity=latestLeadActivity([row2('a','2026-08-10'),row2('b','2026-08-23'),row2('c',null)]);
+  expect(activity).toMatchObject({lastLeadDate:'2026-08-23',coverageComplete:true});
+ });
+ it('never claims coverage when a row lacks it',()=>{
+  const rows=[row2('a','2026-08-10'),{...row2('b','2026-08-23'),activityCoverageComplete:false}];
+  expect(latestLeadActivity(rows).coverageComplete).toBe(false);
+ });
+ it('renders a compact badge with tone and date',()=>{
+  const badge=leadBadge(latestLeadActivity([row2('a','2026-08-23')]));
+  expect(badge.tone).toBe('recent');
+  expect(badge.text).toContain('23.08.');
+ });
+ it('says so when no lead exists at all',()=>{
+  const badge=leadBadge(latestLeadActivity([row2('a',null)]));
+  expect(badge.text).toContain('Kein Lead');
+ });
+});
