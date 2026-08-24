@@ -234,28 +234,31 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
  .sourceGroups>.sourceGroupPanel>.sourceGroupBody{padding-left:12px}
 }
 
-/* Cockpit: drei vollständige Ranglisten über alle Partner */
-.affiliateCockpit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
-.cockpitList{min-width:0;border:1px solid var(--border);background:var(--surface-2)}
-.cockpitList>header{padding:12px 14px;border-bottom:1px solid var(--border)}
-.cockpitList>header span{display:block;color:var(--text-secondary);font-size:11px;letter-spacing:.08em}
-.cockpitList>header h2{margin:4px 0 2px;font-size:17px}
-.cockpitList>header small{display:block;color:var(--text-muted);font-size:11px}
-.cockpitList>header b{display:block;margin-top:6px;font-size:13px;font-weight:800}
+/* Cockpit: drei vollständige Ranglisten über alle Partner — ruhiges, bündiges Raster */
+.affiliateCockpit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0;align-items:start}
+.cockpitList{min-width:0;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);overflow:hidden}
+.cockpitList>header{min-height:92px;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface-1)}
+.cockpitList>header span{display:block;color:var(--text-secondary);font-size:10px;letter-spacing:.08em;font-weight:750}
+.cockpitList>header h2{margin:3px 0 1px;font-size:17px}
+.cockpitList>header small{display:block;color:var(--text-muted);font-size:10px}
+.cockpitList>header b{display:block;margin-top:5px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
 .cockpitList>header b.up{color:var(--positive)}
 .cockpitList>header b.down{color:var(--negative)}
-.cockpitList ol{list-style:none;margin:0;padding:0}
-.cockpitList li{border-top:1px solid var(--line-faint)}
-.cockpitList li a{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 14px;color:inherit;text-decoration:none}
+.cockpitList ol{list-style:none;margin:0;padding:0;counter-reset:cockpit}
+.cockpitList li{counter-increment:cockpit;border-top:1px solid var(--line-faint)}
+.cockpitList li:first-child{border-top:0}
+.cockpitList li:nth-child(even){background:var(--fill-subtle)}
+.cockpitList li a{display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-rows:auto auto;column-gap:8px;row-gap:2px;align-items:baseline;padding:9px 12px;color:inherit;text-decoration:none;transition:background-color 120ms ease}
 .cockpitList li a:hover{background:var(--fill-hover)}
-.cockpitList li a strong{font-size:12px;overflow-wrap:anywhere}
-.cockpitList li a small{grid-column:1;color:var(--text-secondary);font-size:11px}
-.cockpitList li a em{grid-column:1;color:var(--text-muted);font-size:11px;font-style:normal;line-height:1.4}
-.cockpitList li a b{grid-row:1/3;grid-column:2;align-self:center;font-size:14px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.cockpitList li a::before{content:counter(cockpit);grid-row:1/span 2;align-self:center;color:var(--text-muted);font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.cockpitList li a strong{grid-column:2;grid-row:1;font-size:12px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cockpitList li a small{grid-column:2;grid-row:2;color:var(--text-secondary);font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums}
+.cockpitList li a em{grid-column:2/span 2;grid-row:3;margin-top:2px;color:var(--text-muted);font-size:10px;font-style:normal;line-height:1.4}
+.cockpitList li a b{grid-column:3;grid-row:1/span 2;align-self:center;font-size:13px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .cockpitList li a b.up{color:var(--positive)}
 .cockpitList li a b.down{color:var(--negative)}
 .cockpitEmpty{margin:0;padding:14px;color:var(--text-secondary);font-size:11px;line-height:1.5}
-@media(max-width:1050px){.affiliateCockpit{grid-template-columns:1fr}}
+@media(max-width:1050px){.affiliateCockpit{grid-template-columns:1fr}.cockpitList>header{min-height:0}}
 
 /* Quellen nach Source-ID gruppiert: auf einen Blick erkennbar, welche Source
    Geld verdient und welche Geld verbrennt. Sub1-Werte stehen eingerückt darunter. */
