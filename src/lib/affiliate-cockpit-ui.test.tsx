@@ -39,3 +39,24 @@ describe('AffiliateCockpit',()=>{
     expect(html).toContain('Kein Vergleichszeitraum in der 365-Tage-Historie');
   });
 });
+
+describe('informative cockpit rows',()=>{
+  const richRow=(key:string,profit:number,sois:number,delta:number):CockpitRow=>({affiliateId:'154',affiliate:'Partner 154',variantKey:key,offerId:'47',offer:'Offer 47',offerUrlId:'0',offerUrl:'Default',profit,sois,reason:'Mehrere unabhängige First-Sales und belastbar positiver Profit.',trendVerdict:{status:'ok',profitDelta:delta,profitPercent:25,direction:'steigend'}});
+  it('shows per-row facts instead of the repeated recommendation text',()=>{
+    const html=renderToStaticMarkup(<TrendList title="Skalieren" kicker="WACHSTUM" rows={[richRow('a',1000,80,200)]} emptyReason="x" rangeParams="period=30d" mode="profit" detail="facts"/>);
+    expect(html).toContain('80 SOIs');
+    expect(html).toContain('12,50');
+    expect(html).not.toContain('Mehrere unabhängige');
+  });
+  it('explains the change as previous to current',()=>{
+    const html=renderToStaticMarkup(<TrendList title="Veränderung" kicker="VERGLEICH" rows={[richRow('a',1000,80,200)]} emptyReason="x" rangeParams="period=30d" mode="change" detail="delta"/>);
+    expect(html).toContain('Vorperiode');
+    expect(html).toContain('800,00');
+  });
+  it('drops meaningless Default and URL #0 from the identity line',()=>{
+    const html=renderToStaticMarkup(<TrendList title="Skalieren" kicker="WACHSTUM" rows={[richRow('a',1000,80,200)]} emptyReason="x" rangeParams="period=30d" mode="profit" detail="facts"/>);
+    expect(html).toContain('Offer #47');
+    expect(html).not.toContain('Default ·');
+    expect(html).not.toContain('URL #0');
+  });
+});

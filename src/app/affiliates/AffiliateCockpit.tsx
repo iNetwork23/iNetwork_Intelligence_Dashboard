@@ -35,6 +35,7 @@ export default function AffiliateCockpit({
         emptyReason="Keine Position erreicht die Skalier-Schwelle."
         rangeParams={rangeParams}
         mode="profit"
+        detail="facts"
       />
       <TrendList
         kicker="VERGLEICH ZUR VORPERIODE"
@@ -47,6 +48,7 @@ export default function AffiliateCockpit({
         }
         rangeParams={rangeParams}
         mode="change"
+        detail="delta"
       />
     </section>
   );
