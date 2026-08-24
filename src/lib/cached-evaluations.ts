@@ -75,7 +75,7 @@ export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:
  if(markerQuery.error)throw new Error(`Supabase activity markers: ${markerQuery.error.message}`);
  const markers=(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}});
  const available=availableSourceSnapshotDays(range,markers,{minimumVersion:4});
- const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:v1:${affiliateId}:${range.from}:${range.to}`;
+ const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:v2:${affiliateId}:${range.from}:${range.to}`;
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
  if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeActivityEntries(memo.data!.value.entries);
  const history=await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),entries=buildSourceActivityIndex(history);
