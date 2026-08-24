@@ -300,6 +300,10 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
 .provisionalSourceGroup.neutral .provisionalVerdict{color:var(--text-muted)}
 .provisionalSubRows{list-style:none;margin:0;padding:0}
 .provisionalSubRows.columns>li{border-top:1px solid var(--line-faint);font-size:11px;font-variant-numeric:tabular-nums}
+.provisionalSubRows.columns>li{transition:background-color 120ms ease}
+.provisionalSubRows.columns>li:hover{background:var(--fill-hover)}
+.provisionalSourceHead.columns{transition:background-color 120ms ease}
+.provisionalSourceGroup:hover>.provisionalSourceHead.columns{background:color-mix(in srgb,var(--accent) 7%,var(--surface-3))}
 .provisionalSubRows.columns>li>span,.provisionalSubRows.columns>li>b{min-width:0}
 .provisionalSubRows.columns>li>.sub{font-weight:700;overflow-wrap:anywhere}
 .provisionalSubRows.columns>li>.sub:before{content:"└ ";color:var(--text-muted);font-weight:400}
