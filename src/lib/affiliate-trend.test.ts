@@ -75,3 +75,24 @@ describe('buildCockpitLists',()=>{
     expect(lists().losses[1]).toMatchObject({affiliateId:'200',affiliate:'Partner 200',reason:'Grund c'});
   });
 });
+
+import{activityMemoFingerprint,isValidActivityMemo}from'./cached-evaluations';
+describe('activity memo invalidation',()=>{
+  const marker=(date:string,generation:string)=>({version:4,date,generation});
+  it('changes the fingerprint when the newest snapshot generation changes',()=>{
+    const before=activityMemoFingerprint([marker('2026-08-23','g1'),marker('2026-08-24','g2')]);
+    const after=activityMemoFingerprint([marker('2026-08-23','g1'),marker('2026-08-24','g3')]);
+    expect(before).not.toBe(after);
+  });
+  it('changes the fingerprint when a backfill adds days',()=>{
+    const before=activityMemoFingerprint([marker('2026-08-24','g2')]);
+    const after=activityMemoFingerprint([marker('2026-08-23','g1'),marker('2026-08-24','g2')]);
+    expect(before).not.toBe(after);
+  });
+  it('accepts a memo only with matching fingerprint and entry list',()=>{
+    const fp=activityMemoFingerprint([marker('2026-08-24','g2')]);
+    expect(isValidActivityMemo({fingerprint:fp,entries:[]},fp)).toBe(true);
+    expect(isValidActivityMemo({fingerprint:'anders',entries:[]},fp)).toBe(false);
+    expect(isValidActivityMemo({fingerprint:fp},fp)).toBe(false);
+  });
+});

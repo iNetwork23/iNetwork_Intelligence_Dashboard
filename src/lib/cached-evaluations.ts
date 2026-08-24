@@ -6,6 +6,7 @@ import {berlinDateRange} from './dashboard';
 import {getSupabaseAdmin} from './supabase';
 import{availableSourceSnapshotDays,decodeSourceSnapshotRow,mapAffiliateSourceRows,resolveSourceSnapshotCoverage,type SourceSnapshotCoverage,type SourceSnapshotGeneration,type SourceSnapshotRow}from'./affiliate-source-cache';
 import{resolveSnapshotFreshness,type SnapshotFreshness}from'./snapshot-generation';
+import{buildSourceActivityIndex,type SourceActivityEntry}from'./source-breakdown';
 
 export{mapAffiliateSourceRows,type DailySourceRow}from'./affiliate-source-cache';
 type SourceRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;source_id:string;sub_source:string;clicks:number|string;sois:number|string;payout:number|string;revenue:number|string;profit:number|string};
@@ -51,4 +52,30 @@ export async function loadAffiliateConversionsFromCache(affiliateId:string,lookb
     if(databaseCount<1000)break;
   }
   return rows;
+}
+
+/** Persistierter Aktivitäts-Index: eine kleine Zeile statt 365 Tages-Snapshots.
+ * Der Fingerabdruck (Tagesanzahl + jüngste Generation) invalidiert den Memo,
+ * sobald der stündliche Sync neue Snapshots publiziert hat. */
+export const activityMemoFingerprint=(markers:SourceSnapshotGeneration[])=>{
+ const last=markers[markers.length-1];
+ return `v1:${markers.length}:${last?.date||''}:${last?.generation||''}`;
+};
+type ActivityMemoValue={fingerprint:string;entries:SourceActivityEntry[]};
+export const isValidActivityMemo=(value:unknown,fingerprint:string):value is ActivityMemoValue=>{
+ const memo=value as ActivityMemoValue|undefined;
+ return Boolean(memo&&memo.fingerprint===fingerprint&&Array.isArray(memo.entries));
+};
+export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:string;to:string}):Promise<SourceActivityEntry[]>{
+ const markerQuery=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`source_day_generation:${range.from}`).lte('key',`source_day_generation:${range.to}`).order('key');
+ if(markerQuery.error)throw new Error(`Supabase activity markers: ${markerQuery.error.message}`);
+ const markers=(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}});
+ const available=availableSourceSnapshotDays(range,markers,{minimumVersion:4});
+ const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:v1:${affiliateId}:${range.from}:${range.to}`;
+ const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
+ if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return memo.data!.value.entries;
+ const history=await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),entries=buildSourceActivityIndex(history);
+ const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries}},{onConflict:'key'});
+ if(write.error)console.warn('Activity memo write failed',write.error.message);
+ return entries;
 }

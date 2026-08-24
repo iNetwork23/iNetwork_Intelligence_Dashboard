@@ -46,6 +46,7 @@ export default function TrendList({
           {rows.map((r) => (
             <li key={`${r.affiliateId}|${r.variantKey}`}>
               <InstantLink
+                prefetch
                 href={`/affiliates?affiliate=${r.affiliateId}&offer=${r.offerId}&${rangeParams}#url-${r.offerUrlId}`}
               >
                 <strong>{r.affiliate}</strong>
