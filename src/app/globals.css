@@ -409,7 +409,7 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 
 /* Geldspalten der Quellen-Raster rechtsbündig — Beträge stehen wie in einer Bilanz */
 .provisionalSourceHead.columns>span:nth-child(8),.provisionalSourceHead.columns>span:nth-child(9),.provisionalSourceHead.columns>span:nth-child(10),
-.provisionalSubRows.columns>li>span:nth-child(6),.provisionalSubRows.columns>li>span:nth-child(7),.provisionalSubRows.columns>li>b{text-align:right}
+.provisionalSubRows.columns>li>span:nth-child(8),.provisionalSubRows.columns>li>span:nth-child(9),.provisionalSubRows.columns>li>b{text-align:right}
 .lpSourceRanking>header>span:nth-child(n+2),.lpSourceRanking>button>span:nth-child(n+2),.lpSourceRanking>.lpSourceGroupRow>span:nth-child(n+2){text-align:right}
 .sourceGroups .sourceGroupHead>strong{text-align:right}
 
