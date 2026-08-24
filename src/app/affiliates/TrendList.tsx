@@ -3,6 +3,15 @@ import type { CockpitRow } from "../../lib/affiliate-trend";
 
 const eur = (n: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
+const num = (n: number) => new Intl.NumberFormat("de-DE").format(n);
+/** Sekundärzeile ohne Null-Information: "Default" und "URL #0" tragen nichts. */
+const identityLine = (r: CockpitRow) => {
+  const parts: string[] = [];
+  if (r.offerUrl && r.offerUrl !== "Default") parts.push(r.offerUrl);
+  parts.push(`Offer #${r.offerId}`);
+  if (r.offerUrlId && r.offerUrlId !== "0") parts.push(`URL #${r.offerUrlId}`);
+  return parts.join(" · ");
+};
 const pctCapped = (n: number) =>
   Math.abs(n) > 999 ? `${n > 0 ? ">" : "<"}${n > 0 ? "" : "-"}999 %` : `${n.toFixed(0)} %`;
 
@@ -15,6 +24,7 @@ export default function TrendList({
   emptyReason,
   rangeParams,
   mode,
+  detail = "reason",
 }: {
   title: string;
   kicker: string;
@@ -24,6 +34,7 @@ export default function TrendList({
   emptyReason: string;
   rangeParams: string;
   mode: "profit" | "change";
+  detail?: "reason" | "facts" | "delta";
 }) {
   return (
     <section className="cockpitList">
@@ -50,10 +61,14 @@ export default function TrendList({
                 href={`/affiliates?affiliate=${r.affiliateId}&offer=${r.offerId}&${rangeParams}#url-${r.offerUrlId}`}
               >
                 <strong>{r.affiliate}</strong>
-                <small>
-                  {r.offerUrl} · Offer #{r.offerId} · URL #{r.offerUrlId}
-                </small>
-                <em>{r.reason}</em>
+                <small>{identityLine(r)}</small>
+                <em>
+                  {detail === "facts"
+                    ? `${num(r.sois)} SOIs · ${r.sois > 0 ? `${eur(r.profit / r.sois)} je SOI` : "ohne SOI"}`
+                    : detail === "delta" && r.trendVerdict.status === "ok"
+                      ? `Vorperiode ${eur(r.profit - r.trendVerdict.profitDelta)} → ${eur(r.profit)}`
+                      : r.reason}
+                </em>
                 {mode === "profit" ? (
                   <b className={r.profit >= 0 ? "up" : "down"}>{eur(r.profit)}</b>
                 ) : (
