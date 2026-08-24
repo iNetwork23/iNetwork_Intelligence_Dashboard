@@ -8,7 +8,7 @@ export function ProfitPeriod({
   m,
 }: {
   label: string;
-  m: AffiliateVariant["today"];
+  m: AffiliateVariant["days30"];
 }) {
   return (
     <article className="profitPeriod">

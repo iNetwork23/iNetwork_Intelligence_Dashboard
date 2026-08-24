@@ -46,8 +46,8 @@ import type {AffiliateVariant} from './affiliate-optimizer';
 
 const variant=(key:string,action:AffiliateVariant['recommendation']['action'],profit:number,trendDelta:number|null):VariantWithTrend=>({
  key,offerId:'20',offer:'Offer 20',offerUrlId:key,offerUrl:`URL ${key}`,trafficType:'Direkt',trafficMode:'tracked',
- today:m({}),days7:m({}),days30:m({profit,sois:30}),
- efficiency:{label:'Profit je Klick',days7:0,days30:0},trend:'neu/zu wenig Daten',
+ days30:m({profit,sois:30}),
+ efficiency:{label:'Profit je Klick',days30:0},
  recommendation:{action,severity:'neutral',reason:`Grund ${key}`,evidence:[]},
  trendVerdict:trendDelta===null?{status:'insufficient',reason:'Kein Vergleichszeitraum verfügbar'}:{status:'ok',profitDelta:trendDelta,profitPercent:10,direction:trendDelta>0?'steigend':'fallend'},
 });

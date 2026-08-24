@@ -135,6 +135,10 @@ export default async function AffiliateOptimizerPage({
   });
   sourceParams.forEach((value, key) => range.set(key, value));
   const rangeParams = range.toString(),
+    eagerCampaignDirectory =
+      mayPartners && query.mode === "smartlinks"
+        ? getCampaignDirectory(user.access)
+        : null,
     eagerDirectSourceData =
       mayPartners && query.mode==='direct' && query.affiliate
         ? Promise.allSettled([
@@ -272,7 +276,7 @@ export default async function AffiliateOptimizerPage({
     campaignDirectoryError = "";
   if (mode === "smartlinks" && !selectedCampaignId) {
     try {
-      campaignOptions = buildCampaignOptions(await getCampaignDirectory(user.access), associationMappings);
+      campaignOptions = buildCampaignOptions(await (eagerCampaignDirectory ?? getCampaignDirectory(user.access)), associationMappings);
     } catch (cause) {
       console.error("Campaign directory failed", cause);
       campaignDirectoryError = "Smartlink-Verzeichnis konnte nicht geladen werden.";
@@ -953,7 +957,6 @@ export default async function AffiliateOptimizerPage({
                         {v.days30.firstSales} <small>First-Sales</small>
                       </span>
                       <span>
-                        {v.trend}
                         <i>Details</i>
                       </span>
                     </>
