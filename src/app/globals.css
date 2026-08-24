@@ -286,7 +286,7 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
 .provisionalSourceGroup.verdient{box-shadow:inset 4px 0 var(--positive)}
 .provisionalSourceGroup.verbrennt{box-shadow:inset 4px 0 var(--negative)}
 .provisionalSourceGroup.neutral{box-shadow:inset 4px 0 var(--text-muted)}
-.provisionalSourceHead.columns,.provisionalSubRows.columns>li{display:grid;grid-template-columns:minmax(130px,1.6fr) repeat(4,minmax(58px,.7fr)) repeat(3,minmax(78px,1fr)) minmax(96px,auto);align-items:center;gap:10px;padding:10px 12px}
+.provisionalSourceHead.columns,.provisionalSubRows.columns>li{display:grid;grid-template-columns:minmax(120px,1.5fr) repeat(6,minmax(52px,.65fr)) repeat(3,minmax(76px,1fr)) minmax(96px,auto);align-items:center;gap:10px;padding:10px 12px}
 .provisionalSourceHead.columns{background:var(--surface-3)}
 .provisionalSourceHead>span{min-width:0;font-variant-numeric:tabular-nums}
 .provisionalSourceHead>span>small,.provisionalSourceHead>span>b,.provisionalSourceHead>span>em{display:block}
@@ -310,16 +310,16 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
 .provisionalSubRows.columns>li>b{font-weight:800}
 .provisionalSourceGroup>.incompleteSourceEvents{display:block;padding:6px 12px;border-top:1px solid var(--line-faint);color:var(--warning);font-size:9px}
 @media(max-width:1000px){
- .provisionalSourceHead.columns,.provisionalSubRows.columns>li{grid-template-columns:minmax(110px,1.4fr) repeat(4,minmax(48px,.7fr)) minmax(70px,1fr)}
- .provisionalSourceHead.columns>span:nth-child(6),.provisionalSourceHead.columns>span:nth-child(7),
- .provisionalSubRows.columns>li>span:nth-child(6),.provisionalSubRows.columns>li>span:nth-child(7){display:none}
+ .provisionalSourceHead.columns,.provisionalSubRows.columns>li{grid-template-columns:minmax(100px,1.4fr) repeat(6,minmax(42px,.65fr)) minmax(70px,1fr)}
+ .provisionalSourceHead.columns>span:nth-child(8),.provisionalSourceHead.columns>span:nth-child(9),
+ .provisionalSubRows.columns>li>span:nth-child(8),.provisionalSubRows.columns>li>span:nth-child(9){display:none}
  .provisionalVerdict{grid-column:1/-1;justify-self:start}
  .provisionalSubRows.columns>li>span[aria-hidden]{display:none}
 }
 @media(max-width:640px){
  .provisionalSourceHead.columns,.provisionalSubRows.columns>li{grid-template-columns:1fr 1fr;row-gap:6px}
- .provisionalSourceHead.columns>span:nth-child(6),.provisionalSourceHead.columns>span:nth-child(7),
- .provisionalSubRows.columns>li>span:nth-child(6),.provisionalSubRows.columns>li>span:nth-child(7){display:block}
+ .provisionalSourceHead.columns>span:nth-child(8),.provisionalSourceHead.columns>span:nth-child(9),
+ .provisionalSubRows.columns>li>span:nth-child(8),.provisionalSubRows.columns>li>span:nth-child(9){display:block}
 }
 
 /* Gemeinsames Verdikt-Vokabular für alle Quellen-Ansichten */
