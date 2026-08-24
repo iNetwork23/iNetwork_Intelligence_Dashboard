@@ -5,5 +5,5 @@ import {scopeFingerprint,type AccessMetadata} from './rbac';
 
 export function getDashboard(period:ReportingPeriod,custom?:{from?:string;to?:string},access?:AccessMetadata){
   const from=custom?.from||'',to=custom?.to||'',scopeKey=access?scopeFingerprint(access):'system-unscoped';
-  return unstable_cache(()=>loadPortfolioFromCache(period,getSupabaseAdmin(),new Date(),custom,access),['supabase-portfolio',period,from,to,scopeKey],{revalidate:60,tags:['supabase-portfolio']})();
+  return unstable_cache(()=>loadPortfolioFromCache(period,getSupabaseAdmin(),new Date(),custom,access),['supabase-portfolio',period,from,to,scopeKey],{revalidate:300,tags:['supabase-portfolio']})();
 }

@@ -6,9 +6,10 @@ const path=(urlId:string,x:Partial<Metrics>):PathRow=>({...m(x),key:`20|154|0|${
 const portfolio=(paths:PathRow[]):Portfolio=>({range:{from:'2026-08-01',to:'2026-08-30',label:'T'},totals:m({}),offers:[],affiliates:[],paths,generatedAt:'2026-08-30T12:00:00Z'});
 
 const getDashboard=vi.fn();
+vi.mock('next/cache',()=>({unstable_cache:(load:()=>unknown)=>load}));
 vi.mock('./dashboard-service',()=>({getDashboard:(...a:unknown[])=>getDashboard(...a)}));
 
-const access={role:'admin'} as never;
+const access={role:'admin',status:'active',grants:[],denials:[],scopes:{affiliate:[],offer:[],campaign:[],account:[],source:[],sub_source:[]},version:1} as never;
 
 describe('getAffiliateOptimizationsWithTrend',()=>{
   beforeEach(()=>{getDashboard.mockReset()});

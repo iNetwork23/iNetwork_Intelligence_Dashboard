@@ -21,7 +21,8 @@ const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSo
 const sourceWindow=(affiliateId:string,range:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access),['affiliate-source-supabase-v5',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
 const sourceEvaluation=(affiliateId:string,range:{from:string;to:string},activityRange:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>{
  const sameRange=range.from===activityRange.from&&range.to===activityRange.to;
- const [history,freshness]=await Promise.all([sourceWindow(affiliateId,activityRange,access),freshnessWindow(activityRange)]);
+ const activityWindow=unstable_cache(()=>sourceWindow(affiliateId,activityRange,access),['affiliate-source-activity-v1',affiliateId,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:3600,tags:[`affiliate-source-${affiliateId}`]});
+ const [history,freshness]=await Promise.all([sameRange?sourceWindow(affiliateId,activityRange,access):activityWindow(),freshnessWindow(activityRange)]);
  const selected=sameRange?history:await sourceWindow(affiliateId,range,access);
  return attachSourceActivity(mergeSourceWindows(selected,selected,selected),history,resolveActivityCoverage(activityRange.from,freshness));
 },['affiliate-source-evaluation-v6',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source-freshness']})();
@@ -58,13 +59,15 @@ const NO_COMPARISON:TrendVerdict={status:'insufficient',reason:'Kein Vergleichsz
 
 export async function getAffiliateOptimizationsWithTrend(period:ReportingPeriod,custom:{from:string;to:string}|undefined,access:AccessMetadata,range:{from:string;to:string}):Promise<AffiliateAnalysisWithTrend[]>{
  assertAffiliateOptimizerAggregateAccess(access);
- const current=await getDashboard(period,custom,access),
-  analyses=analyzeAffiliateTraffic(current);
- if(period==='12m'||period==='all')
+ const comparable=period!=='12m'&&period!=='all',prev=comparable?previousWindow(range.from,range.to):null;
+ // Vorfenster ist historisch: eigener Langzeit-Cache statt der 60s des Live-Portfolios,
+ // und parallel zum Hauptfenster geladen statt danach.
+ const previousPortfolioCached=prev?unstable_cache(()=>getDashboard('custom',prev,access),['affiliate-trend-previous-v1',prev.from,prev.to,scopeFingerprint(access)],{revalidate:3600,tags:['supabase-portfolio']}):null;
+ const[current,previousPortfolio]=await Promise.all([getDashboard(period,custom,access),previousPortfolioCached?previousPortfolioCached():Promise.resolve(null)]);
+ const analyses=analyzeAffiliateTraffic(current);
+ if(!previousPortfolio)
   return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:NO_COMPARISON}))}));
- const prev=previousWindow(range.from,range.to),
-  previousPortfolio=await getDashboard('custom',prev,access),
-  before=new Map(analyzeAffiliateTraffic(previousPortfolio)
-   .flatMap(a=>a.variants.map(v=>[`${a.affiliateId}|${v.key}`,v.days30] as const)));
+ const before=new Map(analyzeAffiliateTraffic(previousPortfolio)
+  .flatMap(a=>a.variants.map(v=>[`${a.affiliateId}|${v.key}`,v.days30] as const)));
  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:variantTrend(v.days30,before.get(`${a.affiliateId}|${v.key}`))}))}));
 }
