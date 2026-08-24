@@ -24,3 +24,23 @@ describe('source breakdown visibility',()=>{
     expect(html).not.toContain('<details');
   });
 });
+
+describe('shared verdict vocabulary',()=>{
+  it('every source view uses the same verdient/verbrennt classes',async()=>{
+    const {readFileSync}=await import('node:fs');
+    for(const file of ['src/app/affiliates/SourceBreakdown.tsx','src/app/components/SmartlinkPresentation.tsx']){
+      const source=readFileSync(file,'utf8');
+      expect(source).toMatch(/verdient/);
+      expect(source).toMatch(/verbrennt/);
+    }
+    const css=readFileSync('src/app/globals.css','utf8');
+    for(const cls of ['.sourceGroupPanel.verbrennt','.provisionalSourceGroup.verbrennt','.lpSourceRanking>.lpSourceGroupRow.verbrennt'])
+      expect(css).toContain(cls);
+  });
+  it('marks a burning direct source group with the shared verdict class and text',()=>{
+    const burning=[row('Source A','sub-1')].map(r=>({...r,days30:{...r.days30,profit:-120}}));
+    const html=renderToStaticMarkup(<SourceBreakdown rows={burning}/>);
+    expect(html).toContain('sourceGroupPanel verbrennt');
+    expect(html).toContain('Verbrennt Geld');
+  });
+});

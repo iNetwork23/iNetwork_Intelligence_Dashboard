@@ -1,5 +1,8 @@
 "use client";
 import SourceGroupPanel from "./SourceTable";
+const moneyVerdict = (profit: number) =>
+  profit > 0 ? ("verdient" as const) : profit < 0 ? ("verbrennt" as const) : ("neutral" as const);
+const moneyVerdictText = { verdient: "Verdient Geld", verbrennt: "Verbrennt Geld", neutral: "Ausgeglichen" } as const;
 import CopyValue from "./CopyValue";
 import SourcePairCopy from "./SourcePairCopy";
 import SourcePeriodControls from "./SourcePeriodControls";
@@ -197,6 +200,7 @@ export default function SourceBreakdown({
               <SourceGroupPanel
                 id={disclosureId}
                 key={group.sourceId}
+                verdict={moneyVerdict(group.metric.profit)}
                 head={
                   <>
                     <span>
@@ -224,7 +228,7 @@ export default function SourceBreakdown({
                       <small
                         className={group.metric.profit >= 0 ? "up" : "down"}
                       >
-                        {eur(group.metric.profit)} Profit
+                        {eur(group.metric.profit)} · {moneyVerdictText[moneyVerdict(group.metric.profit)]}
                       </small>
                     </strong>
                     <i>{apiMode ? "Details" : "Entscheidungen"}</i>

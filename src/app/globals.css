@@ -308,3 +308,8 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
  .provisionalVerdict{grid-column:1/-1;justify-self:start}
  .provisionalSubRows>li{grid-template-columns:1fr 1fr;row-gap:4px;padding-left:16px}
 }
+
+/* Gemeinsames Verdikt-Vokabular für alle Quellen-Ansichten */
+.sourceGroupPanel.verdient{box-shadow:inset 4px 0 var(--positive)}
+.sourceGroupPanel.verbrennt{box-shadow:inset 4px 0 var(--negative)}
+.sourceGroupPanel.neutral{box-shadow:inset 4px 0 var(--text-muted)}
