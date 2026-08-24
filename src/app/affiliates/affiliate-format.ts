@@ -14,3 +14,12 @@ export const duration = (hours: number | null) =>
     : hours < 48
       ? `${hours.toFixed(1).replace(".", ",")} Std.`
       : `${(hours / 24).toFixed(1).replace(".", ",")} Tage`;
+
+/** Identitätszeile ohne Null-Information: "Default" und "URL #0" tragen nichts. */
+export const variantIdentityLine = (v: { offerUrl: string; offerId: string; offerUrlId: string }) => {
+  const parts: string[] = [];
+  if (v.offerUrl && v.offerUrl !== "Default") parts.push(v.offerUrl);
+  parts.push(`Offer #${v.offerId}`);
+  if (v.offerUrlId && v.offerUrlId !== "0") parts.push(`URL #${v.offerUrlId}`);
+  return parts.join(" · ");
+};

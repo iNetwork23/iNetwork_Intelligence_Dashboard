@@ -42,7 +42,7 @@ import TrafficActionLists from "./TrafficActionLists";
 import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
-import { cr, duration, eur, num } from "./affiliate-format";
+import { cr, duration, eur, num, variantIdentityLine } from "./affiliate-format";
 import { ProfitPeriod, SourceCacheNotice, UrlLeadMaturityPanel } from "./AffiliatePanels";
 
 const recClass = (v: AffiliateVariant) => v.recommendation.severity;
@@ -653,7 +653,7 @@ export default async function AffiliateOptimizerPage({
               <span>AFFILIATE #{selected.affiliateId}</span>
               <h2>{selected.affiliate}</h2>
               <p>
-                {offers.length} Offers · {selected.variants.length} Pfade ·{" "}
+                {offers.length} Offer{offers.length === 1 ? "" : "s"} · {selected.variants.length} {selected.variants.length === 1 ? "Pfad" : "Pfade"} ·{" "}
                 {period.label}
               </p>
             </div>
@@ -732,9 +732,10 @@ export default async function AffiliateOptimizerPage({
                   >
                     <b>{v.recommendation.action}</b>
                     <span>
-                      <strong>{v.offerUrl}</strong>
+                      <strong>{v.offerUrl !== "Default" ? v.offerUrl : v.offer}</strong>
                       <small>
-                        Offer #{v.offerId} · URL #{v.offerUrlId}
+                        {variantIdentityLine(v)} · {num(v.days30.sois)} SOIs
+                        {v.days30.sois > 0 ? ` · ${eur(v.days30.profit / v.days30.sois)} je SOI` : ""}
                       </small>
                     </span>
                     <em className={v.days30.profit >= 0 ? "up" : "down"}>
@@ -880,7 +881,7 @@ export default async function AffiliateOptimizerPage({
                       Rebills
                     </small>
                     <small>
-                      {o.variants.length} Pfade ·{" "}
+                      {o.variants.length} {o.variants.length === 1 ? "Pfad" : "Pfade"} ·{" "}
                       {o.stopCount
                         ? `${o.stopCount} stoppen`
                         : o.scaleCount
@@ -927,7 +928,7 @@ export default async function AffiliateOptimizerPage({
               <span>CR · SOIs / Klicks</span>
               <span>Profit · Zeitraum</span>
               <span>First-Sales</span>
-              <span>Trend</span>
+              <span aria-hidden="true"></span>
             </div>
             <div className="urlDecisionTable">
               {activeOffer.variants.map((v) => (
@@ -940,8 +941,8 @@ export default async function AffiliateOptimizerPage({
                     <>
                       <span className="urlMain">
                         <b>{v.recommendation.action}</b>
-                        <strong>{v.offerUrl}</strong>
-                        <small>Landingpage · URL #{v.offerUrlId}</small>
+                        <strong>{v.offerUrl !== "Default" ? v.offerUrl : "API-Traffic · ohne LP-Aufteilung"}</strong>
+                        <small>{v.offerUrlId !== "0" ? `Landingpage · URL #${v.offerUrlId}` : "Offer-weit aggregiert"}</small>
                       </span>
                       <span className="crAbsolute">
                         {cr(v.days30, v.trafficMode === "api")}
@@ -957,9 +958,7 @@ export default async function AffiliateOptimizerPage({
                       <span>
                         {v.days30.firstSales} <small>First-Sales</small>
                       </span>
-                      <span>
-                        <i>Details</i>
-                      </span>
+                      <span aria-hidden="true"></span>
                     </>
                   }
                 >
