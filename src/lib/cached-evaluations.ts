@@ -61,11 +61,15 @@ export const activityMemoFingerprint=(markers:SourceSnapshotGeneration[])=>{
  const last=markers[markers.length-1];
  return `v1:${markers.length}:${last?.date||''}:${last?.generation||''}`;
 };
-type ActivityMemoValue={fingerprint:string;entries:SourceActivityEntry[]};
+type ActivityMemoValue={fingerprint:string;entries:unknown[]};
 export const isValidActivityMemo=(value:unknown,fingerprint:string):value is ActivityMemoValue=>{
  const memo=value as ActivityMemoValue|undefined;
  return Boolean(memo&&memo.fingerprint===fingerprint&&Array.isArray(memo.entries));
 };
+/** Kompakte Tupel-Serialisierung: [offerId,affiliateId,offerUrlId,trafficMode,mainValue,subValue,lastLeadDate] */
+type DirectMemoTuple=[string,string,string,string,string|null,string|null,string|null];
+export const encodeActivityEntries=(entries:SourceActivityEntry[]):DirectMemoTuple[]=>entries.map(e=>[e.identity.offerId,e.identity.affiliateId,e.identity.offerUrlId,e.identity.trafficMode,e.identity.mainValue,e.identity.subValue,e.lastLeadDate]);
+export const decodeActivityEntries=(tuples:unknown[]):SourceActivityEntry[]=>(tuples as DirectMemoTuple[]).map(([offerId,affiliateId,offerUrlId,trafficMode,mainValue,subValue,lastLeadDate])=>({identity:{pathKey:`${offerId}|${affiliateId}|0|${offerUrlId}`,offerId,affiliateId,offerUrlId,sourceId:mainValue===null?'Ohne Source-ID':mainValue,subSource:subValue===null?'Ohne Sub-Source':subValue,trafficMode:trafficMode==='api'?'api':'tracked',mainValue,subValue},lastLeadDate}));
 export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:string;to:string}):Promise<SourceActivityEntry[]>{
  const markerQuery=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`source_day_generation:${range.from}`).lte('key',`source_day_generation:${range.to}`).order('key');
  if(markerQuery.error)throw new Error(`Supabase activity markers: ${markerQuery.error.message}`);
@@ -73,9 +77,9 @@ export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:
  const available=availableSourceSnapshotDays(range,markers,{minimumVersion:4});
  const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:v1:${affiliateId}:${range.from}:${range.to}`;
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
- if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return memo.data!.value.entries;
+ if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeActivityEntries(memo.data!.value.entries);
  const history=await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),entries=buildSourceActivityIndex(history);
- const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries}},{onConflict:'key'});
+ const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries:encodeActivityEntries(entries)}},{onConflict:'key'});
  if(write.error)console.warn('Activity memo write failed',write.error.message);
  return entries;
 }
