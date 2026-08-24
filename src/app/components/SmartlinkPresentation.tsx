@@ -126,13 +126,16 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
  const chooseSort=(next:SourceMetricSort)=>{if(next===sort)setDirection(current=>current==='asc'?'desc':'asc');else{setSort(next);setDirection('desc')}};
  if(!rows.length)return <p>Keine Source-ID im verfügbaren Snapshot.</p>;
  const events=(row:SmartlinkSourceBreakdown)=>`${num(row.firstSales)} First-Sales · ${num(row.rebills)} Rebills · ${num(row.coinSpend)} Coin-Spend-Events`;
+ const cvrText=(clicks:number,sois:number)=>clicks>0?`${(100*sois/clicks).toFixed(1).replace('.',',')} %`:'—';
  const verdictText=(group:SmartlinkSourceGroup)=>group.verdict==='verdient'?'Verdient Geld':group.verdict==='verbrennt'?'Verbrennt Geld':'Ausgeglichen';
  return <div className="incompleteSourceList"><div className="incompleteSourceSort" role="group" aria-label="Vorläufige Quellen nach Zahlenwert sortieren"><small>Sortieren nach</small>{sourceSortOptions.map(([id,label])=>{const active=id===sort,current=direction==='asc'?'niedrigste zuerst':'höchste zuerst',next=direction==='asc'?'höchste zuerst':'niedrigste zuerst';return <button type="button" key={id} className={active?'active':''} aria-pressed={active} aria-label={`Nach ${label} sortieren${active?`: derzeit ${current}; klicken für ${next}`:': höchste zuerst'}`} onClick={()=>chooseSort(id)}>{label}{active?` ${direction==='asc'?'↑':'↓'}`:''}</button>})}</div>{groups.map((group:SmartlinkSourceGroup)=>{
   const first=group.rows[0],labels=sourceDimensionLabels(first),single=group.rows.length===1;
   return <section className={`provisionalSourceGroup ${group.verdict}`} key={`${group.mode}|${group.source}`}>
    <header className="provisionalSourceHead columns">
     <span className="provisionalIdentity"><small>{labels.main}</small><b>{group.mainValue||group.source||'Nicht übermittelt'}</b><em>{single?`${labels.sub}: ${first.subValue||first.subSource||'Nicht übermittelt'}`:`${num(group.rows.length)} ${labels.sub}-Werte`}</em></span>
+    <span><small>Klicks</small><b>{num(group.totals.clicks)}</b></span>
     <span><small>SOIs</small><b>{num(group.totals.sois)}</b></span>
+    <span><small>CVR</small><b>{cvrText(group.totals.clicks,group.totals.sois)}</b></span>
     <span><small>First-Sales</small><b>{num(group.totals.firstSales)}</b></span>
     <span><small>Rebills</small><b>{num(group.totals.rebills)}</b></span>
     <span><small>Coin-Spend</small><b>{num(group.totals.coinSpend)}</b></span>
@@ -143,7 +146,9 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
    </header>
    {!single&&<ul className="provisionalSubRows columns">{group.rows.map((row:SmartlinkSourceBreakdown)=><li key={sourceRowKey(row)} data-scope={`source-events-${row.source}-${row.subSource}`}>
      <span className="sub">{row.subValue||row.subSource||'Nicht übermittelt'}</span>
+     <span>{num(row.clicks)}</span>
      <span>{num(row.sois)}</span>
+     <span>{cvrText(row.clicks,row.sois)}</span>
      <span>{num(row.firstSales)}</span>
      <span>{num(row.rebills)}</span>
      <span>{num(row.coinSpend)}</span>

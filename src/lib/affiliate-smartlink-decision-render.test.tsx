@@ -59,3 +59,18 @@ describe('provisional event columns',()=>{
   expect(html).not.toContain('First-Sales ·');
  });
 });
+
+describe('provisional clicks and cvr',()=>{
+ const row3=(subSource:string,clicks:number,sois:number)=>({mode:'tracked' as const,source:'32',subSource,mainValue:'32',subValue:subSource,clicks,sois,cvr:clicks?100*sois/clicks:null,firstSales:0,rebills:0,coinSpend:0,payout:sois*5.5,revenue:0,profit:-sois*5.5});
+ it('shows clicks and the derived cvr per group and per sub row',()=>{
+  const html=renderToStaticMarkup(<ProvisionalSourceList rows={[row3('de',200,10),row3('nl',50,1)]}/>);
+  expect(html).toContain('<small>Klicks</small><b>250</b>');
+  expect(html).toContain('<small>CVR</small><b>4,4 %</b>');
+  expect(html).toContain('<span>5,0 %</span>');
+  expect(html).toContain('<span>2,0 %</span>');
+ });
+ it('shows a dash instead of a fake cvr when there are no clicks',()=>{
+  const html=renderToStaticMarkup(<ProvisionalSourceList rows={[row3('api-only',0,4)]}/>);
+  expect(html).toContain('<small>CVR</small><b>—</b>');
+ });
+});
