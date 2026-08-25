@@ -22,7 +22,9 @@ export function variantTrend(current:Metrics,previous:Metrics|undefined):TrendVe
  if(!mature(current))return{status:'insufficient',reason:`Aktueller Zeitraum ${IMMATURE}`};
  if(!mature(previous))return{status:'insufficient',reason:`Vergleichszeitraum ${IMMATURE}`};
  const profitDelta=current.profit-previous.profit,
-  profitPercent=previous.profit===0?null:100*profitDelta/Math.abs(previous.profit),
+  // Prozent nur auf positiver Basis: bei negativem oder Null-Vorwert ist eine
+  // Prozentangabe irreführend (−888 %-Effekte bei Vorzeichenwechsel).
+  profitPercent=previous.profit>0?100*profitDelta/previous.profit:null,
   direction=profitPercent!==null&&Math.abs(profitPercent)<5?'stabil':profitDelta>0?'steigend':profitDelta<0?'fallend':'stabil';
  return{status:'ok',profitDelta,profitPercent,direction};
 }
