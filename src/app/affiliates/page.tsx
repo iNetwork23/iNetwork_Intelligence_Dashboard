@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
 import { can, foreignScopeRequested } from "@/lib/rbac";
 import {
+  getAffiliateLastLeadDates,
   getAffiliateOptimizationsWithTrend,
   getAffiliateLeadLatency,
   getAffiliateSourceBreakdown,
@@ -11,7 +12,7 @@ import {
   groupAffiliateOffers,
   type AffiliateVariant,
 } from "@/lib/affiliate-optimizer";
-import { NO_SUB_SOURCE, type SourceBreakdownRow } from "@/lib/source-breakdown";
+import { NO_SUB_SOURCE, leadActivityStatus, type SourceBreakdownRow } from "@/lib/source-breakdown";
 import type { LeadLatencyAnalysis } from "@/lib/lead-latency";
 import {
   getCampaignAffiliateMappings,
@@ -47,6 +48,24 @@ import type { VariantWithTrend } from "@/lib/affiliate-trend";
 import { ProfitPeriod, SourceCacheNotice, UrlLeadMaturityPanel } from "./AffiliatePanels";
 
 const recClass = (v: AffiliateVariant) => v.recommendation.severity;
+const periodDays = (from: string, to: string) =>
+  Math.max(1, Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000) + 1);
+const partnerLeadBadge = (
+  lastLeadDates: Record<string, string>,
+  affiliateId: string,
+  period: { from: string; to: string },
+) => {
+  const status = leadActivityStatus({
+    lastLeadDate: lastLeadDates[affiliateId] || null,
+    asOf: period.to,
+    coverageComplete: true,
+    lookbackDays: periodDays(period.from, period.to),
+  });
+  const date = lastLeadDates[affiliateId]
+    ? lastLeadDates[affiliateId].split("-").reverse().join(".").replace(/\.\d{4}$/, ".")
+    : null;
+  return { tone: status.tone, text: date ? `Letzter Lead ${date}` : status.label, detail: status.detail };
+};
 export default async function AffiliateOptimizerPage({
   searchParams,
 }: {
@@ -160,8 +179,9 @@ export default async function AffiliateOptimizerPage({
           ])
         : null;
   let analyses, periodMappings, associationMappings;
+  let lastLeadDates: Record<string, string> = {};
   try {
-    [analyses, periodMappings, associationMappings] = await Promise.all([
+    [analyses, periodMappings, associationMappings, lastLeadDates] = await Promise.all([
       mayPartners
         ? getAffiliateOptimizationsWithTrend(
             period.servicePeriod,
@@ -175,6 +195,10 @@ export default async function AffiliateOptimizerPage({
         user.access,
       ),
       getCampaignAffiliateMappings(undefined, user.access),
+      getAffiliateLastLeadDates({ from: period.from, to: period.to }).catch((cause) => {
+        console.error("Last-lead dates failed", cause);
+        return {} as Record<string, string>;
+      }),
     ]);
   } catch (e) {
     console.error(e);
@@ -223,6 +247,14 @@ export default async function AffiliateOptimizerPage({
                   {item.direct?.variants.length || 0} direkte Landingpages ·{" "}
                   {item.campaigns.length} freigegebene Smartlinks
                 </p>
+                {(() => {
+                  const badge = partnerLeadBadge(lastLeadDates, item.affiliateId, period);
+                  return (
+                    <em className={`provisionalLead ${badge.tone}`} title={badge.detail}>
+                      {badge.text}
+                    </em>
+                  );
+                })()}
               </div>
             </article>
           ))}
@@ -653,6 +685,14 @@ export default async function AffiliateOptimizerPage({
               </InstantLink>
               <span>AFFILIATE #{selected.affiliateId}</span>
               <h2>{selected.affiliate}</h2>
+              {(() => {
+                const badge = partnerLeadBadge(lastLeadDates, selected.affiliateId, period);
+                return (
+                  <em className={`provisionalLead ${badge.tone}`} title={badge.detail}>
+                    {badge.text}
+                  </em>
+                );
+              })()}
               <p>
                 {offers.length} Offer{offers.length === 1 ? "" : "s"} · {selected.variants.length} {selected.variants.length === 1 ? "Pfad" : "Pfade"} ·{" "}
                 {period.label}
@@ -1118,6 +1158,14 @@ export default async function AffiliateOptimizerPage({
                     · {a.campaigns.length} Smartlink
                     {a.campaigns.length === 1 ? "" : "s"}
                   </p>
+                  {(() => {
+                    const badge = partnerLeadBadge(lastLeadDates, a.affiliateId, period);
+                    return (
+                      <em className={`provisionalLead ${badge.tone}`} title={badge.detail}>
+                        {badge.text}
+                      </em>
+                    );
+                  })()}
                 </div>
                 <div className="partnerTrafficTotals">
                   {a.direct && (

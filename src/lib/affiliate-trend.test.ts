@@ -108,3 +108,17 @@ describe('activity memo tuple codec',()=>{
     expect(decodeActivityEntries(encodeActivityEntries(entries))).toEqual(entries);
   });
 });
+
+import{lastLeadByAffiliate}from'./affiliate-trend';
+describe('last lead per affiliate',()=>{
+  it('keeps the newest soi day per affiliate',()=>{
+    const rows=[
+      {affiliate_id:'63',metric_date:'2026-08-20',sois:3},
+      {affiliate_id:'63',metric_date:'2026-08-24',sois:1},
+      {affiliate_id:'6',metric_date:'2026-08-25',sois:9},
+      {affiliate_id:'6',metric_date:'2026-08-25',sois:2},
+      {affiliate_id:'154',metric_date:'2026-08-10',sois:0},
+    ];
+    expect(lastLeadByAffiliate(rows)).toEqual(new Map([['63','2026-08-24'],['6','2026-08-25']]));
+  });
+});
