@@ -258,6 +258,16 @@ html[data-locale="en"] .sourceBreakdown.isRefreshing:after,html[data-locale="en"
 .cockpitList li a b.up{color:var(--positive)}
 .cockpitList li a b.down{color:var(--negative)}
 .cockpitEmpty{margin:0;padding:14px;color:var(--text-secondary);font-size:11px;line-height:1.5}
+/* Lange Listen scrollen im Panel statt die Seite zu diktieren — Kopf und Summen bleiben stehen */
+.cockpitList ol{max-height:540px;overflow-y:auto;overscroll-behavior:contain}
+.cockpitList{position:relative}
+.cockpitList ol{scrollbar-gutter:stable}
+/* Sanfter Auslauf als Scroll-Hinweis */
+.cockpitList:has(ol)::after{content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--surface-2))}
+/* Delta-Zeilen: Pfeilvergleich in eigener, ruhiger Zeile statt Dreifach-Umbruch */
+.cockpitList li a small{display:block;overflow-wrap:anywhere}
+.cockpitList li a b{font-size:12px}
+
 @media(max-width:1050px){.affiliateCockpit{grid-template-columns:1fr}.cockpitList>header{min-height:0}}
 
 /* Quellen nach Source-ID gruppiert: auf einen Blick erkennbar, welche Source

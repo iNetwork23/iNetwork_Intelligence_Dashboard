@@ -39,6 +39,9 @@ describe('variantTrend',()=>{
   it('omits the percentage when the previous profit is zero',()=>{
     expect(variantTrend(m({clicks:200,profit:80}),m({clicks:200,profit:0}))).toEqual({status:'ok',profitDelta:80,profitPercent:null,direction:'steigend'});
   });
+  it('omits the percentage on a negative base — sign flips carry the delta alone',()=>{
+    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:200,profit:-100}))).toEqual({status:'ok',profitDelta:400,profitPercent:null,direction:'steigend'});
+  });
 });
 
 import {buildCockpitLists,type AffiliateAnalysisWithTrend,type VariantWithTrend} from './affiliate-trend';
