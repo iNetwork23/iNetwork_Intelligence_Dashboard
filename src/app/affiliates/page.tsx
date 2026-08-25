@@ -43,6 +43,7 @@ import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
 import { cr, duration, eur, num, variantIdentityLine } from "./affiliate-format";
+import type { VariantWithTrend } from "@/lib/affiliate-trend";
 import { ProfitPeriod, SourceCacheNotice, UrlLeadMaturityPanel } from "./AffiliatePanels";
 
 const recClass = (v: AffiliateVariant) => v.recommendation.severity;
@@ -665,6 +666,21 @@ export default async function AffiliateOptimizerPage({
               <span>
                 {num(selected.totals30.sois)} SOIs ·{" "}
                 {selected.totals30.firstSales} First-Sales
+                {(() => {
+                  const verdicts = selected.variants
+                    .map((v) => (v as VariantWithTrend).trendVerdict)
+                    .filter((t) => t && t.status === "ok");
+                  if (!verdicts.length) return null;
+                  const delta = verdicts.reduce(
+                    (sum, t) => sum + (t.status === "ok" ? t.profitDelta : 0),
+                    0,
+                  );
+                  return (
+                    <em className={`heroTrend ${delta >= 0 ? "up" : "down"}`}>
+                      {delta >= 0 ? "+" : ""}{eur(delta)} vs. Vorperiode
+                    </em>
+                  );
+                })()}
               </span>
             </div>
           </section>
@@ -689,21 +705,21 @@ export default async function AffiliateOptimizerPage({
             )}
           </nav>
           <section className="profitCommand">
-            <article className="danger">
+            <a className="danger" href="#next-actions">
               <span>Direkt handeln</span>
               <strong>{stopVariants.length}</strong>
               <small>Landingpages zum Ausschalten</small>
-            </article>
+            </a>
             <article>
               <span>Erkennbares Sparpotenzial</span>
               <strong className="up">{eur(saving)}</strong>
               <small>negativer Profit im gewählten Zeitraum</small>
             </article>
-            <article>
+            <a href="#next-actions">
               <span>Skalierungskandidaten</span>
               <strong>{scaleVariants.length}</strong>
               <small>mit belastbarer Sales-Evidenz</small>
-            </article>
+            </a>
             <article>
               <span>Beste Landingpage</span>
               <strong
@@ -715,7 +731,7 @@ export default async function AffiliateOptimizerPage({
             </article>
           </section>
           {(stopVariants.length > 0 || scaleVariants.length > 0) && (
-            <section className="nextActions">
+            <section className="nextActions" id="next-actions">
               <header>
                 <div>
                   <span>PROFIT-PRIORITÄT</span>
@@ -928,7 +944,7 @@ export default async function AffiliateOptimizerPage({
               <span>CR · SOIs / Klicks</span>
               <span>Profit · Zeitraum</span>
               <span>First-Sales</span>
-              <span aria-hidden="true"></span>
+              <span>Trend</span>
             </div>
             <div className="urlDecisionTable">
               {activeOffer.variants.map((v) => (
@@ -958,7 +974,22 @@ export default async function AffiliateOptimizerPage({
                       <span>
                         {v.days30.firstSales} <small>First-Sales</small>
                       </span>
-                      <span aria-hidden="true"></span>
+                      <span className="urlTrendCell">
+                        {(() => {
+                          const verdict = (v as VariantWithTrend).trendVerdict;
+                          if (!verdict || verdict.status !== "ok")
+                            return <small className="trendMuted">–</small>;
+                          const tone = verdict.profitDelta > 0 ? "up" : verdict.profitDelta < 0 ? "down" : "";
+                          return (
+                            <small className={`urlTrend ${tone}`}>
+                              {verdict.profitDelta >= 0 ? "+" : ""}{eur(verdict.profitDelta)}
+                              {verdict.profitPercent !== null && Math.abs(verdict.profitPercent) <= 999
+                                ? ` · ${verdict.profitPercent.toFixed(0)} %`
+                                : ""}
+                            </small>
+                          );
+                        })()}
+                      </span>
                     </>
                   }
                 >
