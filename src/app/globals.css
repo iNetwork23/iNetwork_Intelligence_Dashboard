@@ -431,3 +431,28 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .urlTrend{font-size:10px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 .trendMuted{color:var(--text-muted);font-size:10px}
 .heroTrend{display:block;margin-top:4px;font-size:11px;font-weight:800;font-style:normal;font-variant-numeric:tabular-nums}
+
+/* ── Atmosphäre-Pass: Tiefe im Seitengrund, weichere Karten, lebendige Aktionen ── */
+
+/* Hausregel des Designsystems: keine dekorativen Verläufe — Tiefe kommt aus
+   Karten-Schatten und weichen Rändern, der Grund bleibt ruhig. */
+
+/* Kartenränder eine Stufe weicher — Tiefe kommt aus Schatten, nicht aus harten Linien */
+:root{--card-border:color-mix(in srgb,var(--border) 62%,transparent)}
+.kpi,.slot,.cockpitList,.smartSearch,.affiliatePeriod,.partnerHero,.profitCommand article,
+.offerPicker article,.offerWorkspace,.sourceBreakdown,.provisionalSourceGroup,
+.incompleteLpDisclosure,.sharedLpCard,.lpSourceRanking,.smartIdentity,.nextActions,
+.leadLatencyPanel,.timeWindowSection,.trafficActionReport{border-color:var(--card-border)}
+
+/* Primäraktionen: spürbar, mit sanftem Hub statt totem Rechteck */
+.refreshBtn,.loginCard button{box-shadow:0 1px 2px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08);transition:transform 120ms ease,box-shadow 120ms ease,background-color 120ms ease}
+.refreshBtn:hover,.loginCard button:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.1)}
+.refreshBtn:active,.loginCard button:active{transform:translateY(0)}
+
+
+/* Anker-Sprünge (Cockpit → URL-Zeile) landen frei unter den Sticky-Köpfen, sanft */
+@media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+[id^="url-"],[id^="campaign-"],[id^="source-"]{scroll-margin-top:84px}
+
+/* Sidebar: aktive Fläche bekommt eine feine Akzentkante links */
+.sidebarNav a.active{box-shadow:inset 3px 0 var(--accent)}
