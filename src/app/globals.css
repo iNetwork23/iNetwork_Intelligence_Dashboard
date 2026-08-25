@@ -466,3 +466,10 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 
 /* Sidebar: aktive Fläche bekommt eine feine Akzentkante links */
 .sidebarNav a.active{box-shadow:inset 3px 0 var(--accent)}
+
+/* Ruhende Sub1-Werte: gefaltet statt als Null-Wand; Null-Beträge neutral statt grün */
+.provisionalSubRows.columns>li>b.flat,.provisionalSourceHead>span>b.flat{color:var(--text-muted);font-weight:600}
+.dormantSubs>summary{padding:7px 12px 7px 26px;border-top:1px solid var(--line-faint);color:var(--text-muted);font-size:10px;cursor:pointer;list-style:none}
+.dormantSubs>summary::-webkit-details-marker{display:none}
+.dormantSubs>summary:hover{background:var(--fill-hover);color:var(--text-secondary)}
+.dormantSubs[open]>summary{background:var(--fill-subtle)}

@@ -87,3 +87,23 @@ describe('last lead badges',()=>{
   expect(html).toContain('provisionalLead stale');
  });
 });
+
+describe('dormant sub rows',()=>{
+ const rowD=(subSource:string,over:Partial<Parameters<typeof Object.assign>[0]>={})=>({mode:'tracked' as const,source:'18744',subSource,mainValue:'18744',subValue:subSource,clicks:0,sois:0,cvr:null,firstSales:0,rebills:0,coinSpend:0,payout:0,revenue:0,profit:0,...over});
+ const rows=[rowD('NICHTMEHR_CH',{clicks:43,sois:11,payout:110,profit:-110}),rowD('FERTIG_CH',{revenue:33.33,profit:33.33}),rowD('JESSIE_DE'),rowD('MUNSTER_DE'),rowD('LETTERS_DACH')];
+ const html=()=>renderToStaticMarkup(<ProvisionalSourceList rows={rows as never}/>);
+ it('folds all-zero rows behind one summary line',()=>{
+  const markup=html();
+  expect(markup).toContain('3 ruhende Sub1-Werte');
+  const beforeDetails=markup.split('<details')[0];
+  expect(beforeDetails).toContain('NICHTMEHR_CH');
+  expect(beforeDetails).not.toContain('JESSIE_DE');
+ });
+ it('keeps trailing-revenue rows visible — dormant means everything is zero',()=>{
+  expect(html().split('<details')[0]).toContain('FERTIG_CH');
+ });
+ it('renders zero amounts neutral instead of green',()=>{
+  const markup=html();
+  expect(markup).toContain('class="flat"');
+ });
+});
