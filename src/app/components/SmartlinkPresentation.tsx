@@ -127,6 +127,8 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
  if(!rows.length)return <p>Keine Source-ID im verfügbaren Snapshot.</p>;
  const events=(row:SmartlinkSourceBreakdown)=>`${num(row.firstSales)} First-Sales · ${num(row.rebills)} Rebills · ${num(row.coinSpend)} Coin-Spend-Events`;
  const cvrText=(clicks:number,sois:number)=>clicks>0?`${(100*sois/clicks).toFixed(1).replace('.',',')} %`:'—';
+ const moneyTone=(value:number)=>value>0?'up':value<0?'down':'flat';
+ const isDormant=(row:SmartlinkSourceBreakdown)=>!row.clicks&&!row.sois&&!row.firstSales&&!row.rebills&&!row.coinSpend&&!row.revenue&&!row.payout&&!row.profit;
  const verdictText=(group:SmartlinkSourceGroup)=>group.verdict==='verdient'?'Verdient Geld':group.verdict==='verbrennt'?'Verbrennt Geld':'Ausgeglichen';
  return <div className="incompleteSourceList"><div className="incompleteSourceSort" role="group" aria-label="Vorläufige Quellen nach Zahlenwert sortieren"><small>Sortieren nach</small>{sourceSortOptions.map(([id,label])=>{const active=id===sort,current=direction==='asc'?'niedrigste zuerst':'höchste zuerst',next=direction==='asc'?'höchste zuerst':'niedrigste zuerst';return <button type="button" key={id} className={active?'active':''} aria-pressed={active} aria-label={`Nach ${label} sortieren${active?`: derzeit ${current}; klicken für ${next}`:': höchste zuerst'}`} onClick={()=>chooseSort(id)}>{label}{active?` ${direction==='asc'?'↑':'↓'}`:''}</button>})}</div>{groups.map((group:SmartlinkSourceGroup)=>{
   const first=group.rows[0],labels=sourceDimensionLabels(first),single=group.rows.length===1;
@@ -141,10 +143,10 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
     <span><small>Coin-Spend</small><b>{num(group.totals.coinSpend)}</b></span>
     <span><small>Umsatz</small><b>{euro(group.totals.revenue)}</b></span>
     <span><small>Payout</small><b>{euro(group.totals.payout)}</b></span>
-    <span><small>Profit</small><b className={group.totals.profit>=0?'up':'down'}>{euro(group.totals.profit)}</b></span>
+    <span><small>Profit</small><b className={moneyTone(group.totals.profit)}>{euro(group.totals.profit)}</b></span>
     <strong className="provisionalVerdict">{verdictText(group)}</strong>
    </header>
-   {!single&&<ul className="provisionalSubRows columns">{group.rows.map((row:SmartlinkSourceBreakdown)=><li key={sourceRowKey(row)} data-scope={`source-events-${row.source}-${row.subSource}`}>
+   {!single&&(()=>{const active=group.rows.filter((row:SmartlinkSourceBreakdown)=>!isDormant(row)),dormant=group.rows.filter(isDormant),subRow=(row:SmartlinkSourceBreakdown)=><li key={sourceRowKey(row)} data-scope={`source-events-${row.source}-${row.subSource}`}>
      <span className="sub">{row.subValue||row.subSource||'Nicht übermittelt'}</span>
      <span>{num(row.clicks)}</span>
      <span>{num(row.sois)}</span>
@@ -154,9 +156,12 @@ export function ProvisionalSourceList({rows}:{rows:SmartlinkSourceBreakdown[]}){
      <span>{num(row.coinSpend)}</span>
      <span>{euro(row.revenue)}</span>
      <span>{euro(row.payout)}</span>
-     <b className={row.profit>=0?'up':'down'}>{euro(row.profit)}</b>
+     <b className={moneyTone(row.profit)}>{euro(row.profit)}</b>
      <span aria-hidden="true"/>
-    </li>)}</ul>}
+    </li>;return <>
+    <ul className="provisionalSubRows columns">{active.map(subRow)}</ul>
+    {dormant.length>0&&<details className="dormantSubs"><summary>{num(dormant.length)} ruhende Sub1-Werte ohne Aktivität im Zeitraum · anzeigen</summary><ul className="provisionalSubRows columns">{dormant.map(subRow)}</ul></details>}
+   </>})()}
    <small className="incompleteSourceEvents" data-scope={single?`source-events-${first.source}-${first.subSource}`:undefined}>{single?`vorläufiger Source-Snapshot · ${events(first)}`:`vorläufiger Source-Snapshot · ${num(group.rows.length)} ${labels.sub}-Werte zusammengefasst`}</small>
   </section>})}</div>;
 }
