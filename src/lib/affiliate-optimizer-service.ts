@@ -9,7 +9,8 @@ import{attachSourceActivityFromIndex,mergeSourceWindows}from'./source-breakdown'
 import{resolveActivityCoverage,sourceScopeCoverageComplete}from'./snapshot-generation';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess,sourceRowsForAccess}from'./service-scopes';
-import{previousWindow,variantTrend,type AffiliateAnalysisWithTrend,type TrendVerdict}from'./affiliate-trend';
+import{lastLeadByAffiliate,previousWindow,variantTrend,type AffiliateAnalysisWithTrend,type TrendVerdict}from'./affiliate-trend';
+import{getSupabaseAdmin}from'./supabase';
 
 export async function getAffiliateOptimizations(period:ReportingPeriod='30d',custom:{from:string;to:string}|undefined,access:AccessMetadata){
  assertAffiliateOptimizerAggregateAccess(access);
@@ -68,4 +69,19 @@ export async function getAffiliateOptimizationsWithTrend(period:ReportingPeriod,
  const before=new Map(analyzeAffiliateTraffic(previousPortfolio)
   .flatMap(a=>a.variants.map(v=>[`${a.affiliateId}|${v.key}`,v.days30] as const)));
  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:variantTrend(v.days30,before.get(`${a.affiliateId}|${v.key}`))}))}));
+}
+
+/** Jüngster SOI-Tag je Affiliate im Zeitraum — für die "Letzter Lead"-Badges der Partnerlisten. */
+export function getAffiliateLastLeadDates(range:{from:string;to:string}){
+ return unstable_cache(async()=>{
+  const rows:Array<{affiliate_id:string;metric_date:string;sois:number|string}>=[];
+  for(let start=0;;start+=1000){
+   const{data,error}=await getSupabaseAdmin().from('daily_metrics').select('affiliate_id,metric_date,sois').gt('sois',0).gte('metric_date',range.from).lte('metric_date',range.to).order('metric_date',{ascending:false}).order('id').range(start,start+999);
+   if(error)throw new Error(`Supabase last-lead dates: ${error.message}`);
+   rows.push(...(data||[]));
+   if(!data||data.length<1000)break;
+   if(rows.length>=20000)break;
+  }
+  return Object.fromEntries(lastLeadByAffiliate(rows));
+ },['affiliate-last-lead-v1',range.from,range.to],{revalidate:300,tags:['supabase-portfolio']})();
 }

@@ -52,3 +52,14 @@ export function buildCockpitLists(analyses:AffiliateAnalysisWithTrend[]):Cockpit
   lossTotal:losses.reduce((s,r)=>s+r.profit,0),
   scaleTotal:scales.reduce((s,r)=>s+r.profit,0)};
 }
+
+/** Jüngster SOI-Tag je Affiliate aus daily_metrics-Zeilen — Tage ohne SOIs zählen nicht. */
+export function lastLeadByAffiliate(rows:Array<{affiliate_id:string;metric_date:string;sois:number|string}>):Map<string,string>{
+ const map=new Map<string,string>();
+ for(const row of rows){
+  if(!Number(row.sois))continue;
+  const current=map.get(row.affiliate_id);
+  if(!current||row.metric_date>current)map.set(row.affiliate_id,row.metric_date);
+ }
+ return map;
+}
