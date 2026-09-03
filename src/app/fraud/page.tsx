@@ -3,6 +3,7 @@ import {currentUser} from '@/lib/session';
 import {can} from '@/lib/rbac';
 import {getFraudDashboard} from '@/lib/fraud-service';
 import DashboardPageHeader from '../components/DashboardPageHeader';
+import AccessDeniedHint from '../components/AccessDeniedHint';
 import FraudStopForm from './FraudStopForm';
 import FraudStopDeactivateButton from './FraudStopDeactivateButton';
 import FraudStopRowButton from './FraudStopRowButton';
@@ -14,7 +15,7 @@ const modeLabel={tracked_smartlink:'Smartlink',tracked_direct:'Direct',clickless
 
 type Params={period?:string;risk?:string;mode?:string;q?:string};
 export default async function FraudPage({searchParams}:{searchParams:Promise<Params>}){
- const user=await currentUser();if(!user)redirect('/login');if(user.access.role==='partner'||user.access.role!=='super_admin'||Object.values(user.access.scopes).some(values=>values.length>0)||!can(user.access,'statistics.view')||!can(user.access,'finance.view'))return <main className="fatal"><h1>403 · Keine Berechtigung</h1></main>;
+ const user=await currentUser();if(!user)redirect('/login');if(user.access.role==='partner'||user.access.role!=='super_admin'||Object.values(user.access.scopes).some(values=>values.length>0)||!can(user.access,'statistics.view')||!can(user.access,'finance.view'))return <main className="fatal"><h1>403 · Keine Berechtigung</h1><AccessDeniedHint permission="statistics.view und finance.view als super_admin ohne Scopes"/></main>;
  const filters=await searchParams,period=['7d','30d','90d'].includes(filters.period||'')?filters.period!:'30d',to=today(),range={from:shift(to,-(Number(period.slice(0,-1))-1)),to};let data;try{data=await getFraudDashboard(range,user.access)}catch(error){console.error('Fraud dashboard failed',error);return <main className="fatal"><h1>Fraud Detection konnte nicht geladen werden</h1><p>Migration, Backfill und Supabase-Verbindung prüfen.</p></main>}
  const query=(filters.q||'').trim().toLowerCase(),rows=data.evaluations.filter(row=>(!filters.risk||filters.risk==='all'||row.riskLevel===filters.risk)&&(!filters.mode||filters.mode==='all'||row.trafficMode===filters.mode)&&(!query||[row.affiliateName,row.affiliateId,row.offerName,row.offerId,row.source,row.subSource,row.campaignName,row.offerUrlName].some(value=>value.toLowerCase().includes(query)))).slice(0,250),compliance=new Map(data.stopCompliance.map(row=>[row.id,row])),canManageStops=can(user.access,'api.manage');
  return <main className="dashboard fraudPage"><DashboardPageHeader kicker="Accountweite Traffic-Kontrolle" title="Fraud Detection" status="Shadow Mode" tone="protected" icon="security" description="Alle Affiliates, Offers, Smartlinks, Direct-Pfade und clickless API-Quellen getrennt nach Qualität, Fraud-Risiko und Stop-Compliance."/>

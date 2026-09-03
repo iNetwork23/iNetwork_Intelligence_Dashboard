@@ -782,6 +782,8 @@ export const translations = {
   "Datenstand": "Data status",
   "Campaign gesamt · Read only": "Campaign as a whole · Read only",
   "BI-Modus: Read only": "BI mode: Read only",
+  "Campaign gesamt · Nur Lesen": "Campaign as a whole · Read only",
+  "BI-Modus: Nur Lesen": "BI mode: Read only",
   "Empfehlungen ändern Everflow nicht automatisch. First-Sales = ausschließlich Event „Sale“; Coin Spend separat.": "Recommendations do not change Everflow automatically. First-Sales exclusively use the “Sale” event; Coin Spend is separate.",
   "Manueller Refresh umgeht den 60-Sekunden-Cache.": "Manual refresh bypasses the 60 second cache.",
   "Traffic-Kontrolle": "Traffic control",

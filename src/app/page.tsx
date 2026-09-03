@@ -6,6 +6,7 @@ import type { ReportingPeriod } from '@/lib/supabase-reporting';
 import type { EntityRow,PathRow } from '@/lib/portfolio';
 import DashboardPageHeader from './components/DashboardPageHeader';
 import DataStatusBar from './components/DataStatusBar';
+import AccessDeniedHint from './components/AccessDeniedHint';
 import {getDataStatus,headerStatus} from '@/lib/data-status';
 import {can} from '@/lib/rbac';
 export const dynamic='force-dynamic';
@@ -14,8 +15,8 @@ const num=(n:number)=>new Intl.NumberFormat('de-DE').format(n);
 const pct=(n:number)=>`${n.toFixed(2).replace('.',',')} %`;
 type View='offers'|'affiliates'|'paths';
 export default async function DashboardPage({searchParams}:{searchParams:Promise<{period?:string;view?:string;from?:string;to?:string}>}){
- const user=await currentUser();if(!user)redirect('/login');if(!can(user.access,'dashboard.view'))return <main className="fatal"><h1>403 · Keine Berechtigung</h1></main>;const finance=can(user.access,'finance.view'),query=await searchParams;const allowed:ReportingPeriod[]=['today','7d','30d','90d','12m','all','custom'];const period:ReportingPeriod=allowed.includes(query.period as ReportingPeriod)?query.period as ReportingPeriod:'7d';const view:View=query.view==='affiliates'||query.view==='paths'?query.view:'offers';
- let data;try{data=await getDashboard(period,{from:query.from,to:query.to},user.access)}catch(error){console.error(error);if(error instanceof Error&&error.message.includes('403'))return <main className="fatal"><h1>403 · Scope nicht sicher auswertbar</h1></main>;return <main className="fatal"><div className="eyebrow">DATENQUELLE NICHT ERREICHBAR</div><h1>Dashboard konnte nicht geladen werden</h1><p>Der Supabase-Historiencache ist noch nicht eingerichtet oder vorübergehend nicht verfügbar.</p><InstantLink href="/">Erneut versuchen</InstantLink></main>}
+ const user=await currentUser();if(!user)redirect('/login');if(!can(user.access,'dashboard.view'))return <main className="fatal"><h1>403 · Keine Berechtigung</h1><p>Fehlende Berechtigung: dashboard.view</p></main>;const finance=can(user.access,'finance.view'),query=await searchParams;const allowed:ReportingPeriod[]=['today','7d','30d','90d','12m','all','custom'];const period:ReportingPeriod=allowed.includes(query.period as ReportingPeriod)?query.period as ReportingPeriod:'7d';const view:View=query.view==='affiliates'||query.view==='paths'?query.view:'offers';
+ let data;try{data=await getDashboard(period,{from:query.from,to:query.to},user.access)}catch(error){console.error(error);if(error instanceof Error&&error.message.includes('403'))return <main className="fatal"><h1>403 · Scope nicht sicher auswertbar</h1><AccessDeniedHint/></main>;return <main className="fatal"><div className="eyebrow">DATENQUELLE NICHT ERREICHBAR</div><h1>Dashboard konnte nicht geladen werden</h1><p>Der Supabase-Historiencache ist noch nicht eingerichtet oder vorübergehend nicht verfügbar.</p><InstantLink href="/">Erneut versuchen</InstantLink></main>}
  const rows:(EntityRow|PathRow)[]=view==='offers'?data.offers:view==='affiliates'?data.affiliates:data.paths;const visibleRows=rows.filter(x=>x.clicks>0||x.sois>0||x.firstSales>0||x.rebills>0||(finance&&(x.revenue!==0||x.payout!==0))),activeRows=finance?visibleRows:[...visibleRows].sort((a,b)=>b.sois-a.sois);
  const dataStatus=await getDataStatus(),header=headerStatus(dataStatus);
  return <main className="dashboard"><DashboardPageHeader kicker="ME Media · Everflow Monitor" title={user.access.role==='partner'?'Freigegebene Partnerdaten':'Gesamter Account'} status={header.label} tone={header.tone} icon="monitor" description={user.access.role==='partner'?'Ausschließlich Ihr zugeordneter Datenscope':'Alle Offers, Affiliates, Smartlinks und Direkt-Traffic auf einen Blick.'}/>

@@ -22,6 +22,19 @@ describe('shared professional dashboard header system',()=>{
   for(const marker of['getDataStatus','headerStatus(','status={header.label}','tone={header.tone}','<DataStatusBar'])expect(page).toContain(marker);
   expect(page).toContain('Persistenter Supabase-Cache');
  });
+ it('computes the remaining page headers from the real sync state and reads it once per page',()=>{
+  for(const route of['affiliates/page.tsx','automation/page.tsx']){const page=read(route);expect(page).not.toContain('status="Live"');for(const marker of['headerStatus(','status={header.label}','tone={header.tone}','<DataStatusBar status={dataStatus}'])expect(page,route).toContain(marker);expect(page.match(/getDataStatus\(/g),route).toHaveLength(1)}
+  const cohorts=read('cohorts/page.tsx');expect(cohorts).not.toContain('status="Aktuell"');for(const marker of['ltvHeaderStatus(','status={header.label}','tone={header.tone}','<DataStatusBar status={dataStatus}'])expect(cohorts).toContain(marker);expect(cohorts.match(/getDataStatus\(/g)).toHaveLength(1);
+  expect(read('fraud/page.tsx')).toContain('status="Shadow Mode"');
+  expect(read('source-blocks/page.tsx')).toContain('aktiv`}');
+  expect(read('affiliates/page.tsx')).toContain('status="Read-only"');
+ });
+ it('gives every 403 dead end a way back to the account monitor',()=>{
+  const hint=read('components/AccessDeniedHint.tsx');for(const marker of['href="/"','← Zurück zum Account Monitor','Fehlende Berechtigung: {permission}'])expect(hint).toContain(marker);
+  const pages=['page.tsx','affiliates/page.tsx','automation/page.tsx','cohorts/page.tsx','fraud/page.tsx','source-blocks/page.tsx','admin/access/page.tsx','settings/security/page.tsx'];
+  for(const route of pages){const blocks=read(route).match(/<main className="fatal">[\s\S]*?<\/main>/g)||[];for(const block of blocks.filter(block=>block.includes('403 ·'))){const ok=block.includes('<AccessDeniedHint')||block.includes('href="/"')||(route==='page.tsx'&&block.includes('Fehlende Berechtigung: dashboard.view'));expect(ok,`${route}: ${block.slice(0,80)}`).toBe(true)}}
+  expect(read('cohorts/page.tsx')).toContain('permission="finance.view"');expect(read('automation/page.tsx')).toContain('permission="finance.view"');
+ });
  it('standardizes header, filter surfaces, period controls and responsive density',()=>{
   const css=read('globals.css');
   for(const marker of['.dashboardPageHeader{','.dashboardPageTitle{','.dashboardPageStatus{','.dashboardPageDescription{','.affiliatePickerBar{','.affiliatePeriod{','.periods{','.customPeriod{','.cohortFilters{'])expect(css).toContain(marker);

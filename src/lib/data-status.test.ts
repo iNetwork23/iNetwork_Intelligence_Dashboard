@@ -78,6 +78,16 @@ describe('deriveDataStatus',()=>{
  });
 });
 
+describe('ltvHeaderStatus',()=>{
+ it('shows the LTV refresh time, a failed refresh or an unknown state for the cohort header',async()=>{
+  const {deriveDataStatus,ltvHeaderStatus}=await import('./data-status');
+  expect(ltvHeaderStatus(deriveDataStatus(rolling,now,{ltv:{status:'ready',refreshed_at:'2026-09-03T11:25:00Z'}}))).toEqual({label:'LTV 13:25',tone:'live'});
+  expect(ltvHeaderStatus(deriveDataStatus(rolling,now,{ltv:{status:'failed',failed_at:'2026-09-03T11:25:00Z',error:'refresh_timeout'}}))).toEqual({label:'LTV-Refresh fehlgeschlagen',tone:'warning'});
+  expect(ltvHeaderStatus(deriveDataStatus(rolling,now))).toEqual({label:'LTV unbekannt',tone:'warning'});
+  expect(ltvHeaderStatus(deriveDataStatus(null,now,{ltv:{status:'ready',refreshed_at:'garbage'}}))).toEqual({label:'LTV unbekannt',tone:'warning'});
+ });
+});
+
 describe('getDataStatus',()=>{
  beforeEach(()=>{from.mockClear();select.mockClear();inFilter.mockReset()});
  it('reads the three sync_state keys with a single select and never writes',async()=>{

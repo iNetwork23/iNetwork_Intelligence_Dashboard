@@ -36,6 +36,9 @@ import LazyDetails from "./LazyDetails";
 import SourceBreakdown from "./SourceBreakdown";
 import { sourceRebillKey } from "@/lib/source-rebill-key";
 import DashboardPageHeader from "../components/DashboardPageHeader";
+import DataStatusBar from "../components/DataStatusBar";
+import AccessDeniedHint from "../components/AccessDeniedHint";
+import { getDataStatus, headerStatus } from "@/lib/data-status";
 import OptimizationFlow from "../components/OptimizationFlow";
 import AffiliateCockpit from "./AffiliateCockpit";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
@@ -103,12 +106,14 @@ export default async function AffiliateOptimizerPage({
     return (
       <main className="fatal">
         <h1>403 · Keine Berechtigung</h1>
+        <AccessDeniedHint permission="partners.view" />
       </main>
     );
   if (query.mode === "smartlinks" && !maySmartlinks)
     return (
       <main className="fatal">
         <h1>403 · Smartlink Intelligence nicht freigegeben</h1>
+        <AccessDeniedHint permission="smartlinks.view und finance.view" />
       </main>
     );
   if (
@@ -121,6 +126,7 @@ export default async function AffiliateOptimizerPage({
     return (
       <main className="fatal">
         <h1>403 · Fremde ID</h1>
+        <AccessDeniedHint />
       </main>
     );
   const period = resolveAffiliatePeriod(query),
@@ -207,6 +213,7 @@ export default async function AffiliateOptimizerPage({
       return (
         <main className="fatal">
           <h1>403 · Scope nicht sicher auswertbar</h1>
+          <AccessDeniedHint />
         </main>
       );
     return (
@@ -469,16 +476,19 @@ export default async function AffiliateOptimizerPage({
           ];
         }),
       );
+  const dataStatus = await getDataStatus(),
+    header = headerStatus(dataStatus);
   return (
     <main className="dashboard affiliateOptimizer affiliateDecisionDesk">
       <DashboardPageHeader
         kicker="ME Media · Traffic Intelligence"
         title="Affiliate Optimizer"
-        status="Live"
-        tone="live"
+        status={header.label}
+        tone={header.tone}
         icon="affiliate"
         description="Direktlinks und Smartlinks pro Partner – getrennte KPIs und vollständige Landingpage-Sicht."
       />
+      <DataStatusBar status={dataStatus} />
       <OptimizationFlow active={mode === "smartlinks" ? "smartlink" : "affiliate"} />
       <section className="smartSearch affiliateSearch affiliatePickerBar">
         <AffiliatePartnerPicker

@@ -18,7 +18,6 @@ const actionLabel:{[K in SlotRecommendation['action']]:string}={stop:'STOPPEN',r
 const statusActionLabel:{[K in SlotRecommendation['action']]:string}={stop:'Stoppen',rotate:'Rotieren',scale:'Skalieren',protect:'Schützen',hold:'Halten'};
 
 type Windows={traffic:string;economics:string;maturity:string;source?:string};
-const defaultWindows:Windows={traffic:'Letzte 24 Stunden',economics:'Letzte 72 Stunden',maturity:'Maximal 14 Tage'};
 
 export function KpiValue({label,value,detail,scope,size='m',tone='neutral'}:{label:string;value:string;detail?:string;scope?:string;size?:'l'|'m'|'s';tone?:'positive'|'negative'|'neutral'}){
  return <div className={`sharedKpi size-${size} tone-${tone}`}><span>{label}</span><strong>{value}</strong>{detail&&<small>{detail}</small>}{scope&&<em>{scope}</em>}</div>;
@@ -214,7 +213,7 @@ function CampaignSourceWorkspace({rows,selectedKey,onSelect,scope}:{rows:Campaig
  </section>;
 }
 
-export function SmartlinkRotationCards({slots,recommendations,rotationLabel,windows=defaultWindows,affiliateId,affiliateName,campaignId,canManage=false}:{slots:SmartSlot[];recommendations:SlotRecommendation[];rotationLabel:string;windows?:Windows;affiliateId?:string;affiliateName?:string;campaignId?:string;canManage?:boolean}){
+export function SmartlinkRotationCards({slots,recommendations,rotationLabel,windows,affiliateId,affiliateName,campaignId,canManage=false}:{slots:SmartSlot[];recommendations:SlotRecommendation[];rotationLabel:string;windows:Windows;affiliateId?:string;affiliateName?:string;campaignId?:string;canManage?:boolean}){
  const [sort,setSort]=useState<SmartlinkSort>('rotation');
  const [workspace,setWorkspace]=useState<'landingpages'|'sources'>('landingpages');
  const [selectedId,setSelectedId]=useState(slots[0]?.id||'');

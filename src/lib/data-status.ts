@@ -37,6 +37,11 @@ export function headerStatus(status:DataStatus):HeaderStatus{
   return{label:`Sync ${formatBerlinTime(status.syncAt)}`,tone:'live'};
 }
 
+export function ltvHeaderStatus(status:DataStatus):HeaderStatus{
+  if(status.ltv.failed)return{label:'LTV-Refresh fehlgeschlagen',tone:'warning'};
+  return status.ltv.refreshedAt?{label:`LTV ${formatBerlinTime(status.ltv.refreshedAt)}`,tone:'live'}:{label:'LTV unbekannt',tone:'warning'};
+}
+
 export function describeDataStatus(status:DataStatus):{primary:string;ltv:string|null}{
   const ltv=status.ltv.failed?'LTV-Refresh fehlgeschlagen':status.ltv.refreshedAt?`LTV-Kohorten ${formatBerlinTime(status.ltv.refreshedAt)}`:null;
   if(status.level==='unknown')return{primary:'Sync-Status nicht lesbar',ltv};
