@@ -60,16 +60,16 @@ describe('zentraler Affiliate Optimizer',()=>{
     expect(period.match(/<form/g)).toHaveLength(1);
   });
 
-  it('bewahrt Favoriten, Kurzfenster, Stundenverlauf und echten Cache-Refresh zentral',()=>{
+  it('bewahrt Favoriten, Kurzfenster, Tagesverlauf und echten Cache-Refresh zentral',()=>{
     const page=app('affiliates/page.tsx');
     const details=app('affiliates/AffiliateSmartlinks.tsx');
     const watchlist=app('smartlinks/SmartlinkWatchlist.tsx');
     expect(page).toContain('<SmartlinkWatchlist');
     expect(page).toContain('query.refresh === "1"');
-    expect(details).toContain('Letzte 24 Stunden');
-    expect(details).toContain('Letzte 72 Stunden');
-    expect(details).toContain('Letzte 14 Tage');
-    expect(details).toContain('STUNDENBASIS · LETZTE 24H');
+    expect(details).toContain('title={data.windows.traffic}');
+    expect(details).toContain('title={data.windows.economics}');
+    expect(details).toContain('title={data.windows.maturity}');
+    expect(details).toContain('TAGESBASIS · LETZTE 14 KALENDERTAGE');
     expect(details).toContain('Datenstand');
     expect(watchlist).toContain('baseHref');
     expect(watchlist).toContain('affiliateId?:string');

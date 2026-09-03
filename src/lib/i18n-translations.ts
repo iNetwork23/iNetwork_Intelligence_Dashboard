@@ -798,5 +798,18 @@ export const translations = {
   "Tatsächlich gebuchter Payout": "Payout actually posted",
   "Notiz:": "Note:",
   "Geändert von": "Modified by",
-  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard."
+  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard.",
+  "TAGESBASIS · LETZTE 14 KALENDERTAGE": "DAILY BASE · LAST 14 CALENDAR DAYS",
+  "Teiltag": "Partial day",
+  "Europe/Berlin · heutiger Tag bis Datenstand": "Europe/Berlin · today up to data status",
+  "Entwurf gespeichert": "Draft saved",
+  "Konfiguration aktualisiert": "Configuration updated",
+  "Live angefordert": "Live requested",
+  "Live aktiviert": "Live activated",
+  "Pausiert": "Paused",
+  "Fortgesetzt": "Resumed",
+  "Beendet": "Completed",
+  "Als Entwurf importiert": "Imported as draft",
+  "Aktion ausgeführt": "Action completed",
+  "Aktion fehlgeschlagen": "Action failed"
 } as const;

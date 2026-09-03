@@ -487,3 +487,13 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .loginAside dl.loginFacts dt{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
 .loginAside dl.loginFacts dd{margin:6px 0 0;font-size:13px;font-weight:700}
 @media(max-width:900px){.loginShell{grid-template-columns:1fr}.loginAside{display:none}.loginCard{min-height:100vh;padding:28px 24px}}
+
+/* ── Smartlink: Tagesbalken statt Stundenchart, Notice-Töne der Automation ── */
+.dayRow{grid-template-columns:72px 1fr 45px 200px}
+.dayRow>span small{display:block;color:var(--text-muted);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.dayRow.partial .barTrack i{opacity:.45;background-image:repeating-linear-gradient(135deg,transparent 0 4px,var(--panel) 4px 6px)}
+.dayRow.partial>b,.dayRow.partial>em{color:var(--text-muted)}
+.windowNote{flex-wrap:wrap}
+.automationNotice.ok{border-left-color:var(--positive)}
+.automationNotice.error{border-left-color:var(--negative);color:var(--negative)}
+@media(max-width:700px){.dayRow{grid-template-columns:72px 1fr 35px}}
