@@ -815,4 +815,7 @@ export const translations = {
   "Zuletzt verifiziert:": "Last verified:",
   "Everflow-Antwort nicht bestätigt": "Everflow response not confirmed",
   "Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow.": "No second activation attempt without a manual check in Everflow."
+  "Affiliate-ID": "Affiliate ID",
+  "Umsatz je Registrierung (90 Tage)": "Revenue per registration (90 days)",
+  "LTV-Kohorten nach Registrierungsmonat, Affiliate, Offer, Campaign, Source und Sub-Source": "LTV cohorts by registration month, affiliate, offer, campaign, source and sub-source"
 } as const;
