@@ -498,3 +498,13 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .trafficActionReport>header .actionPeriod{white-space:nowrap;font-size:11px;color:var(--text-secondary)}
 .sourceBlockAuditCard.error{border-color:var(--warning)}.sourceBlockAuditCard.error>header span{color:var(--warning)}.sourceBlockAuditCard.pending>header span{color:var(--muted)}.sourceBlockAuditCard>p.sourceBlockIncident{padding:11px 12px;border:1px solid var(--warning);border-radius:var(--radius-md);color:var(--text);line-height:1.5}.sourceBlockIconButton.locked,.sourceBlockIconButton.locked:hover{border-color:var(--warning);background:transparent;color:var(--warning);opacity:.85;cursor:not-allowed;box-shadow:none}
 .cohortTable{min-width:1240px}@media(max-width:900px){.cohortTable td:nth-child(2){display:flex}.cohortTable td:nth-child(2):before{display:inline;margin-bottom:0}.cohortTable td:nth-child(5){display:block}.cohortTable td:nth-child(5):before{display:block;margin-bottom:5px}}
+
+/* ── Smartlink: Tagesbalken statt Stundenchart, Notice-Töne der Automation ── */
+.dayRow{grid-template-columns:72px 1fr 45px 200px}
+.dayRow>span small{display:block;color:var(--text-muted);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.dayRow.partial .barTrack i{opacity:.45;background-image:repeating-linear-gradient(135deg,transparent 0 4px,var(--panel) 4px 6px)}
+.dayRow.partial>b,.dayRow.partial>em{color:var(--text-muted)}
+.windowNote{flex-wrap:wrap}
+.automationNotice.ok{border-left-color:var(--positive)}
+.automationNotice.error{border-left-color:var(--negative);color:var(--negative)}
+@media(max-width:700px){.dayRow{grid-template-columns:72px 1fr 35px}}

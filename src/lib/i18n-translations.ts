@@ -818,4 +818,17 @@ export const translations = {
   "Affiliate-ID": "Affiliate ID",
   "Umsatz je Registrierung (90 Tage)": "Revenue per registration (90 days)",
   "LTV-Kohorten nach Registrierungsmonat, Affiliate, Offer, Campaign, Source und Sub-Source": "LTV cohorts by registration month, affiliate, offer, campaign, source and sub-source"
+  "TAGESBASIS · LETZTE 14 KALENDERTAGE": "DAILY BASE · LAST 14 CALENDAR DAYS",
+  "Teiltag": "Partial day",
+  "Europe/Berlin · heutiger Tag bis Datenstand": "Europe/Berlin · today up to data status",
+  "Entwurf gespeichert": "Draft saved",
+  "Konfiguration aktualisiert": "Configuration updated",
+  "Live angefordert": "Live requested",
+  "Live aktiviert": "Live activated",
+  "Pausiert": "Paused",
+  "Fortgesetzt": "Resumed",
+  "Beendet": "Completed",
+  "Als Entwurf importiert": "Imported as draft",
+  "Aktion ausgeführt": "Action completed",
+  "Aktion fehlgeschlagen": "Action failed"
 } as const;
