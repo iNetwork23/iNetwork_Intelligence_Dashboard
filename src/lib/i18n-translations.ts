@@ -798,5 +798,11 @@ export const translations = {
   "Tatsächlich gebuchter Payout": "Payout actually posted",
   "Notiz:": "Note:",
   "Geändert von": "Modified by",
-  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard."
+  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard.",
+  "Nur Lesen": "Read only",
+  "Sperren": "Blocks",
+  "Live-Freigabe": "Live approval",
+  "Sync unbekannt": "Sync unknown",
+  "Sync-Status nicht lesbar": "Sync status unreadable",
+  "LTV-Refresh fehlgeschlagen": "LTV refresh failed"
 } as const;

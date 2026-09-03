@@ -22,6 +22,8 @@ type Props={
  mayAdmin:boolean;
  maySecurity:boolean;
  oneSignalConfigured:boolean;
+ capabilityLabel:string;
+ writeAccess:boolean;
 };
 type IconName="monitor"|"chart"|"users"|"rotation"|"spark"|"shield"|"lock";
 type PrimaryItem={href:string;label:string;icon:IconName;show:boolean};
@@ -83,7 +85,7 @@ export default function AdminSidebar(props:Props){
    </nav>
    <span className="sidebarOrderAnnouncement" aria-live="polite">{announcement}</span>
    <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span></Link>)}</nav>
-   <div className="sidebarFooter"><div className="sidebarStatus"><i/><span>Read only</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><div className="sidebarPreferences"><div className="sidebarPreference"><span>Sprache</span><LanguageToggle compact/></div><div className="sidebarPreference"><span>Darstellung</span><ThemeToggle showLabel/></div></div><OneSignalLogoutForm configured={props.oneSignalConfigured}/></div></div>
+   <div className="sidebarFooter"><div className="sidebarStatus"><i className={props.writeAccess?"write":"read"}/><span>{props.capabilityLabel}</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><div className="sidebarPreferences"><div className="sidebarPreference"><span>Sprache</span><LanguageToggle compact/></div><div className="sidebarPreference"><span>Darstellung</span><ThemeToggle showLabel/></div></div><OneSignalLogoutForm configured={props.oneSignalConfigured}/></div></div>
   </aside>
  </>
 }

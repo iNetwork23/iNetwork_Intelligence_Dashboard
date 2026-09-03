@@ -487,3 +487,10 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .loginAside dl.loginFacts dt{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
 .loginAside dl.loginFacts dd{margin:6px 0 0;font-size:13px;font-weight:700}
 @media(max-width:900px){.loginShell{grid-template-columns:1fr}.loginAside{display:none}.loginCard{min-height:100vh;padding:28px 24px}}
+.dashboardPageStatus.warning{border-color:color-mix(in srgb,var(--warning) 25%,var(--border));background:color-mix(in srgb,var(--warning) 7%,var(--surface-1));color:var(--warning)}
+.dashboardPageStatus.warning i{background:var(--warning);box-shadow:0 0 0 3px color-mix(in srgb,var(--warning) 10%,transparent)}
+.dataStatusBar{display:flex;flex-wrap:wrap;gap:3px 14px;margin:-8px 0 14px;font-size:11px;line-height:1.4;color:var(--text-muted)}
+.dataStatusBar>span{min-width:0}
+.dataStatusBar.warning{color:var(--warning)}
+.sidebarStatus i.read{background:var(--text-muted);box-shadow:0 0 0 3px color-mix(in srgb,var(--text-muted) 12%,transparent)}
+.sidebarStatus i.write{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}

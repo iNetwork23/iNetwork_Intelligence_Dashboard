@@ -15,6 +15,13 @@ describe('shared professional dashboard header system',()=>{
   for(const marker of['dashboardPageHeader','dashboardPageIcon','dashboardPageKicker','dashboardPageTitle','dashboardPageStatus','dashboardPageDescription'])expect(source).toContain(marker);
   for(const icon of['monitor','affiliate','smartlink','automation','cohorts','access','security'])expect(source).toContain(`"${icon}"`);
  });
+ it('computes the account monitor status from the real sync state instead of a hardcoded live badge',()=>{
+  const page=read('page.tsx');
+  expect(page).not.toContain('status="Live"');
+  expect(page).not.toContain('Cache: 60');
+  for(const marker of['getDataStatus','headerStatus(','status={header.label}','tone={header.tone}','<DataStatusBar'])expect(page).toContain(marker);
+  expect(page).toContain('Persistenter Supabase-Cache');
+ });
  it('standardizes header, filter surfaces, period controls and responsive density',()=>{
   const css=read('globals.css');
   for(const marker of['.dashboardPageHeader{','.dashboardPageTitle{','.dashboardPageStatus{','.dashboardPageDescription{','.affiliatePickerBar{','.affiliatePeriod{','.periods{','.customPeriod{','.cohortFilters{'])expect(css).toContain(marker);
