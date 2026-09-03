@@ -26,6 +26,13 @@ import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import { sourceRebillKey } from "../../lib/source-rebill-key";
 import { rankNestedSourceMatches } from "../../lib/source-search";
 import SourceSearchField from "../components/SourceSearchField";
+import {
+  DEAD_TRAFFIC_CLICKS,
+  KILL_MATURITY_SOIS,
+  SCALE_MIN_FIRST_SALES,
+  SCALE_MIN_SOIS,
+  UNDERPERFORMANCE_FACTOR,
+} from "../../lib/decision-engine";
 const num = (n: number) => new Intl.NumberFormat("de-DE").format(n),
   pct = (n: number) => `${n.toFixed(1).replace(".", ",")} %`,
   eur = (n: number) =>
@@ -367,13 +374,12 @@ export default function SourceBreakdown({
         {apiMode ? (
           <>
             API · clickless: keine klickbasierten Stop-/Scale-Regeln. Primär
-            zählen SOIs, First-Sales, Rebills, Profit und Profit je SOI.
+            zählen SOIs, First-Sales, Rebills, Profit und Profit je SOI.{" "}
+            {`Abschalten ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         ) : (
           <>
-            Entscheidungsreif ab <b>100 Klicks</b> oder <b>20 SOIs</b>.
-            Skalieren erst ab 20 SOIs und positivem Profit; Abschalten bei
-            reifem negativem Profit oder 100 Klicks ohne SOI.
+            {`Abschalten ab ${DEAD_TRAFFIC_CLICKS} Klicks ohne SOI, oder ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         )}
       </footer>

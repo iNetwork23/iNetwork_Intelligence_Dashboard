@@ -487,3 +487,5 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .loginAside dl.loginFacts dt{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
 .loginAside dl.loginFacts dd{margin:6px 0 0;font-size:13px;font-weight:700}
 @media(max-width:900px){.loginShell{grid-template-columns:1fr}.loginAside{display:none}.loginCard{min-height:100vh;padding:28px 24px}}
+
+.trafficActionReport>header .actionPeriod{white-space:nowrap;font-size:11px;color:var(--text-secondary)}

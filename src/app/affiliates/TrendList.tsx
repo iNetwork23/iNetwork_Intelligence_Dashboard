@@ -1,5 +1,6 @@
 import InstantLink from "./InstantLink";
 import type { CockpitRow } from "../../lib/affiliate-trend";
+import { openSourceRowHref } from "../../lib/open-source-row-link";
 
 const eur = (n: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
@@ -58,7 +59,7 @@ export default function TrendList({
             <li key={`${r.affiliateId}|${r.variantKey}`}>
               <InstantLink
                 prefetch
-                href={`/affiliates?affiliate=${r.affiliateId}&offer=${r.offerId}&${rangeParams}#url-${r.offerUrlId}`}
+                href={openSourceRowHref(r.affiliateId, r.offerId, r.offerUrlId, rangeParams)}
               >
                 <strong>{r.affiliate}</strong>
                 <small>
