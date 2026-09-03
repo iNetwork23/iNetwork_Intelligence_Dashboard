@@ -40,6 +40,7 @@ import OptimizationFlow from "../components/OptimizationFlow";
 import AffiliateCockpit from "./AffiliateCockpit";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
+import { openSourceRowHref } from "../../lib/open-source-row-link";
 import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
@@ -783,7 +784,7 @@ export default async function AffiliateOptimizerPage({
                 {[...stopVariants, ...scaleVariants].map((v) => (
                   <InstantLink
                     key={v.key}
-                    href={`/affiliates?affiliate=${selected.affiliateId}&offer=${v.offerId}&${rangeParams}#url-${v.offerUrlId}`}
+                    href={openSourceRowHref(selected.affiliateId, v.offerId, v.offerUrlId, rangeParams)}
                     className={recClass(v)}
                   >
                     <b>{v.recommendation.action}</b>
@@ -1122,6 +1123,7 @@ export default async function AffiliateOptimizerPage({
                   urls={Object.fromEntries(
                     activeOffer.variants.map((v) => [v.offerUrlId, v.offerUrl]),
                   )}
+                  sourcePeriodLabel={sourcePeriod.label}
                 />
               )}
           </section>

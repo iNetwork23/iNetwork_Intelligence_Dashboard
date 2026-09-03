@@ -805,4 +805,7 @@ export const translations = {
   "Sync unbekannt": "Sync unknown",
   "Sync-Status nicht lesbar": "Sync status unreadable",
   "LTV-Refresh fehlgeschlagen": "LTV refresh failed"
+  "Zeitraum:": "Period:",
+  "Abschalten ab 100 Klicks ohne SOI, oder ab 50 SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter 50 % des Vergleichswerts). Skalieren ab 20 SOIs mit mindestens 3 First-Sales und positivem Profit.": "Switch off from 100 clicks without an SOI, or from 50 SOIs without a first sale at negative profit, or on proven underperformance (first-sale rate even optimistically below 50 % of the benchmark). Scale from 20 SOIs with at least 3 first sales and positive profit.",
+  "Abschalten ab 50 SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter 50 % des Vergleichswerts). Skalieren ab 20 SOIs mit mindestens 3 First-Sales und positivem Profit.": "Switch off from 50 SOIs without a first sale at negative profit, or on proven underperformance (first-sale rate even optimistically below 50 % of the benchmark). Scale from 20 SOIs with at least 3 first sales and positive profit."
 } as const;
