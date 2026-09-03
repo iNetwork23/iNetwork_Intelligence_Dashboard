@@ -114,6 +114,22 @@ export default function SourceBlockButton(props: Props) {
     [blocks, props],
   );
 
+  const uncertain = useMemo(
+    () =>
+      blocks.find((block) => same(block, props) && block.status === "error"),
+    [blocks, props],
+  );
+  const pending = useMemo(
+    () =>
+      blocks.find((block) => same(block, props) && block.status === "pending"),
+    [blocks, props],
+  );
+  const locked = Boolean(uncertain || pending);
+  const lockedLabel = uncertain ? "Zustand unklar" : "Verifizierung läuft";
+  const lockedTitle = uncertain
+    ? `${uncertain.error || "Zustand unklar"} · Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow.`
+    : "Verifizierung läuft · Everflow-Bestätigung steht noch aus.";
+
   const fieldMain = props.trafficMode === "api" ? "ADV1" : "Source";
   const fieldSub = props.trafficMode === "api" ? "ADV2" : "Sub1";
   const source = props.mainValue || "nicht übermittelt";
@@ -311,18 +327,34 @@ export default function SourceBlockButton(props: Props) {
 
   return (
     <span className="sourceBlockControl">
-      <button
-        type="button"
-        className={`sourceBlockIconButton${active ? " blocked" : ""}`}
-        onClick={() => {setProductWide(false);setOpen(true)}}
-        aria-label={triggerLabel}
-        title={triggerLabel}
-        aria-pressed={Boolean(active)}
-      >
-        <PowerIcon />
-        <span>{active ? `${controlScope} ausgeschaltet` : `${controlScope} ausschalten`}</span>
-      </button>
-      <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
+      {locked ? (
+        <button
+          type="button"
+          className="sourceBlockIconButton locked"
+          disabled
+          aria-disabled="true"
+          aria-label={`${controlScope} ${isSubSource ? sub : source}: ${lockedLabel}`}
+          title={lockedTitle}
+        >
+          <PowerIcon />
+          <span>{lockedLabel}</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`sourceBlockIconButton${active ? " blocked" : ""}`}
+          onClick={() => {setProductWide(false);setOpen(true)}}
+          aria-label={triggerLabel}
+          title={triggerLabel}
+          aria-pressed={Boolean(active)}
+        >
+          <PowerIcon />
+          <span>{active ? `${controlScope} ausgeschaltet` : `${controlScope} ausschalten`}</span>
+        </button>
+      )}
+      {!locked && (
+        <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
+      )}
       {error && (
         <small className="sourceBlockError" role="alert">
           {error}
