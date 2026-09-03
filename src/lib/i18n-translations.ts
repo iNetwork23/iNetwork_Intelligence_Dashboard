@@ -166,6 +166,7 @@ export const translations = {
   "Schnelle Zeiträume": "Fast periods",
   "Zeitraum genauer auswählen": "Choose an exact period",
   "Monat wählen": "Choose month",
+  "Monate": "Months",
   "Vorheriges Jahr": "Previous year",
   "Nächstes Jahr": "Next year",
   "Noch nicht verfügbar": "Not available yet",
