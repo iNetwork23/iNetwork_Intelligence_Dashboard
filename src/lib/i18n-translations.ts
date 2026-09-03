@@ -798,5 +798,8 @@ export const translations = {
   "Tatsächlich gebuchter Payout": "Payout actually posted",
   "Notiz:": "Note:",
   "Geändert von": "Modified by",
-  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard."
+  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard.",
+  "Affiliate-ID": "Affiliate ID",
+  "Umsatz je Registrierung (90 Tage)": "Revenue per registration (90 days)",
+  "LTV-Kohorten nach Registrierungsmonat, Affiliate, Offer, Campaign, Source und Sub-Source": "LTV cohorts by registration month, affiliate, offer, campaign, source and sub-source"
 } as const;
