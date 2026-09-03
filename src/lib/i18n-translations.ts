@@ -804,20 +804,20 @@ export const translations = {
   "Live-Freigabe": "Live approval",
   "Sync unbekannt": "Sync unknown",
   "Sync-Status nicht lesbar": "Sync status unreadable",
-  "LTV-Refresh fehlgeschlagen": "LTV refresh failed"
+  "LTV-Refresh fehlgeschlagen": "LTV refresh failed",
   "Zeitraum:": "Period:",
   "Abschalten ab 100 Klicks ohne SOI, oder ab 50 SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter 50 % des Vergleichswerts). Skalieren ab 20 SOIs mit mindestens 3 First-Sales und positivem Profit.": "Switch off from 100 clicks without an SOI, or from 50 SOIs without a first sale at negative profit, or on proven underperformance (first-sale rate even optimistically below 50 % of the benchmark). Scale from 20 SOIs with at least 3 first sales and positive profit.",
-  "Abschalten ab 50 SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter 50 % des Vergleichswerts). Skalieren ab 20 SOIs mit mindestens 3 First-Sales und positivem Profit.": "Switch off from 50 SOIs without a first sale at negative profit, or on proven underperformance (first-sale rate even optimistically below 50 % of the benchmark). Scale from 20 SOIs with at least 3 first sales and positive profit."
+  "Abschalten ab 50 SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter 50 % des Vergleichswerts). Skalieren ab 20 SOIs mit mindestens 3 First-Sales und positivem Profit.": "Switch off from 50 SOIs without a first sale at negative profit, or on proven underperformance (first-sale rate even optimistically below 50 % of the benchmark). Scale from 20 SOIs with at least 3 first sales and positive profit.",
   "ZUSTAND UNKLAR": "STATE UNCLEAR",
   "Zustand unklar": "State unclear",
   "Zustand unklar:": "State unclear:",
   "Verifizierung läuft": "Verification in progress",
   "Zuletzt verifiziert:": "Last verified:",
   "Everflow-Antwort nicht bestätigt": "Everflow response not confirmed",
-  "Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow.": "No second activation attempt without a manual check in Everflow."
+  "Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow.": "No second activation attempt without a manual check in Everflow.",
   "Affiliate-ID": "Affiliate ID",
   "Umsatz je Registrierung (90 Tage)": "Revenue per registration (90 days)",
-  "LTV-Kohorten nach Registrierungsmonat, Affiliate, Offer, Campaign, Source und Sub-Source": "LTV cohorts by registration month, affiliate, offer, campaign, source and sub-source"
+  "LTV-Kohorten nach Registrierungsmonat, Affiliate, Offer, Campaign, Source und Sub-Source": "LTV cohorts by registration month, affiliate, offer, campaign, source and sub-source",
   "TAGESBASIS · LETZTE 14 KALENDERTAGE": "DAILY BASE · LAST 14 CALENDAR DAYS",
   "Teiltag": "Partial day",
   "Europe/Berlin · heutiger Tag bis Datenstand": "Europe/Berlin · today up to data status",
