@@ -798,5 +798,12 @@ export const translations = {
   "Tatsächlich gebuchter Payout": "Payout actually posted",
   "Notiz:": "Note:",
   "Geändert von": "Modified by",
-  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard."
+  "Noch keine Quelle wurde über das Dashboard ausgeschaltet.": "No source has yet been switched off via the dashboard.",
+  "ZUSTAND UNKLAR": "STATE UNCLEAR",
+  "Zustand unklar": "State unclear",
+  "Zustand unklar:": "State unclear:",
+  "Verifizierung läuft": "Verification in progress",
+  "Zuletzt verifiziert:": "Last verified:",
+  "Everflow-Antwort nicht bestätigt": "Everflow response not confirmed",
+  "Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow.": "No second activation attempt without a manual check in Everflow."
 } as const;

@@ -487,3 +487,4 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .loginAside dl.loginFacts dt{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
 .loginAside dl.loginFacts dd{margin:6px 0 0;font-size:13px;font-weight:700}
 @media(max-width:900px){.loginShell{grid-template-columns:1fr}.loginAside{display:none}.loginCard{min-height:100vh;padding:28px 24px}}
+.sourceBlockAuditCard.error{border-color:var(--warning)}.sourceBlockAuditCard.error>header span{color:var(--warning)}.sourceBlockAuditCard.pending>header span{color:var(--muted)}.sourceBlockAuditCard>p.sourceBlockIncident{padding:11px 12px;border:1px solid var(--warning);border-radius:var(--radius-md);color:var(--text);line-height:1.5}.sourceBlockIconButton.locked,.sourceBlockIconButton.locked:hover{border-color:var(--warning);background:transparent;color:var(--warning);opacity:.85;cursor:not-allowed;box-shadow:none}

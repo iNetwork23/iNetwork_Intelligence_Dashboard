@@ -37,6 +37,16 @@ export async function loadCampaignShapesFromCache(ids:number[]):Promise<Campaign
   const byId=new Map(data.map(row=>[row.value.campaign_id,row.value.payload]));return wanted.map(id=>{const payload=byId.get(String(id));if(!validShape(payload,id))throw new Error(`Campaign #${id}: Cache fehlt oder ist beschädigt`);return payload});
 }
 
+export async function patchCampaignSnapshotStatus(campaignId:number,status:string):Promise<boolean>{
+  if(!Number.isInteger(campaignId)||campaignId<=0||!['active','paused'].includes(status))return false;
+  const generation=await activeGeneration(),key=`${generation?`${GENERATION_PREFIX}${generation}:`:LEGACY_PREFIX}${campaignId}`,{data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',key).maybeSingle();
+  if(error)throw new Error(`Supabase campaign snapshot status read: ${error.message}`);
+  const current=(data?.value as SnapshotValue|undefined);if(!current||String(current.campaign_id)!==String(campaignId)||!validShape(current.payload,campaignId))return false;
+  if(current.campaign_status===status&&current.payload.campaign_status===status)return false;
+  const value:SnapshotValue={...current,campaign_status:status,payload:{...current.payload,campaign_status:status}},result=await getSupabaseAdmin().from('sync_state').upsert({key,value},{onConflict:'key'});
+  if(result.error)throw new Error(`Supabase campaign snapshot status patch: ${result.error.message}`);return true;
+}
+
 export async function syncCampaignSnapshots(apiKey:string,limit=60){
   if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');
   await pruneCampaignGenerations();
