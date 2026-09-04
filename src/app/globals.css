@@ -527,3 +527,19 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 @media(max-width:430px){.sourcesFilters{grid-template-columns:1fr}.sourcesTable td{grid-template-columns:1fr;gap:3px}.sourcesTable td>*{grid-column:1}}
 .sourceBlockFilters{margin:0 0 14px}.sourceBlockSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px}.sourceBlockSummary>div{display:grid;gap:4px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.sourceBlockSummary dt{color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase}.sourceBlockSummary dd{margin:0;font-size:16px;font-weight:800}.sourceBlockHistory{display:grid;gap:8px}.sourceBlockHistoryToggle{justify-self:start;min-height:30px;padding:4px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-size:10px;font-weight:750;cursor:pointer}.sourceBlockHistoryToggle:hover,.sourceBlockHistoryToggle:focus-visible{border-color:var(--accent);color:var(--text)}.sourceBlockHistory>p{margin:0;color:var(--muted);font-size:11px}.sourceBlockHistoryList{display:grid;gap:6px;margin:0;padding:0;list-style:none}.sourceBlockHistoryList li{display:grid;grid-template-columns:auto auto auto minmax(0,1fr);gap:4px 12px;align-items:baseline;padding:8px 10px;border-radius:var(--radius-md);background:var(--surface-2);font-size:11px}.sourceBlockHistoryList time,.sourceBlockHistoryList span{color:var(--muted)}.sourceBlockHistoryList small,.sourceBlockHistoryList em{grid-column:1/-1;color:var(--text);font-style:normal;overflow-wrap:anywhere}.sourceBlockHistoryList em{color:var(--warning)}a.showMoreSources{text-decoration:none}
 @media(max-width:800px){.sourceBlockSummary{grid-template-columns:1fr}.sourceBlockHistoryList li{grid-template-columns:1fr}}
+/* Etappe 2 · Sperr-Marker, Top-N-Toggle und 44-px-Klickflächen in den Kandidatenlisten (D10, D20) */
+.blockMarker{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:transparent;color:var(--text-secondary);font-size:11px;font-weight:750;line-height:1.2;text-decoration:none;white-space:nowrap}
+.blockMarker.active{border-color:color-mix(in srgb,var(--negative) 40%,var(--border));color:var(--negative)}
+.blockMarker.unclear{border-color:color-mix(in srgb,var(--warning) 50%,var(--border));color:var(--warning)}
+a.blockMarker:hover,a.blockMarker:focus-visible{background:var(--fill-hover);text-decoration:underline}
+.sourceGroupHead .blockMarker{margin-top:4px}
+.actionCandidateList article .blockMarker{margin-top:8px}
+.sourceGroupPanel.blocked>.sourceGroupHead{opacity:.9}
+.blockedHidden{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:8px 0 0;color:var(--text-secondary);font-size:11px}
+.blockedHidden a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent);font-weight:750;text-decoration:none}
+.blockedHidden a:hover,.blockedHidden a:focus-visible{text-decoration:underline}
+.topNToggle{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin-top:6px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--accent);font-size:11px;font-weight:750;cursor:pointer}
+.topNToggle:hover,.topNToggle:focus-visible{background:var(--fill-hover)}
+.cockpitList .topNToggle{margin-top:0;border-width:1px 0 0;border-radius:0}
+.cockpitList li a{min-height:44px}
+.cockpitList li a .cockpitBlocked{grid-column:2/span 2;grid-row:4;margin-top:2px;color:var(--negative);font-size:10px;font-weight:700;line-height:1.4}

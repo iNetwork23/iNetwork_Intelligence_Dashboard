@@ -3,15 +3,18 @@ import {
   buildCockpitLists,
   type AffiliateAnalysisWithTrend,
 } from "../../lib/affiliate-trend";
+import type { SourceBlockMarkerIndex } from "../../lib/source-block-markers";
 
 export default function AffiliateCockpit({
   analyses,
   rangeParams,
   comparisonAvailable,
+  blocks,
 }: {
   analyses: AffiliateAnalysisWithTrend[];
   rangeParams: string;
   comparisonAvailable: boolean;
+  blocks?: SourceBlockMarkerIndex;
 }) {
   const lists = buildCockpitLists(analyses);
   return (
@@ -25,6 +28,7 @@ export default function AffiliateCockpit({
         emptyReason="Keine Position erfüllt die Abschalt-Kriterien."
         rangeParams={rangeParams}
         mode="profit"
+        blocks={blocks}
       />
       <TrendList
         kicker="WACHSTUM"
@@ -36,6 +40,7 @@ export default function AffiliateCockpit({
         rangeParams={rangeParams}
         mode="profit"
         detail="facts"
+        blocks={blocks}
       />
       <TrendList
         kicker="VERGLEICH ZUR VORPERIODE"
@@ -49,6 +54,7 @@ export default function AffiliateCockpit({
         rangeParams={rangeParams}
         mode="change"
         detail="delta"
+        blocks={blocks}
       />
     </section>
   );

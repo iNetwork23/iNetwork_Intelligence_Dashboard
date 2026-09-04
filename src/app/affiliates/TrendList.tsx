@@ -1,6 +1,8 @@
 import InstantLink from "./InstantLink";
+import CandidateTopN, { CANDIDATE_TOP_N } from "./CandidateTopN";
 import type { CockpitRow } from "../../lib/affiliate-trend";
 import { openSourceRowHref } from "../../lib/open-source-row-link";
+import { activeBlocksText, countActiveBlocks, type SourceBlockMarkerIndex } from "../../lib/source-block-markers";
 
 const eur = (n: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
@@ -26,6 +28,7 @@ export default function TrendList({
   rangeParams,
   mode,
   detail = "reason",
+  blocks,
 }: {
   title: string;
   kicker: string;
@@ -36,7 +39,43 @@ export default function TrendList({
   rangeParams: string;
   mode: "profit" | "change";
   detail?: "reason" | "facts" | "delta";
+  /** Sperr-Index (serialisiert): LP-Zeilen zeigen die Zahl aktiver Quellen-Sperren ihres Affiliate/Offer-Paars. */
+  blocks?: SourceBlockMarkerIndex;
 }) {
+  const item = (r: CockpitRow) => {
+    const blocked = countActiveBlocks(blocks, r.affiliateId, r.offerId);
+    return (
+      <li key={`${r.affiliateId}|${r.variantKey}`}>
+        <InstantLink
+          prefetch
+          href={openSourceRowHref(r.affiliateId, r.offerId, r.offerUrlId, rangeParams)}
+        >
+          <strong>{r.affiliate}</strong>
+          <small>
+            {identityLine(r)}
+            {detail === "facts"
+              ? ` · ${num(r.sois)} SOIs · ${r.sois > 0 ? `${eur(r.profit / r.sois)} je SOI` : "ohne SOI"}`
+              : detail === "delta" && r.trendVerdict.status === "ok"
+                ? ` · ${eur(r.profit - r.trendVerdict.profitDelta)} → ${eur(r.profit)}`
+                : ""}
+          </small>
+          {detail === "reason" && <em>{r.reason}</em>}
+          {blocked > 0 && <span className="cockpitBlocked">{activeBlocksText(blocked)}</span>}
+          {mode === "profit" ? (
+            <b className={r.profit >= 0 ? "up" : "down"}>{eur(r.profit)}</b>
+          ) : (
+            r.trendVerdict.status === "ok" && (
+              <b className={r.trendVerdict.profitDelta >= 0 ? "up" : "down"}>
+                {eur(r.trendVerdict.profitDelta)}
+                {r.trendVerdict.profitPercent !== null &&
+                  ` · ${pctCapped(r.trendVerdict.profitPercent)}`}
+              </b>
+            )
+          )}
+        </InstantLink>
+      </li>
+    );
+  };
   return (
     <section className="cockpitList">
       <header>
@@ -54,38 +93,12 @@ export default function TrendList({
       {rows.length === 0 ? (
         <p className="cockpitEmpty">{emptyReason}</p>
       ) : (
-        <ol>
-          {rows.map((r) => (
-            <li key={`${r.affiliateId}|${r.variantKey}`}>
-              <InstantLink
-                prefetch
-                href={openSourceRowHref(r.affiliateId, r.offerId, r.offerUrlId, rangeParams)}
-              >
-                <strong>{r.affiliate}</strong>
-                <small>
-                  {identityLine(r)}
-                  {detail === "facts"
-                    ? ` · ${num(r.sois)} SOIs · ${r.sois > 0 ? `${eur(r.profit / r.sois)} je SOI` : "ohne SOI"}`
-                    : detail === "delta" && r.trendVerdict.status === "ok"
-                      ? ` · ${eur(r.profit - r.trendVerdict.profitDelta)} → ${eur(r.profit)}`
-                      : ""}
-                </small>
-                {detail === "reason" && <em>{r.reason}</em>}
-                {mode === "profit" ? (
-                  <b className={r.profit >= 0 ? "up" : "down"}>{eur(r.profit)}</b>
-                ) : (
-                  r.trendVerdict.status === "ok" && (
-                    <b className={r.trendVerdict.profitDelta >= 0 ? "up" : "down"}>
-                      {eur(r.trendVerdict.profitDelta)}
-                      {r.trendVerdict.profitPercent !== null &&
-                        ` · ${pctCapped(r.trendVerdict.profitPercent)}`}
-                    </b>
-                  )
-                )}
-              </InstantLink>
-            </li>
-          ))}
-        </ol>
+        <CandidateTopN
+          as="ol"
+          head={rows.slice(0, CANDIDATE_TOP_N).map(item)}
+          rest={rows.slice(CANDIDATE_TOP_N).map(item)}
+          restCount={Math.max(0, rows.length - CANDIDATE_TOP_N)}
+        />
       )}
     </section>
   );

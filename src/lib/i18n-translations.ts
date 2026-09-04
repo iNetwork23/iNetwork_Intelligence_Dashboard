@@ -890,4 +890,9 @@ export const translations = {
   "Ausgewählte Quellen": "Selected sources",
   "Wartet": "Waiting",
   "Schließen": "Close"
+  "Sperre unklar": "Block unclear",
+  "Sperren ansehen": "View blocks",
+  "Weniger anzeigen": "Show less",
+  "1 gesperrte Quelle ausgeblendet": "1 blocked source hidden",
+  "1 Quelle gesperrt": "1 source blocked"
 } as const;

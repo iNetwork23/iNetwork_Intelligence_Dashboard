@@ -3,6 +3,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 vi.mock('next/navigation',()=>({usePathname:()=>'/affiliates',useSearchParams:()=>new URLSearchParams(''),useRouter:()=>({push:vi.fn()})}));
 import SourceBreakdown from '@/app/affiliates/SourceBreakdown';
 import type {ConversionMetric,SourceBreakdownRow} from '@/lib/source-breakdown';
+import {sourceRowBlockKeys,type SourceBlockMarkerIndex} from '@/lib/source-block-markers';
 
 const metric=(x:Partial<ConversionMetric>):ConversionMetric=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,payout:0,revenue:0,profit:0,profitPerSoi:0,...x});
 const activity={lastLeadDate:'2026-08-22',asOf:'2026-08-23',coverageComplete:true,lookbackDays:365};
@@ -42,5 +43,40 @@ describe('shared verdict vocabulary',()=>{
     const html=renderToStaticMarkup(<SourceBreakdown rows={burning}/>);
     expect(html).toContain('sourceGroupPanel verbrennt');
     expect(html).toContain('Verbrennt Geld');
+  });
+});
+
+describe('Sperrstatus in der Quellenauswertung (Etappe 2)',()=>{
+  const marker=(key:string,status:'active'|'error'|'inactive'):SourceBlockMarkerIndex=>({[key]:{id:`b-${status}`,status,effectiveAt:'2026-09-03T08:15:00.000Z',affiliateId:'154',offerId:'20'}});
+  const keys=(mainValue:string,subValue?:string)=>sourceRowBlockKeys({affiliateId:'154',offerId:'20',trafficMode:'tracked',mainValue,subValue});
+  const render=(blocks:SourceBlockMarkerIndex|undefined,canManage:boolean)=>renderToStaticMarkup(<SourceBreakdown rows={rows} blocks={blocks} canManage={canManage} affiliateName="Partner" offerName="Offer"/>);
+  it('zeigt „Gesperrt seit“ auf der gesperrten Unterquelle und rendert dort keinen Sperrknopf mehr',()=>{
+    const html=render(marker(keys('Source A','sub-1')[0],'active'),true);
+    expect(html).toContain('Gesperrt seit 03.09.2026');
+    expect(html).toContain('<a class="blockMarker active" href="/source-blocks">Gesperrt seit 03.09.2026</a>');
+    expect(html).not.toContain('Sub1 sub-1 ausschalten');
+    expect(html).toContain('Sub1 sub-2 ausschalten');
+    expect(html).toContain('Source Source A ausschalten');
+    expect(html.match(/Gesperrt seit/g)).toHaveLength(1);
+  });
+  it('markiert eine gesperrte Hauptquelle im Kopf, verlinkt im Sperrbereich und deckt ihre Unterquellen ab',()=>{
+    const html=render(marker(keys('Source A')[0],'active'),true);
+    expect(html).toContain('sourceGroupPanel verdient blocked');
+    expect(html).toContain('<span class="blockMarker active">Gesperrt seit 03.09.2026</span>');
+    expect(html).not.toContain('Source Source A ausschalten');
+    expect(html).not.toContain('Sub1 sub-1 ausschalten');
+    expect(html).toContain('Source Source B ausschalten');
+  });
+  it('zeigt unklare Sperren als „Sperre unklar“ und ohne Link für Rollen ohne Sperrrecht',()=>{
+    const html=render(marker(keys('Source A','sub-1')[0],'error'),false);
+    expect(html).toContain('<span class="blockMarker unclear">Sperre unklar</span>');
+    expect(html).not.toContain('href="/source-blocks"');
+    expect(html).not.toContain('ausschalten</span>');
+  });
+  it('rendert ohne Index oder bei inaktiven Datensätzen unverändert Sperrknöpfe',()=>{
+    expect(render(undefined,true)).not.toContain('blockMarker');
+    const inactive=render(marker(keys('Source A','sub-1')[0],'inactive'),true);
+    expect(inactive).not.toContain('blockMarker');
+    expect(inactive).toContain('Sub1 sub-1 ausschalten');
   });
 });

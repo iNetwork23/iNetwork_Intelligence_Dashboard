@@ -7,10 +7,23 @@ import type {CockpitRow} from '@/lib/affiliate-trend';
 const row=(key:string,profit:number):CockpitRow=>({affiliateId:'154',affiliate:'Partner 154',variantKey:key,offerId:'20',offer:'Offer 20',offerUrlId:key,offerUrl:`URL ${key}`,profit,sois:30,reason:`Grund ${key}`,trendVerdict:{status:'ok',profitDelta:profit,profitPercent:12,direction:'steigend'}});
 
 describe('TrendList',()=>{
-  it('renders every row without truncating',()=>{
-    const rows=Array.from({length:37},(_,i)=>row(`v${i}`,-i));
+  it('renders the Top-10 with a client toggle for the rest (D10) and keeps the full count in the header',()=>{
+    const rows=Array.from({length:37},(_,i)=>row(`v${String(i).padStart(2,'0')}`,-i));
     const html=renderToStaticMarkup(<TrendList title="Verluste" kicker="PROFIT" rows={rows} emptyReason="x" rangeParams="period=30d" mode="profit"/>);
-    for(const r of rows)expect(html).toContain(`URL ${r.variantKey}`);
+    for(const r of rows.slice(0,10))expect(html).toContain(`URL ${r.variantKey}`);
+    for(const r of rows.slice(10))expect(html).not.toContain(`URL ${r.variantKey}`);
+    expect(html).toContain('37 Positionen');
+    expect(html).toContain('Mehr anzeigen · 27 weitere');
+    expect(html).toContain('class="topNToggle"');
+    const ten=renderToStaticMarkup(<TrendList title="Verluste" kicker="PROFIT" rows={rows.slice(0,10)} emptyReason="x" rangeParams="period=30d" mode="profit"/>);
+    expect(ten).not.toContain('Mehr anzeigen');
+  });
+  it('shows the number of active source blocks of the row\'s affiliate/offer pair without nesting a link',()=>{
+    const blocks={'154:20:tracked:sub_source:source_id:src:sub1:a':{id:'b1',status:'active' as const,effectiveAt:'2026-09-03T08:15:00.000Z',affiliateId:'154',offerId:'20'},'154:20:tracked:sub_source:source_id:src:sub1:b':{id:'b2',status:'error' as const,effectiveAt:'2026-09-03T08:15:00.000Z',affiliateId:'154',offerId:'20'},'154:21:tracked:main_source:source_id:src:sub1:%E2%88%85':{id:'b3',status:'active' as const,effectiveAt:'2026-09-03T08:15:00.000Z',affiliateId:'154',offerId:'21'}};
+    const html=renderToStaticMarkup(<TrendList title="Verluste" kicker="PROFIT" rows={[row('a',-5),{...row('b',-4),offerId:'22'}]} emptyReason="x" rangeParams="period=30d" mode="profit" blocks={blocks}/>);
+    expect(html).toContain('<span class="cockpitBlocked">1 Quelle gesperrt</span>');
+    expect(html.match(/cockpitBlocked/g)).toHaveLength(1);
+    expect(html).not.toContain('href="/source-blocks"');
   });
   it('shows the row count',()=>{
     const html=renderToStaticMarkup(<TrendList title="Verluste" kicker="PROFIT" rows={[row('a',-5)]} emptyReason="x" rangeParams="period=30d" mode="profit"/>);
