@@ -1,0 +1,10 @@
+import{describe,expect,it}from'vitest';
+import{isSourceCandidateRange,parseSourceCandidateKey,sourceCandidateBlockIdentity,sourceCandidateBlockKey,sourceCandidateDomId,sourceCandidateHref,sourceCandidateKey}from'./source-candidate-link';
+import{sourceBlockIdentityKey}from'./source-blocks';
+const row={affiliateId:'436',offerId:'12',offerUrlId:'7',trafficMode:'tracked' as const,level:'sub_source' as const,mainValue:'fb|camp 1',subValue:null};
+describe('source-candidate-link',()=>{
+ it('round-trips the key including separators and empty sub value',()=>{const key=sourceCandidateKey(row);expect(key).toBe('436|12|7|tracked|sub_source|fb%7Ccamp%201|');expect(parseSourceCandidateKey(key)).toEqual(row)});
+ it('rejects malformed keys',()=>{expect(parseSourceCandidateKey('a|b')).toBeNull();expect(parseSourceCandidateKey('x|12|7|tracked|sub_source||')).toBeNull();expect(parseSourceCandidateKey('436|12|7|other|sub_source||')).toBeNull();expect(parseSourceCandidateKey('436|12|7|tracked|leaf||')).toBeNull();expect(parseSourceCandidateKey('436|12|7|tracked|sub_source|%E0%A4%A||')).toBeNull()});
+ it('builds a safe DOM id and a /sources deep link',()=>{expect(sourceCandidateDomId(row)).toMatch(/^sc-[A-Za-z0-9_-]+$/);expect(sourceCandidateHref(row)).toBe(`/sources?range=30d&open=${encodeURIComponent(sourceCandidateKey(row))}`);expect(sourceCandidateHref(row,'7d').startsWith('/sources?range=7d&open=')).toBe(true);expect(isSourceCandidateRange('7d')).toBe(true);expect(isSourceCandidateRange('90d')).toBe(false)});
+ it('maps candidates onto the block identity used by the Sperr-Index',()=>{expect(sourceCandidateBlockIdentity(row)).toMatchObject({affiliateId:436,offerId:12,mainField:'source_id',subField:'sub1'});expect(sourceCandidateBlockIdentity({...row,trafficMode:'api'})).toMatchObject({mainField:'adv1',subField:'adv2'});expect(sourceCandidateBlockKey(row)).toBe(sourceBlockIdentityKey({affiliateId:436,offerId:12,trafficMode:'tracked',level:'sub_source',mainField:'source_id',mainValue:'fb|camp 1',subField:'sub1',subValue:null}))});
+});
