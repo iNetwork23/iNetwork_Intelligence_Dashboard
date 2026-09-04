@@ -220,6 +220,8 @@ export default async function AffiliateOptimizerPage({
             period.custom,
             user.access,
             { from: period.from, to: period.to },
+            // D3: Lead-Reife nur für den gewählten Partner koppeln (Conversions je Partner nicht für alle laden).
+            query.affiliate ? { leadMaturityFor: query.affiliate } : undefined,
           )
         : Promise.resolve([]),
       getCampaignAffiliateMappings(
