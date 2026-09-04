@@ -1,5 +1,6 @@
 import {currentUser} from '@/lib/session';
 import {can} from '@/lib/rbac';
+import {canAccessFraud} from '@/lib/fraud-access';
 import AdminSidebar from './AdminSidebar';
 import DashboardShellFrame from './DashboardShellFrame';
 import OneSignalIdentity from '../settings/app/OneSignalIdentity';
@@ -12,7 +13,8 @@ export default async function DashboardShell({children}:{children:React.ReactNod
  const mayAdmin=can(user.access,'users.manage')||can(user.access,'roles.manage')||can(user.access,'audit.view');
  const mayStatistics=can(user.access,'statistics.view')&&can(user.access,'finance.view');
  const capabilities=[can(user.access,'landingpages.manage')&&can(user.access,'api.manage')&&'Sperren',can(user.access,'campaigns.edit')&&can(user.access,'api.manage')&&'Campaigns',can(user.access,'automations.live')&&'Live-Freigabe',can(user.access,'exports.download')&&'Export'].filter((value):value is string=>Boolean(value)),capabilityLabel=capabilities.length?capabilities.join(' · '):'Nur Lesen';
- const mayFraud=user.access.role==='super_admin'&&Object.values(user.access.scopes).every(values=>values.length===0)&&can(user.access,'statistics.view')&&can(user.access,'finance.view');
+ /** D2: dieselbe Regel wie assertFraudAccess (fraud-access.ts) – kein Sidebar-Eintrag, der in 403 endet. */
+ const mayFraud=canAccessFraud(user.access);
  /** Leitstand-Zähler (Sidebar-Badges): nur interne Rollen mit dashboard.view, einmal je Request, gebündelt gecacht; Fehler → keine Zähler (D7: Partner nie). */
  const mayLeitstand=user.access.role!=='partner'&&can(user.access,'dashboard.view');
  let counters:LeitstandCounters|null=null;
