@@ -2,9 +2,11 @@ import type {SourceBlockReasonCategory} from './source-block-reasons';
 export type SourceTrafficMode='tracked'|'api';
 export type SourceBlockLevel='main_source'|'sub_source';
 export type EverflowBlockVariable={variable:string;variable_value:string;variable_secondary_value:string;comparison_method:'exact_match'|'not_present'};
-export type SourceBlockInput={affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId?:string;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainValue?:string|null;subValue?:string|null;reason?:string;reasonCategory?:SourceBlockReasonCategory};
+/** Referenzwerte der Identität zum Sperrzeitpunkt (Etappe 4): Summen der letzten windowDays Tage, serverseitig aus Snapshot-Zeilen berechnet – nie aus Client-Werten. */
+export type SourceBlockMetricsAtBlock={windowDays:number;clicks:number;sois:number;payout:number;revenue:number;capturedAt:string};
+export type SourceBlockInput={affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId?:string;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainValue?:string|null;subValue?:string|null;reason?:string;reasonCategory?:SourceBlockReasonCategory;metricsAtBlock?:SourceBlockMetricsAtBlock};
 export type NormalizedSourceBlock={affiliateId:number;affiliateName:string;offerId:number;offerName:string;originCampaignId:number|null;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainField:'source_id'|'adv1';mainValue:string|null;subField:'sub1'|'adv2';subValue:string|null;variables:EverflowBlockVariable[];reason:string};
-export type SourceBlockRecord=NormalizedSourceBlock&{id:string;status:'pending'|'active'|'inactive'|'error';effectiveAt:string;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string;everflowSettingId:number|null;lastVerifiedAt:string|null;error:string|null;reasonCategory?:SourceBlockReasonCategory};
+export type SourceBlockRecord=NormalizedSourceBlock&{id:string;status:'pending'|'active'|'inactive'|'error';effectiveAt:string;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string;everflowSettingId:number|null;lastVerifiedAt:string|null;error:string|null;metricsAtBlock?:SourceBlockMetricsAtBlock;reasonCategory?:SourceBlockReasonCategory};
 export class SourceBlockActivationCompensatedError extends Error{override name='SourceBlockActivationCompensatedError';constructor(message:string,options?:ErrorOptions){super(message,options)}}
 
 const normalizedValue=(value:unknown)=>{if(value===undefined||value===null)return null;const text=String(value).trim();if(!text||['N/A','Ohne Source-ID','Ohne Sub-Source','Nicht übermittelt'].includes(text))return null;if(text.length>200)throw new Error('Quellenwert ist zu lang');return text};
@@ -54,6 +56,18 @@ export function sourceBlockOfferSummariesFromSnapshotRows(rows:SourceBlockSnapsh
 }
 export function sourceBlockVisibleInSnapshotRows(rows:SourceBlockSnapshotRow[],block:NormalizedSourceBlock){
  return rows.some(row=>snapshotRowMatchesBlock(row,block)&&snapshotDimension(row,'offer')?.id===String(block.offerId)&&(block.originCampaignId===null||snapshotDimension(row,'campaign')?.id===String(block.originCampaignId)));
+}
+export const SOURCE_BLOCK_METRICS_WINDOW_DAYS=30;
+const finiteNonNegative=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
+export const isSourceBlockMetricsAtBlock=(value:unknown):value is SourceBlockMetricsAtBlock=>{if(!value||typeof value!=='object')return false;const m=value as Record<string,unknown>;return Number.isInteger(m.windowDays)&&(m.windowDays as number)>0&&finiteNonNegative(m.clicks)&&finiteNonNegative(m.sois)&&finiteNonNegative(m.payout)&&finiteNonNegative(m.revenue)&&typeof m.capturedAt==='string'&&!Number.isNaN(Date.parse(m.capturedAt))};
+const berlinDayOf=(date:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+const shiftDay=(day:string,count:number)=>new Date(Date.parse(`${day}T12:00:00Z`)+count*86_400_000).toISOString().slice(0,10);
+const cents=(value:number)=>Math.round(value*100)/100;
+/** Serverseitige Referenz zum Sperrzeitpunkt: Summen (Klicks/SOIs/Payout/Umsatz) der exakten Identität im exakten Offer über die letzten windowDays Kalendertage (Berlin) bis now; Zeilen ohne Tagesdimension zählen nicht. */
+export function sourceBlockMetricsFromSnapshotRows(rows:SourceBlockSnapshotRow[],block:NormalizedSourceBlock,options:{now?:Date;windowDays?:number}={}):SourceBlockMetricsAtBlock{
+ const now=options.now??new Date(),windowDays=options.windowDays??SOURCE_BLOCK_METRICS_WINDOW_DAYS,to=berlinDayOf(now),from=shiftDay(to,-(windowDays-1)),totals={clicks:0,sois:0,payout:0,revenue:0};
+ for(const row of rows){const day=snapshotDimension(row,'date')?.id||'';if(!day||day<from||day>to||snapshotDimension(row,'offer')?.id!==String(block.offerId)||!snapshotRowMatchesBlock(row,block))continue;totals.clicks+=Number(row.reporting?.total_click||0);totals.sois+=Number(row.reporting?.cv||0);totals.payout+=Number(row.reporting?.payout||0);totals.revenue+=Number(row.reporting?.revenue||0)}
+ return{windowDays,clicks:totals.clicks,sois:totals.sois,payout:cents(totals.payout),revenue:cents(totals.revenue),capturedAt:now.toISOString()};
 }
 
 export type SourceBlockMetricRow={metric_date:string;affiliate_id:string;offer_id:string;source_id:string;sub_source:string;sois:number;payout:number;raw?:Record<string,unknown>};

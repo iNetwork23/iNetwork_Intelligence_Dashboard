@@ -1015,5 +1015,12 @@ export const translations = {
   "Regel ändern": "Edit rule",
   "Gespeichertes Register aktiv.": "Stored register active.",
   "Keine Regeln – es gelten die allgemeinen Schwellen der Engine.": "No rules – the engine's general thresholds apply.",
-  "Partnerspezifische Testquoten, Reifefenster und CVR-Untergrenzen für Smartlink-Empfehlungen und Auto-Rotation. Ohne Eintrag gelten die bisherigen Konstanten.": "Partner-specific test quotas, maturity windows and CVR floors for Smartlink recommendations and auto-rotation. Without an entry the previous constants apply."
+  "Partnerspezifische Testquoten, Reifefenster und CVR-Untergrenzen für Smartlink-Empfehlungen und Auto-Rotation. Ohne Eintrag gelten die bisherigen Konstanten.": "Partner-specific test quotas, maturity windows and CVR floors for Smartlink recommendations and auto-rotation. Without an entry the previous constants apply.",
+  "Vermiedener Payout": "Avoided payout",
+  "Entgangener Umsatz": "Forgone revenue",
+  "Bilanz": "Balance",
+  "Maßnahmen-Bilanz": "Measures balance",
+  "vor Etappe 4 gesperrt": "blocked before stage 4",
+  "keine SOIs im Referenzfenster": "no SOIs in the reference window",
+  "keine Sperre mit Referenzwerten": "no block with reference values"
 } as const;

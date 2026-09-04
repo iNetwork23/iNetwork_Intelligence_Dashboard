@@ -2,6 +2,7 @@ import type { SecurityStore } from './security';
 import { withSecurityLock } from './security';
 import { isSourceBlockReasonCategory } from './source-block-reasons';
 import {
+  isSourceBlockMetricsAtBlock,
   normalizeSourceBlockInput,
   SourceBlockActivationCompensatedError,
   sourceBlockStoreKey,
@@ -89,6 +90,8 @@ async function activateSourceBlockUnlocked(
   const now = new Date().toISOString(),
     id = previous?.id ?? crypto.randomUUID(),
     reasonCategory = isSourceBlockReasonCategory(input.reasonCategory) ? input.reasonCategory : previous?.reasonCategory,
+    // Referenz zum Sperrzeitpunkt (Etappe 4): nur eine gültige, vom Aufrufer (Route, serverseitig) berechnete Struktur; nie vom Vorgänger-Record geerbt.
+    metricsAtBlock = isSourceBlockMetricsAtBlock(input.metricsAtBlock) ? input.metricsAtBlock : undefined,
     pending: SourceBlockRecord = {
       ...block,
       id,
@@ -102,6 +105,7 @@ async function activateSourceBlockUnlocked(
       lastVerifiedAt: null,
       error: null,
       ...(reasonCategory ? { reasonCategory } : {}),
+      ...(metricsAtBlock ? { metricsAtBlock } : {}),
     };
   await store.set(key, pending);
   const external = await writer.activate(block, id).catch(async (activationError: unknown) => {

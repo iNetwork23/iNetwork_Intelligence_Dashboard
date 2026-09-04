@@ -83,3 +83,30 @@ describe('source block offer summaries',()=>{
     expect(sourceBlockOfferSummariesFromSnapshotRows(rows,block)).toEqual([{offerId:'17',offerName:'Offer 17',sois:5,payout:3.01,profit:-1},{offerId:'57',offerName:'Offer 57',sois:0,payout:0,profit:0}]);
   });
 });
+
+describe('source block reference metrics at block time (Etappe 4)',()=>{
+ const row=(date:string,offer:string,mode:'tracked'|'api',main:string,sub:string,reporting:Record<string,number>)=>({columns:[{column_type:'date',id:date,label:date},{column_type:'affiliate',id:'20',label:'20'},{column_type:'offer',id:offer,label:`Offer ${offer}`},{column_type:'campaign',id:'23',label:'23'},{column_type:'traffic_mode',id:mode,label:mode},{column_type:'source_id',id:main,label:main},{column_type:'sub1',id:sub||'N/A',label:sub||'N/A'}],reporting});
+ it('sums clicks, SOIs, payout and revenue of the exact identity in the exact offer over the last 30 Berlin days only',async()=>{
+  const {sourceBlockMetricsFromSnapshotRows,SOURCE_BLOCK_METRICS_WINDOW_DAYS}=await import('./source-blocks');
+  const block=normalizeSourceBlockInput({affiliateId:'20',affiliateName:'Partner',offerId:'17',offerName:'Offer 17',trafficMode:'tracked',level:'main_source',mainValue:'src-a'}),now=new Date('2026-09-04T10:00:00Z');
+  const rows=[row('2026-09-04','17','tracked','src-a','x',{total_click:100,cv:10,payout:30.005,revenue:12.5}),row('2026-08-06','17','tracked','src-a','y',{total_click:50,cv:5,payout:15,revenue:0}),row('2026-08-05','17','tracked','src-a','',{total_click:999,cv:99,payout:999,revenue:999}),row('2026-09-01','57','tracked','src-a','',{total_click:7,cv:7,payout:7,revenue:7}),row('2026-09-01','17','api','src-a','',{total_click:8,cv:8,payout:8,revenue:8}),row('2026-09-01','17','tracked','src-b','',{total_click:9,cv:9,payout:9,revenue:9})];
+  expect(SOURCE_BLOCK_METRICS_WINDOW_DAYS).toBe(30);
+  expect(sourceBlockMetricsFromSnapshotRows(rows,block,{now})).toEqual({windowDays:30,clicks:150,sois:15,payout:45.01,revenue:12.5,capturedAt:'2026-09-04T10:00:00.000Z'});
+ });
+ it('ignores rows without a day dimension and yields zero volume for an offer without traffic',async()=>{
+  const {sourceBlockMetricsFromSnapshotRows}=await import('./source-blocks');
+  const block=normalizeSourceBlockInput({affiliateId:'20',affiliateName:'Partner',offerId:'17',offerName:'Offer 17',trafficMode:'tracked',level:'main_source',mainValue:'src-a'});
+  const undated={columns:[{column_type:'affiliate',id:'20',label:'20'},{column_type:'offer',id:'17',label:'Offer 17'},{column_type:'traffic_mode',id:'tracked',label:'tracked'},{column_type:'source_id',id:'src-a',label:'src-a'},{column_type:'sub1',id:'N/A',label:'N/A'}],reporting:{total_click:5,cv:5,payout:5,revenue:5}};
+  expect(sourceBlockMetricsFromSnapshotRows([undated],block,{now:new Date('2026-09-04T10:00:00Z')})).toMatchObject({clicks:0,sois:0,payout:0,revenue:0});
+ });
+ it('accepts only a complete finite reference structure',async()=>{
+  const {isSourceBlockMetricsAtBlock}=await import('./source-blocks');
+  const valid={windowDays:30,clicks:1,sois:0,payout:0,revenue:0,capturedAt:'2026-09-04T10:00:00.000Z'};
+  expect(isSourceBlockMetricsAtBlock(valid)).toBe(true);
+  expect(isSourceBlockMetricsAtBlock({...valid,payout:-1})).toBe(false);
+  expect(isSourceBlockMetricsAtBlock({...valid,sois:'3'})).toBe(false);
+  expect(isSourceBlockMetricsAtBlock({...valid,capturedAt:'gestern'})).toBe(false);
+  expect(isSourceBlockMetricsAtBlock({...valid,windowDays:0})).toBe(false);
+  expect(isSourceBlockMetricsAtBlock(null)).toBe(false);
+ });
+});
