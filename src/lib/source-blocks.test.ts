@@ -73,3 +73,13 @@ describe('source block contract',()=>{
     expect(sourceBlockVisibleInSnapshotRows([row('adv-child')],block)).toBe(true);
   });
 });
+
+describe('source block offer summaries',()=>{
+  it('sums SOIs, payout and profit per offer for the exact source and keeps offers without reporting at zero',async()=>{
+    const {sourceBlockOfferSummariesFromSnapshotRows}=await import('./source-blocks');
+    const row=(offer:string,offerName:string,mode:'tracked'|'api',main:string,reporting?:Record<string,number>)=>({columns:[{column_type:'affiliate',id:'20',label:'20'},{column_type:'offer',id:offer,label:offerName},{column_type:'campaign',id:'23',label:'23'},{column_type:'traffic_mode',id:mode,label:mode},{column_type:'source_id',id:main,label:main},{column_type:'sub1',id:'N/A',label:'N/A'}],...(reporting?{reporting}:{})});
+    const block=normalizeSourceBlockInput({affiliateId:'20',affiliateName:'Partner',offerId:'17',offerName:'Offer 17',trafficMode:'tracked',level:'main_source',mainValue:'source-x'});
+    const rows=[row('17','Offer 17 alt','tracked','source-x',{cv:4,payout:2.005,profit:-1.5}),row('17','Offer 17 alt','tracked','source-x',{cv:1,payout:1,profit:0.5}),row('57','Offer 57','tracked','source-x'),row('50','Offer 50','api','source-x',{cv:9,payout:9,profit:9}),row('17','Offer 17','tracked','other',{cv:9,payout:9,profit:9})];
+    expect(sourceBlockOfferSummariesFromSnapshotRows(rows,block)).toEqual([{offerId:'17',offerName:'Offer 17',sois:5,payout:3.01,profit:-1},{offerId:'57',offerName:'Offer 57',sois:0,payout:0,profit:0}]);
+  });
+});

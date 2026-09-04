@@ -14,6 +14,7 @@ describe('automatic Supabase reporting refresh',()=>{
    {path:'/api/sync/rollups',schedule:'47 * * * *'},
    {path:'/api/automation/scheduler',schedule:'*/15 * * * *'},
    {path:'/api/push/dispatch',schedule:'*/5 * * * *'},
+   {path:'/api/source-blocks/reconcile',schedule:'27 * * * *'},
   ]);
   const route=read('src/app/api/sync/route.ts');
   expect(route).toContain('CRON_SECRET');

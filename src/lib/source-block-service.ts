@@ -1,5 +1,6 @@
 import type { SecurityStore } from './security';
 import { withSecurityLock } from './security';
+import { isSourceBlockReasonCategory } from './source-block-reasons';
 import {
   normalizeSourceBlockInput,
   SourceBlockActivationCompensatedError,
@@ -87,6 +88,7 @@ async function activateSourceBlockUnlocked(
   }
   const now = new Date().toISOString(),
     id = previous?.id ?? crypto.randomUUID(),
+    reasonCategory = isSourceBlockReasonCategory(input.reasonCategory) ? input.reasonCategory : previous?.reasonCategory,
     pending: SourceBlockRecord = {
       ...block,
       id,
@@ -99,6 +101,7 @@ async function activateSourceBlockUnlocked(
       everflowSettingId: null,
       lastVerifiedAt: null,
       error: null,
+      ...(reasonCategory ? { reasonCategory } : {}),
     };
   await store.set(key, pending);
   const external = await writer.activate(block, id).catch(async (activationError: unknown) => {

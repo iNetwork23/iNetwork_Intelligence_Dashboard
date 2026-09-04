@@ -18,6 +18,9 @@ type Props={
  mayPartners:boolean;
  mayAutomation:boolean;
  maySourceBlocks:boolean;
+ maySources:boolean;
+ sourcesBadge:number|null;
+ sourceBlocksBadge:number|null;
  maySmartlinks:boolean;
  mayAdmin:boolean;
  maySecurity:boolean;
@@ -25,9 +28,14 @@ type Props={
  capabilityLabel:string;
  writeAccess:boolean;
 };
-type IconName="monitor"|"chart"|"users"|"rotation"|"spark"|"shield"|"lock";
-type PrimaryItem={href:string;label:string;icon:IconName;show:boolean};
-const PRIMARY_ROUTES=["/","/cohorts","/fraud","/affiliates","/automation"];
+type IconName="monitor"|"chart"|"users"|"rotation"|"spark"|"shield"|"lock"|"layers";
+type NavItem={href:string;label:string;icon:IconName;show:boolean;badge?:number|null;badgeLabel?:string};
+type PrimaryItem=NavItem;
+const PRIMARY_ROUTES=["/","/sources","/cohorts","/fraud","/affiliates","/automation"];
+/** Gespeicherte Reihenfolgen aus Etappe 1 kennen /sources noch nicht: der Eintrag landet dann direkt unter Home statt am Ende. */
+const placeSourcesUnderHome=(order:string[])=>{const rest=order.filter(href=>href!=="/sources");rest.splice(rest.indexOf("/")+1,0,"/sources");return rest};
+/** Badge nur mit Wert > 0 (null = Zähler nicht ladbar); Werte kommen als Props aus der Shell, kein Client-Fetch. */
+const Badge=({item}:{item:NavItem})=>typeof item.badge==="number"&&item.badge>0?<small className="sidebarBadge" aria-label={`${item.badge} ${item.badgeLabel||""}`.trim()} title={item.badgeLabel}>{item.badge}</small>:null;
 const icons:Record<IconName,React.ReactNode>={
  monitor:<><rect x="3" y="4" width="18" height="15" rx="2"/><path d="M8 22h8M12 19v3M7 9h3v6H7zm7-2h3v8h-3z"/></>,
  chart:<><path d="M4 19V9m6 10V5m6 14v-7m4 9H2"/></>,
@@ -36,6 +44,7 @@ const icons:Record<IconName,React.ReactNode>={
  spark:<><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3zm7 11 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14zM5 14l1.1 2.9L9 18l-2.9 1.1L5 22l-1.1-2.9L1 18l2.9-1.1L5 14z"/></>,
  shield:<><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></>,
  lock:<><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>,
+ layers:<><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5M3 17.5l9 5 9-5"/></>,
 };
 function Icon({name}:{name:IconName}){return <svg className="sidebarIcon" viewBox="0 0 24 24" aria-hidden="true">{icons[name]}</svg>}
 function PencilIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg>}
@@ -46,21 +55,22 @@ export default function AdminSidebar(props:Props){
  const pathname=usePathname(),storageKey=`wlx-sidebar-order:${props.email.trim().toLowerCase()}`;
  const[collapsed,setCollapsed]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[editing,setEditing]=useState(false),[order,setOrder]=useState<string[]>(PRIMARY_ROUTES),[dragging,setDragging]=useState<string|null>(null),[announcement,setAnnouncement]=useState("");
  useEffect(()=>{const saved=window.localStorage.getItem("wlx-sidebar-collapsed")==="1";setCollapsed(saved);document.documentElement.dataset.sidebarCollapsed=saved?"true":"false"},[]);
- useEffect(()=>setOrder(parseSidebarOrder(window.localStorage.getItem(storageKey),PRIMARY_ROUTES)),[storageKey]);
+ useEffect(()=>{const raw=window.localStorage.getItem(storageKey),parsed=parseSidebarOrder(raw,PRIMARY_ROUTES);setOrder(raw&&!raw.includes('"/sources"')?placeSourcesUnderHome(parsed):parsed)},[storageKey]);
  useEffect(()=>{setMobileOpen(false)},[pathname]);
  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape"){setMobileOpen(false);setEditing(false)}};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey)},[]);
  const toggleCollapsed=()=>setCollapsed(current=>{const next=!current;window.localStorage.setItem("wlx-sidebar-collapsed",next?"1":"0");document.documentElement.dataset.sidebarCollapsed=next?"true":"false";return next});
  const items:PrimaryItem[]=[
   {href:"/",label:"Account Monitor",icon:"monitor",show:true},
+  {href:"/sources",label:"Quellen",icon:"layers",show:props.maySources,badge:props.sourcesBadge,badgeLabel:"offene Ausschalt-Kandidaten"},
   {href:"/cohorts",label:"LTV-Kohorten",icon:"chart",show:props.mayStatistics},
   {href:"/fraud",label:"Fraud Detection",icon:"shield",show:props.mayFraud},
   {href:"/affiliates",label:"Affiliate Optimizer",icon:"users",show:props.mayPartners||props.maySmartlinks},
   {href:"/automation",label:"Auto-Rotation",icon:"rotation",show:props.mayAutomation},
 
  ];
- const secondary=[
+ const secondary:NavItem[]=[
   {href:"/admin/access",label:"Benutzer & Rechte",icon:"shield" as const,show:props.mayAdmin},
-  {href:"/source-blocks",label:"Ausgeschaltete Quellen",icon:"rotation" as const,show:props.maySourceBlocks},
+  {href:"/source-blocks",label:"Ausgeschaltete Quellen",icon:"rotation" as const,show:props.maySourceBlocks,badge:props.sourceBlocksBadge,badgeLabel:"aktive Sperren"},
   {href:"/settings/app",label:"App & Hinweise",icon:"monitor" as const,show:!props.impersonating},
   {href:"/settings/security",label:"Sicherheit",icon:"lock" as const,show:props.maySecurity},
  ];
@@ -81,10 +91,10 @@ export default function AdminSidebar(props:Props){
    <nav className="sidebarNav" aria-label="Dashboard-Bereiche">
     {editing?<div className="sidebarOrderList" role="list">{visibleItems.map((item,index)=><div key={item.href} role="listitem" className={`sidebarOrderItem ${active(item.href)?"active":""} ${dragging===item.href?"dragging":""}`} draggable onDragStart={event=>{event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",item.href);setDragging(item.href)}} onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move"}} onDrop={event=>{event.preventDefault();dropOn(item.href)}} onDragEnd={()=>setDragging(null)}>
       <span className="sidebarDragHandle" title="Ziehen, um die Reihenfolge zu ändern"><GripIcon/></span><Icon name={item.icon}/><span className="sidebarOrderLabel">{item.label}</span><span className="sidebarOrderControls"><button type="button" disabled={index===0} aria-label={`${item.label} nach oben`} onClick={()=>moveBy(item.href,-1)}><ArrowIcon direction="up"/></button><button type="button" disabled={index===visibleItems.length-1} aria-label={`${item.label} nach unten`} onClick={()=>moveBy(item.href,1)}><ArrowIcon direction="down"/></button></span>
-     </div>)}</div>:visibleItems.map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span></Link>)}
+     </div>)}</div>:visibleItems.map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}
    </nav>
    <span className="sidebarOrderAnnouncement" aria-live="polite">{announcement}</span>
-   <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span></Link>)}</nav>
+   <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}</nav>
    <div className="sidebarFooter"><div className="sidebarStatus"><i className={props.writeAccess?"write":"read"}/><span>{props.capabilityLabel}</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><div className="sidebarPreferences"><div className="sidebarPreference"><span>Sprache</span><LanguageToggle compact/></div><div className="sidebarPreference"><span>Darstellung</span><ThemeToggle showLabel/></div></div><OneSignalLogoutForm configured={props.oneSignalConfigured}/></div></div>
   </aside>
  </>
