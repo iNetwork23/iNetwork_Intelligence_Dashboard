@@ -14,15 +14,15 @@ describe('SourceCandidateList render',()=>{
   const html=render([candidate()],new Map(),{finance:true,mayBlock:true});
   for(const text of['Partner Alpha','#436','Offer Zwölf · #12','Landing B','fb-camp','AUSSCHALTEN','50 SOIs ohne Sale','Heute aktiv','120,00','-110,00','reif · 60 SOIs'])expect(html).toContain(text);
   expect(html).toContain(`id="${sourceCandidateDomId(candidate())}"`);
-  expect(html).toContain('Source fb-camp ausschalten');expect(html).toContain('type="checkbox"');
+  expect(html).toContain('Source fb-camp: Vergütung sperren');expect(html).toContain('type="checkbox"');
  });
  it('hides money without finance.view and every block action without manage rights',()=>{
   const html=render([candidate()],new Map(),{finance:false,mayBlock:false});
-  expect(html).not.toContain('120,00');expect(html).not.toContain('-110,00');expect(html).not.toContain('<th scope="col">Payout</th>');expect(html).not.toContain('ausschalten</span>');expect(html).not.toContain('type="checkbox"');expect(html).toContain('Nicht gesperrt');
+  expect(html).not.toContain('120,00');expect(html).not.toContain('-110,00');expect(html).not.toContain('<th scope="col">Payout</th>');expect(html).not.toContain('Vergütung sperren</span>');expect(html).not.toContain('type="checkbox"');expect(html).toContain('Nicht gesperrt');
  });
  it('shows blocked rows as "Gesperrt seit" with the audit link and without checkbox or block button',()=>{
   const base=candidate(),html=render([base],new Map([[sourceCandidateBlockKey(base),record()]]),{finance:true,mayBlock:true});
-  expect(html).toContain('Gesperrt seit 01.09.2026');expect(html).toContain('href="/source-blocks"');expect(html).not.toContain('type="checkbox"');expect(html).not.toContain('Source fb-camp ausschalten');
+  expect(html).toContain('Gesperrt seit 01.09.2026');expect(html).toContain('href="/source-blocks"');expect(html).not.toContain('type="checkbox"');expect(html).not.toContain('Source fb-camp: Vergütung sperren');
  });
  it('highlights the deep-linked row even when it sits outside the top 50',()=>{
   const rows=Array.from({length:60},(_,i)=>candidate({offerUrlId:String(i),profit:-i,mainValue:`src-${i}`}));

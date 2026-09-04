@@ -1,104 +1,126 @@
+import type { ReactNode } from "react";
 import InstantLink from "./InstantLink";
 import CandidateTopN, { CANDIDATE_TOP_N } from "./CandidateTopN";
-import type { CockpitRow } from "../../lib/affiliate-trend";
+import Sparkline from "../components/Sparkline";
+import type { PriorityItem } from "../../lib/affiliate-priority";
 import { openSourceRowHref } from "../../lib/open-source-row-link";
-import { activeBlocksText, countActiveBlocks, type SourceBlockMarkerIndex } from "../../lib/source-block-markers";
+import { activeBlocksText, blockMarkerText, SOURCE_BLOCKS_HREF } from "../../lib/source-block-markers";
+import { signTone } from "../../lib/verdict-vocabulary";
+import { latencyBadge, rebillEvidence, toneClass, trendCells, trendReason, trustLine, type LatencyInput } from "../../lib/verdict-trust";
+import { eur, num, variantIdentityLine } from "./affiliate-format";
 
-const eur = (n: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
-const num = (n: number) => new Intl.NumberFormat("de-DE").format(n);
-/** Sekundärzeile ohne Null-Information: "Default" und "URL #0" tragen nichts. */
-const identityLine = (r: CockpitRow) => {
-  const parts: string[] = [];
-  if (r.offerUrl && r.offerUrl !== "Default") parts.push(r.offerUrl);
-  parts.push(`Offer #${r.offerId}`);
-  if (r.offerUrlId && r.offerUrlId !== "0") parts.push(`URL #${r.offerUrlId}`);
-  return parts.join(" · ");
-};
-const pctCapped = (n: number) =>
-  Math.abs(n) > 999 ? `${n > 0 ? ">" : "<"}${n > 0 ? "" : "-"}999 %` : `${n.toFixed(0)} %`;
+const pct = (n: number) => `${n.toFixed(2).replace(".", ",")} %`;
+/** Sekundärzeile: Landingpage-Identität bzw. Source/Sub-Source unter ihrer Offer-URL. */
+const identityLine = (item: PriorityItem) =>
+  item.kind === "source"
+    ? `${item.offerUrl} · Source: ${item.sourceId} · ${item.subSource ? `Sub-Source: ${item.subSource}` : "keine Sub-Source (Source-Fallback)"}`
+    : variantIdentityLine(item);
+const volumeLine = (item: PriorityItem) =>
+  item.trafficMode === "api"
+    ? `${num(item.metrics.sois)} SOIs · ${num(item.metrics.firstSales)} First-Sales`
+    : item.metrics.clicks
+      ? `${pct(item.metrics.cvr)} CVR · ${num(item.metrics.sois)} SOIs aus ${num(item.metrics.clicks)} Klicks · ${num(item.metrics.firstSales)} First-Sales`
+      : `${num(item.metrics.sois)} SOIs · keine Klicks · ${num(item.metrics.firstSales)} First-Sales`;
 
-export default function TrendList({
-  title,
-  kicker,
-  rows,
-  total,
-  totalLabel,
-  emptyReason,
+/** Eine Zeile der priorisierten Liste: Verdikt + Grund, Vertrauenszeile, Latenz-Ampel, Rebill-Evidenz, Trend mit Richtung, Sparkline, Sperrstatus. */
+export function PriorityRow({
+  item,
   rangeParams,
-  mode,
-  detail = "reason",
-  blocks,
+  finance = true,
+  latency,
+  canManage = false,
 }: {
-  title: string;
-  kicker: string;
-  rows: CockpitRow[];
-  total?: number;
-  totalLabel?: string;
-  emptyReason: string;
+  item: PriorityItem;
   rangeParams: string;
-  mode: "profit" | "change";
-  detail?: "reason" | "facts" | "delta";
-  /** Sperr-Index (serialisiert): LP-Zeilen zeigen die Zahl aktiver Quellen-Sperren ihres Affiliate/Offer-Paars. */
-  blocks?: SourceBlockMarkerIndex;
+  finance?: boolean;
+  latency?: LatencyInput | null;
+  canManage?: boolean;
 }) {
-  const item = (r: CockpitRow) => {
-    const blocked = countActiveBlocks(blocks, r.affiliateId, r.offerId);
+  const tone = signTone(item.metrics.profit, item.metrics),
+    trust = trustLine(item.gate, item.metrics),
+    badge = latencyBadge(item.gate, latency),
+    trend = trendCells(item.metrics, item.previous),
+    markerText = item.blockMarker ? blockMarkerText(item.blockMarker) : null,
+    markerClass = `blockMarker ${item.blockMarker?.status === "active" ? "active" : "unclear"}`,
+    href = openSourceRowHref(item.affiliateId, item.offerId, item.offerUrlId, rangeParams);
+  const cell = (label: string, delta: typeof trend.sois) => {
+    const reason = trendReason(delta);
     return (
-      <li key={`${r.affiliateId}|${r.variantKey}`}>
-        <InstantLink
-          prefetch
-          href={openSourceRowHref(r.affiliateId, r.offerId, r.offerUrlId, rangeParams)}
-        >
-          <strong>{r.affiliate}</strong>
-          <small>
-            {identityLine(r)}
-            {detail === "facts"
-              ? ` · ${num(r.sois)} SOIs · ${r.sois > 0 ? `${eur(r.profit / r.sois)} je SOI` : "ohne SOI"}`
-              : detail === "delta" && r.trendVerdict.status === "ok"
-                ? ` · ${eur(r.profit - r.trendVerdict.profitDelta)} → ${eur(r.profit)}`
-                : ""}
-          </small>
-          {detail === "reason" && <em>{r.reason}</em>}
-          {blocked > 0 && <span className="cockpitBlocked">{activeBlocksText(blocked)}</span>}
-          {mode === "profit" ? (
-            <b className={r.profit >= 0 ? "up" : "down"}>{eur(r.profit)}</b>
-          ) : (
-            r.trendVerdict.status === "ok" && (
-              <b className={r.trendVerdict.profitDelta >= 0 ? "up" : "down"}>
-                {eur(r.trendVerdict.profitDelta)}
-                {r.trendVerdict.profitPercent !== null &&
-                  ` · ${pctCapped(r.trendVerdict.profitPercent)}`}
-              </b>
-            )
-          )}
-        </InstantLink>
-      </li>
+      <span className={`priorityTrendCell ${delta.direction}`} title={reason ?? undefined}>
+        <small>{label}</small>
+        <b className={delta.direction === "none" ? "trendMuted" : toneClass(signTone(delta.absolute ?? 0, item.metrics))}>{delta.text}</b>
+        {reason && <i>{reason}</i>}
+      </span>
     );
   };
   return (
-    <section className="cockpitList">
+    <li className={`priorityRow ${item.severity}${item.blocked ? " blocked" : ""}`} data-key={item.key}>
+      <div className="priorityMain">
+        <InstantLink prefetch href={href} className="priorityTitle">
+          <strong>{item.kind === "source" ? `${item.affiliate} · ${item.subSource ?? item.sourceId}` : item.affiliate}</strong>
+          <small>{identityLine(item)}</small>
+        </InstantLink>
+        <span className={`verdictBadge ${item.severity}`}>{item.action}</span>
+        {finance && <b className={`priorityProfit ${toneClass(tone)}`}>{eur(item.metrics.profit)}</b>}
+      </div>
+      <p className="priorityReason">{item.reason}</p>
+      <p className={`priorityTrust ${trust.confidence ?? "none"}`} title="Trauen oder nicht, und warum">{trust.text}</p>
+      <p className="priorityEvidence">
+        <span className={`latencyBadge ${badge.tone}`} title={badge.title}>{badge.label}</span>
+        <span>{volumeLine(item)}</span>
+        <span>{rebillEvidence(item.metrics)}</span>
+      </p>
+      <div className="priorityTrend">
+        {cell("Δ SOIs", trend.sois)}
+        {item.trafficMode !== "api" && cell("Δ CVR", trend.cvr)}
+        {finance && cell("Δ Profit", trend.profit)}
+        {item.daily && item.daily.length > 1 && (
+          <span className="prioritySpark"><Sparkline points={item.daily} label={`Tagesverlauf ${item.kind === "source" ? item.subSource ?? item.sourceId : item.offerUrl}`} tone={tone} /></span>
+        )}
+      </div>
+      {markerText && (canManage ? <a className={markerClass} href={SOURCE_BLOCKS_HREF}>{markerText}</a> : <span className={markerClass}>{markerText}</span>)}
+      {!markerText && item.activeBlocks > 0 && <span className="cockpitBlocked">{activeBlocksText(item.activeBlocks)}</span>}
+    </li>
+  );
+}
+
+/** Die eine priorisierte Liste (Top-10 + „mehr anzeigen“, D10). Kopf mit Zählern je Verdikt-Klasse; Geldsummen nur mit finance. */
+export default function TrendList({
+  kicker,
+  title,
+  items,
+  emptyReason,
+  rangeParams,
+  finance = true,
+  latency,
+  canManage = false,
+  summary,
+}: {
+  kicker: string;
+  title: string;
+  items: PriorityItem[];
+  emptyReason: string;
+  rangeParams: string;
+  finance?: boolean;
+  latency?: LatencyInput | null;
+  canManage?: boolean;
+  summary?: ReactNode;
+}) {
+  const rows = items.map((item) => <PriorityRow key={item.key} item={item} rangeParams={rangeParams} finance={finance} latency={latency} canManage={canManage} />);
+  return (
+    <section className="priorityList">
       <header>
         <span>{kicker}</span>
         <h2>{title}</h2>
         <small>
-          {rows.length} {rows.length === 1 ? "Position" : "Positionen"}
+          {items.length} {items.length === 1 ? "Position" : "Positionen"}
         </small>
-        {total !== undefined && (
-          <b className={total >= 0 ? "up" : "down"}>
-            {totalLabel}: {eur(total)}
-          </b>
-        )}
+        {summary}
       </header>
-      {rows.length === 0 ? (
+      {items.length === 0 ? (
         <p className="cockpitEmpty">{emptyReason}</p>
       ) : (
-        <CandidateTopN
-          as="ol"
-          head={rows.slice(0, CANDIDATE_TOP_N).map(item)}
-          rest={rows.slice(CANDIDATE_TOP_N).map(item)}
-          restCount={Math.max(0, rows.length - CANDIDATE_TOP_N)}
-        />
+        <CandidateTopN as="ol" head={rows.slice(0, CANDIDATE_TOP_N)} rest={rows.slice(CANDIDATE_TOP_N)} restCount={Math.max(0, items.length - CANDIDATE_TOP_N)} />
       )}
     </section>
   );
