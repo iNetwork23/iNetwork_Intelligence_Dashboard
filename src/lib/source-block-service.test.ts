@@ -129,3 +129,16 @@ describe('source block persistence',()=>{
   expect(commit.mock.calls[0]?.[1]).toEqual([prior,null]);
  });
 });
+
+describe('source block reason category',()=>{
+ it('persists a valid reason category, keeps the previous one on reactivation and ignores unknown values',async()=>{
+  const store=new MemorySecurityStore(),writer={actorId:'admin',activate:vi.fn(async()=>({settingId:777,created:true})),deactivate:vi.fn(async()=>({deleted:true}))};
+  const active=await activateSourceBlock(store,{...input,reasonCategory:'fraud',reason:'Bot-Traffic'},writer);
+  expect(active).toMatchObject({reasonCategory:'fraud',reason:'Bot-Traffic'});
+  await deactivateSourceBlock(store,active.id,writer);
+  const reactivated=await activateSourceBlock(store,{...input,reasonCategory:'nope' as 'fraud'},writer);
+  expect(reactivated.reasonCategory).toBe('fraud');
+  const store2=new MemorySecurityStore();
+  expect((await activateSourceBlock(store2,input,writer)).reasonCategory).toBeUndefined();
+ });
+});
