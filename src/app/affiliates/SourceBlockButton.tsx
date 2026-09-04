@@ -7,6 +7,24 @@ import type {
   SourceBlockRecord,
   SourceTrafficMode,
 } from "@/lib/source-blocks";
+import {
+  SOURCE_BLOCK_REASON_CATEGORIES,
+  SOURCE_BLOCK_REASON_LABELS,
+  type SourceBlockReasonCategory,
+} from "@/lib/source-block-reasons";
+import type { SourceBlockHistoryEvent } from "@/lib/source-block-history";
+import { sourceBlockHistoryActionLabel } from "@/lib/source-block-history-labels";
+
+/** Kennzahlen, die der Aufrufer vor der Bestätigung zeigt; fehlen sie, entfällt der Block im Dialog. */
+export type SourceBlockDialogMetrics = {
+  payout: number | null;
+  sois: number;
+  profit: number | null;
+  clicks: number;
+  firstSales: number;
+  maturity?: string | null;
+  leadStatus?: string | null;
+};
 
 type Props = {
   affiliateId: string;
@@ -18,6 +36,27 @@ type Props = {
   level: SourceBlockLevel;
   mainValue: string | null;
   subValue?: string | null;
+  /** Optional: Kennzahlen vor der Bestätigung (Payout, SOIs, Profit, First-Sale-Rate, Klicks, Reife/Lead-Status). */
+  metrics?: SourceBlockDialogMetrics;
+  /** Geldwerte im Dialog nur mit finance.view (Default: anzeigen). */
+  showMoney?: boolean;
+  /** Wird nach erfolgreicher Aktivierung mit den neuen Records aufgerufen (z. B. Zeilenzustand in Listen). */
+  onBlocked?: (records: SourceBlockRecord[]) => void;
+};
+
+type AffectedOffer = {
+  offerId: string;
+  offerName: string;
+  sois?: number;
+  payout?: number;
+  profit?: number;
+  blocked?: boolean;
+};
+
+type HistoryState = {
+  status: "idle" | "loading" | "ready" | "error";
+  events: SourceBlockHistoryEvent[];
+  error: string;
 };
 
 let sharedLoad: Promise<SourceBlockRecord[]> | null = null;
@@ -44,6 +83,14 @@ const same = (block: SourceBlockRecord, props: Props) =>
   (block.mainValue || null) === (props.mainValue || null) &&
   (block.subValue || null) === (props.subValue || null);
 
+const euro = (value: number) =>
+  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
+const integer = (value: number) => new Intl.NumberFormat("de-DE").format(value);
+const dateTime = (value: string) =>
+  new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Berlin" }).format(new Date(value));
+const day = (value: string) =>
+  new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeZone: "Europe/Berlin" }).format(new Date(value));
+
 function PowerIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -68,10 +115,14 @@ export default function SourceBlockButton(props: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [reason, setReason] = useState("");
+  const [reasonCategory, setReasonCategory] = useState<"" | SourceBlockReasonCategory>("");
   const [confirmation, setConfirmation] = useState("");
   const [requiredConfirmation, setRequiredConfirmation] = useState("");
-  const [affectedOffers, setAffectedOffers] = useState<Array<{offerId:string;offerName:string}>>([]);
+  const [affectedOffers, setAffectedOffers] = useState<AffectedOffer[]>([]);
+  const [history, setHistory] = useState<HistoryState>({ status: "idle", events: [], error: "" });
   const dialogRef = useRef<HTMLDivElement>(null);
+  const showMoney = props.showMoney !== false;
+  const metrics = props.metrics;
 
   useEffect(() => {
     let live = true;
@@ -127,6 +178,8 @@ export default function SourceBlockButton(props: Props) {
   const recoverable = uncertain?.everflowSettingId ? uncertain : undefined;
   const locked = Boolean(pending || (uncertain && !recoverable));
   const recovering = Boolean(recoverable) && !productWide;
+  const existing = active || pending || uncertain;
+  const activating = !((active || recovering) && !productWide);
   const lockedHintId = useId();
   const lockedHint = "Manuelle Prüfung laut Runbook nötig";
   const lockedLabel = uncertain ? "Zustand unklar" : "Verifizierung läuft";
@@ -142,9 +195,33 @@ export default function SourceBlockButton(props: Props) {
   const isSubSource = props.level === "sub_source";
   const controlScope = isSubSource ? fieldSub : fieldMain;
   const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source} ${active ? "wieder aktivieren" : "ausschalten"}`;
+  const blockStatusLabel = active
+    ? `Gesperrt seit ${day(active.effectiveAt)}`
+    : pending
+      ? "Verifizierung läuft"
+      : uncertain
+        ? "Zustand unklar"
+        : "Nicht gesperrt";
+  const identity = {
+    affiliateId: props.affiliateId,
+    affiliateName: props.affiliateName,
+    offerId: props.offerId,
+    offerName: props.offerName,
+    campaignId: props.campaignId,
+    trafficMode: props.trafficMode,
+    level: props.level,
+    mainValue: props.mainValue,
+    subValue: props.subValue,
+  };
+
+  const openDialog = (wide: boolean) => {
+    setProductWide(wide);
+    setHistory({ status: "idle", events: [], error: "" });
+    setOpen(true);
+  };
 
   const openProductWide = async () => {
-    setProductWide(true); setConfirmation(""); setAffectedOffers([]); setOpen(true); setBusy(true); setError("");
+    openDialog(true); setConfirmation(""); setAffectedOffers([]); setBusy(true); setError("");
     try {
       const params = new URLSearchParams({action:"preview_across_offers",affiliateId:props.affiliateId,affiliateName:props.affiliateName,offerId:props.offerId,offerName:props.offerName,trafficMode:props.trafficMode,level:props.level,mainValue:props.mainValue||"",subValue:props.subValue||""});
       const response=await fetch(`/api/source-blocks?${params}`,{cache:"no-store"}),body=await response.json();
@@ -154,14 +231,31 @@ export default function SourceBlockButton(props: Props) {
     finally { setBusy(false); }
   };
 
+  const loadHistory = async () => {
+    if (!existing) return;
+    setHistory({ status: "loading", events: [], error: "" });
+    try {
+      const response = await fetch(`/api/source-blocks?action=history&id=${encodeURIComponent(existing.id)}`, { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Historie konnte nicht geladen werden");
+      setHistory({ status: "ready", events: body.events || [], error: "" });
+    } catch (value) {
+      setHistory({ status: "error", events: [], error: value instanceof Error ? value.message : "Historie konnte nicht geladen werden" });
+    }
+  };
+
   const activate = async () => {
+    if (!reasonCategory) {
+      setError("Grundkategorie fehlt");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const response = await fetch("/api/source-blocks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: productWide ? "activate_across_offers" : "activate", ...props, reason, confirmation }),
+        body: JSON.stringify({ action: productWide ? "activate_across_offers" : "activate", ...identity, reasonCategory, reason, confirmation }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -170,6 +264,7 @@ export default function SourceBlockButton(props: Props) {
       sharedLoad = null;
       const changed:SourceBlockRecord[]=body.blocks||[body.block];
       setBlocks((current) => [...changed,...current.filter((item)=>!changed.some(block=>block.id===item.id))]);
+      props.onBlocked?.(changed);
       setOpen(false);
     } catch (value) {
       setError(
@@ -261,7 +356,15 @@ export default function SourceBlockButton(props: Props) {
           </div>
           <div>
             <dt>{productWide ? "Betroffene Offers" : "Offer"}</dt>
-            <dd>{productWide ? (busy ? "Wird serverseitig ermittelt …" : affectedOffers.map(item=>`${item.offerName} (#${item.offerId})`).join(", ")||"Nicht verfügbar") : props.offerName}</dd>
+            <dd>
+              {productWide
+                ? busy
+                  ? "Wird serverseitig ermittelt …"
+                  : affectedOffers.length
+                    ? <ul className="sourceBlockOfferList">{affectedOffers.map(item=><li key={item.offerId}><b>{item.offerName} (#{item.offerId})</b>{typeof item.sois==="number"&&<span>{integer(item.sois)} SOIs{showMoney&&typeof item.payout==="number"?` · Payout ${euro(item.payout)}`:""}{showMoney&&typeof item.profit==="number"?` · Profit ${euro(item.profit)}`:""}</span>}{item.blocked&&<span className="sourceBlockOfferBlocked">bereits gesperrt</span>}</li>)}</ul>
+                    : "Nicht verfügbar"
+                : props.offerName}
+            </dd>
           </div>
           <div className="sourceBlockScopeWide">
             <dt>Auswahl</dt>
@@ -277,6 +380,22 @@ export default function SourceBlockButton(props: Props) {
             </div>
           )}
         </dl>
+
+        {metrics && (
+          <dl className="sourceBlockScope sourceBlockMetrics" aria-label="Kennzahlen vor der Bestätigung">
+            {showMoney && metrics.payout !== null && (
+              <div><dt>Payout</dt><dd>{euro(metrics.payout)}</dd></div>
+            )}
+            <div><dt>SOIs</dt><dd>{integer(metrics.sois)}</dd></div>
+            {showMoney && metrics.profit !== null && (
+              <div><dt>Profit</dt><dd className={metrics.profit < 0 ? "sourceBlockNegative" : ""}>{euro(metrics.profit)}</dd></div>
+            )}
+            <div><dt>First-Sale-Rate</dt><dd>{metrics.sois > 0 ? `${(metrics.firstSales / metrics.sois * 100).toFixed(1).replace(".", ",")} % (${integer(metrics.firstSales)})` : "–"}</dd></div>
+            <div><dt>Klicks</dt><dd>{props.trafficMode === "api" ? "n/a – clickless" : integer(metrics.clicks)}</dd></div>
+            <div><dt>Reife · Lead-Status</dt><dd>{[metrics.maturity, metrics.leadStatus].filter(Boolean).join(" · ") || "–"}</dd></div>
+            <div className="sourceBlockScopeWide"><dt>Sperrstatus</dt><dd>{blockStatusLabel}</dd></div>
+          </dl>
+        )}
 
         <p className="sourceBlockImpact">
           {(active||recovering)&&!productWide
@@ -298,16 +417,63 @@ export default function SourceBlockButton(props: Props) {
           </label>
         )}
 
-        {!active && !recovering && (
-          <label className="sourceBlockReason">
-            Notiz <span>optional</span>
-            <input
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              maxLength={500}
-              placeholder="z. B. Partner per Telegram informiert"
-            />
-          </label>
+        {activating && (
+          <>
+            <label className="sourceBlockReason">
+              Grundkategorie <span>Pflicht</span>
+              <select
+                value={reasonCategory}
+                onChange={(event) => setReasonCategory(event.target.value as "" | SourceBlockReasonCategory)}
+                required
+              >
+                <option value="">Bitte wählen</option>
+                {SOURCE_BLOCK_REASON_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{SOURCE_BLOCK_REASON_LABELS[category]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="sourceBlockReason">
+              Begründung <span>optional · max. 500 Zeichen</span>
+              <input
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                maxLength={500}
+                placeholder="z. B. Partner per Telegram informiert"
+              />
+            </label>
+          </>
+        )}
+
+        {existing && (
+          <div className="sourceBlockHistory">
+            {history.status === "ready" ? (
+              history.events.length ? (
+                <ol className="sourceBlockHistoryList" aria-label="Historie dieser Sperre">
+                  {history.events.map((event) => (
+                    <li key={event.id}>
+                      <span>{dateTime(event.at)}</span>
+                      <b>{sourceBlockHistoryActionLabel(event.action)}</b>
+                      <span>{event.reasonCategory ? SOURCE_BLOCK_REASON_LABELS[event.reasonCategory] : "–"}</span>
+                      <span>{event.actorId}</span>
+                      {event.error && <small>{event.error}</small>}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <small>Noch keine Historie-Ereignisse.</small>
+              )
+            ) : (
+              <button
+                type="button"
+                className="sourceBlockHistoryToggle"
+                onClick={loadHistory}
+                disabled={history.status === "loading"}
+              >
+                {history.status === "loading" ? "Historie wird geladen …" : "Historie anzeigen"}
+              </button>
+            )}
+            {history.status === "error" && <small className="sourceBlockUnclear" role="alert">{history.error}</small>}
+          </div>
         )}
 
         <footer className="sourceBlockDialogActions">
@@ -323,7 +489,7 @@ export default function SourceBlockButton(props: Props) {
             type="button"
             className={(active||recovering)&&!productWide ? "sourceReactivate" : "sourceConfirmBlock"}
             onClick={(active||recovering)&&!productWide ? deactivate : activate}
-            disabled={busy || (productWide && confirmation !== requiredConfirmation)}
+            disabled={busy || (productWide && confirmation !== requiredConfirmation) || (activating && !reasonCategory)}
           >
             {busy
               ? "Wird verifiziert …"
@@ -357,7 +523,7 @@ export default function SourceBlockButton(props: Props) {
         <button
           type="button"
           className="sourceBlockIconButton locked unclear"
-          onClick={() => {setProductWide(false);setOpen(true)}}
+          onClick={() => openDialog(false)}
           aria-label={`${controlScope} ${isSubSource ? sub : source}: Zustand unklar · Nach Everflow-Prüfung deaktivieren`}
           title={recoverTitle}
         >
@@ -368,7 +534,7 @@ export default function SourceBlockButton(props: Props) {
         <button
           type="button"
           className={`sourceBlockIconButton${active ? " blocked" : ""}`}
-          onClick={() => {setProductWide(false);setOpen(true)}}
+          onClick={() => openDialog(false)}
           aria-label={triggerLabel}
           title={triggerLabel}
           aria-pressed={Boolean(active)}

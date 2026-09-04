@@ -13,7 +13,7 @@ import {can} from '@/lib/rbac';
 import {canonicalOrigin,checkCsrf,parseBoundedJson,securityHeaders} from '@/lib/security';
 export const dynamic='force-dynamic';
 /** Phase B schaltet die Pflicht scharf: bis dahin gilt ein fehlendes Feld als 'sonstiges', ein ungültiges wird immer abgelehnt. */
-const REASON_CATEGORY_REQUIRED=false;
+const REASON_CATEGORY_REQUIRED=true;
 const REASON_CATEGORY_ERROR=`Grundkategorie fehlt oder ist ungültig (erlaubt: ${SOURCE_BLOCK_REASON_CATEGORIES.join(', ')})`;
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{...securityHeaders,'Cache-Control':'private, no-store'}});
 const mayManage=(access:Parameters<typeof can>[0])=>access.role!=='partner'&&can(access,'landingpages.manage')&&can(access,'api.manage');
