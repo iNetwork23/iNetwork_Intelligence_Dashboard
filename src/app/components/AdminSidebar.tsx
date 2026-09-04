@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import {usePathname} from "next/navigation";
+import {usePathname,useSearchParams} from "next/navigation";
+import {withGlobalPeriod} from "@/lib/period-controls";
 import {useEffect,useState} from "react";
 import {moveSidebarItem,moveSidebarItemByVisibleOrder,parseSidebarOrder} from "@/lib/sidebar-order";
 import ThemeToggle from "./ThemeToggle";
@@ -34,6 +35,7 @@ type PrimaryItem=NavItem;
 const PRIMARY_ROUTES=["/","/sources","/cohorts","/fraud","/affiliates","/automation"];
 /** Gespeicherte Reihenfolgen aus Etappe 1 kennen /sources noch nicht: der Eintrag landet dann direkt unter Home statt am Ende. */
 const placeSourcesUnderHome=(order:string[])=>{const rest=order.filter(href=>href!=="/sources");rest.splice(rest.indexOf("/")+1,0,"/sources");return rest};
+/** Globaler Zeitraum (period/from/to) wandert in jeden internen Link mit (D5); Links ohne gesetzten Zeitraum bleiben unverändert. */
 /** Badge nur mit Wert > 0 (null = Zähler nicht ladbar); Werte kommen als Props aus der Shell, kein Client-Fetch. */
 const Badge=({item}:{item:NavItem})=>typeof item.badge==="number"&&item.badge>0?<small className="sidebarBadge" aria-label={`${item.badge} ${item.badgeLabel||""}`.trim()} title={item.badgeLabel}>{item.badge}</small>:null;
 const icons:Record<IconName,React.ReactNode>={
@@ -52,7 +54,7 @@ function GripIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><circle c
 function ArrowIcon({direction}:{direction:"up"|"down"}){return <svg viewBox="0 0 24 24" aria-hidden="true" className={direction}><path d="m7 14 5-5 5 5"/></svg>}
 
 export default function AdminSidebar(props:Props){
- const pathname=usePathname(),storageKey=`wlx-sidebar-order:${props.email.trim().toLowerCase()}`;
+ const pathname=usePathname(),searchParams=useSearchParams(),storageKey=`wlx-sidebar-order:${props.email.trim().toLowerCase()}`;
  const[collapsed,setCollapsed]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[editing,setEditing]=useState(false),[order,setOrder]=useState<string[]>(PRIMARY_ROUTES),[dragging,setDragging]=useState<string|null>(null),[announcement,setAnnouncement]=useState("");
  useEffect(()=>{const saved=window.localStorage.getItem("wlx-sidebar-collapsed")==="1";setCollapsed(saved);document.documentElement.dataset.sidebarCollapsed=saved?"true":"false"},[]);
  useEffect(()=>{const raw=window.localStorage.getItem(storageKey),parsed=parseSidebarOrder(raw,PRIMARY_ROUTES);setOrder(raw&&!raw.includes('"/sources"')?placeSourcesUnderHome(parsed):parsed)},[storageKey]);
@@ -91,10 +93,10 @@ export default function AdminSidebar(props:Props){
    <nav className="sidebarNav" aria-label="Dashboard-Bereiche">
     {editing?<div className="sidebarOrderList" role="list">{visibleItems.map((item,index)=><div key={item.href} role="listitem" className={`sidebarOrderItem ${active(item.href)?"active":""} ${dragging===item.href?"dragging":""}`} draggable onDragStart={event=>{event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",item.href);setDragging(item.href)}} onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move"}} onDrop={event=>{event.preventDefault();dropOn(item.href)}} onDragEnd={()=>setDragging(null)}>
       <span className="sidebarDragHandle" title="Ziehen, um die Reihenfolge zu ändern"><GripIcon/></span><Icon name={item.icon}/><span className="sidebarOrderLabel">{item.label}</span><span className="sidebarOrderControls"><button type="button" disabled={index===0} aria-label={`${item.label} nach oben`} onClick={()=>moveBy(item.href,-1)}><ArrowIcon direction="up"/></button><button type="button" disabled={index===visibleItems.length-1} aria-label={`${item.label} nach unten`} onClick={()=>moveBy(item.href,1)}><ArrowIcon direction="down"/></button></span>
-     </div>)}</div>:visibleItems.map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}
+     </div>)}</div>:visibleItems.map(item=><Link key={item.href} href={withGlobalPeriod(item.href,searchParams)} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}
    </nav>
    <span className="sidebarOrderAnnouncement" aria-live="polite">{announcement}</span>
-   <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={item.href} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}</nav>
+   <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={withGlobalPeriod(item.href,searchParams)} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}</nav>
    <div className="sidebarFooter"><div className="sidebarStatus"><i className={props.writeAccess?"write":"read"}/><span>{props.capabilityLabel}</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><div className="sidebarPreferences"><div className="sidebarPreference"><span>Sprache</span><LanguageToggle compact/></div><div className="sidebarPreference"><span>Darstellung</span><ThemeToggle showLabel/></div></div><OneSignalLogoutForm configured={props.oneSignalConfigured}/></div></div>
   </aside>
  </>

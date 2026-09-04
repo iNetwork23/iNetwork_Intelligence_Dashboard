@@ -5,7 +5,7 @@ const moneyVerdict = (profit: number) =>
 const moneyVerdictText = { verdient: "Verdient Geld", verbrennt: "Verbrennt Geld", neutral: "Ausgeglichen" } as const;
 import CopyValue from "./CopyValue";
 import SourcePairCopy from "./SourcePairCopy";
-import SourcePeriodControls from "./SourcePeriodControls";
+import PeriodControls from "../components/PeriodControls";
 import { useDeferredValue, useMemo, useState } from "react";
 import {
   groupSources,
@@ -191,7 +191,7 @@ export default function SourceBreakdown({
             scopeId={`source-breakdown-${apiMode ? "api" : "tracked"}-${rows[0]?.offerUrlId || disclosureScope}`}
           />
           {sourcePeriod ? (
-            <SourcePeriodControls period={sourcePeriod} />
+            <PeriodControls dimension="source" period={sourcePeriod.period} from={sourcePeriod.from} to={sourcePeriod.to} rangeLabel={sourcePeriod.label} maxDate={sourcePeriod.maxDate} error={sourcePeriod.error} />
           ) : (
             <div>
               <small>{rangeLabel} · Europe/Berlin</small>

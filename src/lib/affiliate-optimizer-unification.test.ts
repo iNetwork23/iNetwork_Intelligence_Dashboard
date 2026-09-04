@@ -53,8 +53,8 @@ describe('zentraler Affiliate Optimizer',()=>{
 
   it('hält die Datumssteuerung für Direktlinks und Smartlinks gemeinsam sichtbar',()=>{
     const page=app('affiliates/page.tsx');
-    const period=app('affiliates/AffiliatePeriodControls.tsx');
-    expect(page.lastIndexOf('<AffiliatePeriodControls period={period} />')).toBeLessThan(page.lastIndexOf('selectedWorkspace && mode === "smartlinks"'));
+    const period=app('components/PeriodControls.tsx');
+    expect(page.lastIndexOf('<PeriodControls dimension="global" period={period.period} from=')).toBeLessThan(page.lastIndexOf('selectedWorkspace && mode === "smartlinks"'));
     expect(period).toContain('Jahr / Monat');
     expect(period).toContain('Individuell');
     expect(period.match(/<form/g)).toHaveLength(1);

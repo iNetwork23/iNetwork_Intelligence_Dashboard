@@ -1,2 +1,2 @@
 import{readFileSync}from'node:fs';import{join}from'node:path';import{describe,expect,it}from'vitest';
-describe('dashboard period truthfulness',()=>{it('labels period=all as the implemented 365-day range, not lifetime total',()=>{const controls=readFileSync(join(process.cwd(),'src/app/components/DashboardPeriodControls.tsx'),'utf8');expect(controls).toContain("['all','365 Tage']");expect(controls).not.toContain("['all','Gesamt']")})});
+describe('dashboard period truthfulness',()=>{it('labels period=all as the implemented 365-day range, not lifetime total',()=>{const presets=readFileSync(join(process.cwd(),'src/lib/period-controls.ts'),'utf8');expect(presets).toContain("['all','365 Tage']");expect(presets).not.toContain("['all','Gesamt']")})});
