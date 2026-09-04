@@ -30,10 +30,11 @@ export function findBlockMarker(index:SourceBlockMarkerIndex|undefined,row:Sourc
  return null;
 }
 const berlinDate=(iso:string)=>new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Berlin'}).format(new Date(iso));
-/** Anzeigetext: aktiv → „Gesperrt seit <Datum>“, error/pending → „Sperre unklar“, inaktiv → null (kein Marker). */
+/** Anzeigetext: aktiv → „Gesperrt seit <Datum>“, pending → „Verifizierung läuft“, error → „Sperre unklar“, inaktiv → null (kein Marker). */
 export function blockMarkerText(marker:SourceBlockMarker):string|null{
  if(marker.status==='active')return`Gesperrt seit ${berlinDate(marker.effectiveAt)}`;
- if(marker.status==='error'||marker.status==='pending')return'Sperre unklar';
+ if(marker.status==='pending')return'Verifizierung läuft';
+ if(marker.status==='error')return'Sperre unklar';
  return null;
 }
 export const isBlockedMarker=(marker:SourceBlockMarker|null)=>marker?.status==='active';

@@ -48,7 +48,7 @@ describe('reconcile selection',()=>{
 });
 
 describe('reconcile runner',()=>{
- it('writes markers, records mismatch on every deviation and reconcile_ok at most once per Berlin day, never touching the record or Everflow writes',async()=>{
+ it('writes markers and records history only on transitions (ok ↔ mismatch, changed deviation), never touching the record or Everflow writes',async()=>{
   const store=new MemorySecurityStore();
   await seed(store,record({id:'a'}),record({id:'b',everflowSettingId:778,offerId:26}));
   const settings=new Map<number,EverflowSettingView|null>([[777,goodSetting()],[778,goodSetting({network_offer_id:26,is_postback_disabled:false})]]);
@@ -64,22 +64,32 @@ describe('reconcile runner',()=>{
   clock=new Date('2026-09-04T18:00:00Z');
   await run();
   expect((await listSourceBlockHistory('a',store)).map(event=>event.action)).toEqual(['reconcile_ok']);
-  expect((await listSourceBlockHistory('b',store)).map(event=>event.action)).toEqual(['reconcile_mismatch','reconcile_mismatch']);
+  expect((await listSourceBlockHistory('b',store)).map(event=>event.action)).toEqual(['reconcile_mismatch']);
   expect(await store.get(sourceBlockReconcileKey('a'))).toMatchObject({at:'2026-09-04T18:00:00.000Z',okEventDay:'2026-09-04'});
   clock=new Date('2026-09-04T22:30:00Z');
   await run();
-  expect((await listSourceBlockHistory('a',store)).map(event=>event.action)).toEqual(['reconcile_ok','reconcile_ok']);
-  expect(await store.get(sourceBlockReconcileKey('a'))).toMatchObject({okEventDay:'2026-09-05'});
+  expect((await listSourceBlockHistory('a',store)).map(event=>event.action)).toEqual(['reconcile_ok']);
+  expect(await store.get(sourceBlockReconcileKey('a'))).toMatchObject({at:'2026-09-04T22:30:00.000Z',okEventDay:'2026-09-04'});
+  clock=new Date('2026-09-04T23:00:00Z');settings.set(778,goodSetting({network_offer_id:26,is_postback_disabled:false,payout_amount:5}));
+  await run();
+  expect((await listSourceBlockHistory('b',store)).map(event=>event.action)).toEqual(['reconcile_mismatch','reconcile_mismatch']);
+  clock=new Date('2026-09-05T00:00:00Z');settings.set(778,goodSetting({network_offer_id:26}));
+  await run();clock=new Date('2026-09-05T01:00:00Z');await run();
+  expect((await listSourceBlockHistory('b',store)).map(event=>event.action)).toEqual(['reconcile_ok','reconcile_mismatch','reconcile_mismatch']);
   expect(await store.get(sourceBlockStoreKey(record({id:'a'})))).toEqual(record({id:'a'}));
   expect(await store.get(sourceBlockStoreKey(record({id:'b',everflowSettingId:778,offerId:26})))).toEqual(record({id:'b',everflowSettingId:778,offerId:26}));
  });
- it('marks unreachable settings without history events and keeps the previous ok day',async()=>{
+ it('marks unreachable settings without history events, keeps the previous ok day and aborts the run on Everflow 429/5xx',async()=>{
   const store=new MemorySecurityStore();
-  await seed(store,record({id:'a'}));
+  await seed(store,record({id:'a'}),record({id:'b',everflowSettingId:778,offerId:26}));
   await store.set(sourceBlockReconcileKey('a'),{at:'2026-09-03T00:00:00.000Z',status:'ok',detail:'',okEventDay:'2026-09-03'});
   const result=await runSourceBlockReconcile({store,readSetting:async()=>{throw new Error('Everflow HTTP 503')},now:()=>new Date('2026-09-04T06:00:00Z')});
-  expect(result).toEqual({checked:1,ok:0,mismatch:0,unreachable:1,budgetExhausted:false});
-  expect(await store.get(sourceBlockReconcileKey('a'))).toMatchObject({status:'unreachable',detail:'Everflow HTTP 503',okEventDay:'2026-09-03'});
+  expect(result).toEqual({checked:1,ok:0,mismatch:0,unreachable:1,budgetExhausted:true});
+  expect(await store.get(sourceBlockReconcileKey('b'))).toMatchObject({status:'unreachable',detail:'Everflow HTTP 503'});
+  expect(await store.get(sourceBlockReconcileKey('a'))).toMatchObject({status:'ok',okEventDay:'2026-09-03'});
+  const network=await runSourceBlockReconcile({store,readSetting:async()=>{throw new Error('fetch failed')},now:()=>new Date('2026-09-04T07:00:00Z')});
+  expect(network).toEqual({checked:2,ok:0,mismatch:0,unreachable:2,budgetExhausted:false});
+  expect(await store.get(sourceBlockReconcileKey('a'))).toMatchObject({status:'unreachable',detail:'fetch failed',okEventDay:'2026-09-03'});
   expect(await listSourceBlockHistory('a',store)).toEqual([]);
  });
  it('stops at the time budget and reports it',async()=>{
@@ -176,6 +186,7 @@ describe('source block balance page',()=>{
   const panel=read('src/app/source-blocks/SourceBlockHistoryPanel.tsx');
   expect(panel.startsWith("'use client'")).toBe(true);
   expect(panel).toContain('/api/source-blocks?action=history&id=');
-  for(const marker of['reconcile_ok','reconcile_mismatch','activate_failed','Historie anzeigen'])expect(panel).toContain(marker);
+  for(const marker of['sourceBlockHistoryActionLabel(','Historie anzeigen','berlinDateTime'])expect(panel).toContain(marker);
+  for(const action of['reconcile_ok','reconcile_mismatch','activate_failed'])expect(read('src/lib/source-block-history-labels.ts')).toContain(action);
  });
 });

@@ -45,22 +45,23 @@ export async function loadReconcileMarkers(store:SecurityStore):Promise<Map<stri
 }
 export type ReconcileRunOptions={store:SecurityStore;readSetting:(settingId:number)=>Promise<EverflowSettingView|null>;now?:()=>Date;timeBudgetMs?:number;limit?:number};
 export type ReconcileRunResult={checked:number;ok:number;mismatch:number;unreachable:number;budgetExhausted:boolean};
-/** Runner: je Sperre Setting lesen → vergleichen → Marker schreiben; reconcile_ok höchstens einmal je Berlin-Tag, reconcile_mismatch bei jeder Abweichung, unreachable nur im Marker. */
+/** Runner: je Sperre Setting lesen → vergleichen → Marker schreiben. Historie nur bei Zustandswechsel (reconcile_ok beim Übergang nach ok, reconcile_mismatch bei neuer oder geänderter Abweichung), damit sync_state nicht stündlich wächst; unreachable nur im Marker; bei Everflow 429/5xx bricht der Lauf ab (Rest beim nächsten Stundenlauf). */
 export async function runSourceBlockReconcile(options:ReconcileRunOptions):Promise<ReconcileRunResult>{
  const{store,readSetting}=options,now=options.now??(()=>new Date()),budget=options.timeBudgetMs??RECONCILE_TIME_BUDGET_MS,started=now().getTime(),result:ReconcileRunResult={checked:0,ok:0,mismatch:0,unreachable:0,budgetExhausted:false};
  const markers=await loadReconcileMarkers(store),selected=selectBlocksForReconcile(await listSourceBlocks(store),markers,options.limit);
  for(const block of selected){
   if(now().getTime()-started>=budget){result.budgetExhausted=true;break}
   const previous=markers.get(block.id),at=now(),today=berlinDay(at),identityKey=sourceBlockIdentityKey(block);
-  let marker:SourceBlockReconcileMarker;
+  let marker:SourceBlockReconcileMarker,abort=false;
   try{
    const outcome=compareEverflowSettingWithBlock(await readSetting(Number(block.everflowSettingId)),block);
    marker={at:at.toISOString(),status:outcome.status,detail:outcome.detail,...(previous?.okEventDay?{okEventDay:previous.okEventDay}:{})};
-   if(outcome.status==='mismatch'){await recordSourceBlockHistory({blockId:block.id,identityKey,actorId:RECONCILE_ACTOR,action:'reconcile_mismatch',error:outcome.detail},store)}
-   else if(previous?.okEventDay!==today){await recordSourceBlockHistory({blockId:block.id,identityKey,actorId:RECONCILE_ACTOR,action:'reconcile_ok'},store);marker.okEventDay=today}
-  }catch(error){marker={at:at.toISOString(),status:'unreachable',detail:(error instanceof Error?error.message:'Everflow nicht erreichbar').slice(0,300),...(previous?.okEventDay?{okEventDay:previous.okEventDay}:{})}}
+   if(outcome.status==='mismatch'){if(previous?.status!=='mismatch'||previous.detail!==outcome.detail)await recordSourceBlockHistory({blockId:block.id,identityKey,actorId:RECONCILE_ACTOR,action:'reconcile_mismatch',error:outcome.detail,at:at.toISOString()},store)}
+   else if(previous?.status!=='ok'){await recordSourceBlockHistory({blockId:block.id,identityKey,actorId:RECONCILE_ACTOR,action:'reconcile_ok',at:at.toISOString()},store);marker.okEventDay=today}
+  }catch(error){const detail=(error instanceof Error?error.message:'Everflow nicht erreichbar').slice(0,300);marker={at:at.toISOString(),status:'unreachable',detail,...(previous?.okEventDay?{okEventDay:previous.okEventDay}:{})};abort=/Everflow HTTP (429|5\d\d)/.test(detail)}
   await store.set(sourceBlockReconcileKey(block.id),marker);
   result.checked++;result[marker.status]++;
+  if(abort){result.budgetExhausted=true;break}
  }
  return result;
 }

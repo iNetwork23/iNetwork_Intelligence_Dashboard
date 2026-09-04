@@ -11,13 +11,16 @@ import type{SourceBlockRecord}from'@/lib/source-blocks';
 import SourceBlockButton from'../affiliates/SourceBlockButton';
 import SourceBlockHistoryPanel from'./SourceBlockHistoryPanel';
 import DashboardPageHeader from'../components/DashboardPageHeader';import AccessDeniedHint from'../components/AccessDeniedHint';
+import DataStatusBar from'../components/DataStatusBar';
+import{getDataStatus}from'@/lib/data-status';
+import{berlinDateTime,berlinDay}from'@/lib/format-berlin';
 export const dynamic='force-dynamic';
 /** Sperr-Bilanz (Etappe 2, Prinzip C): Verstoßsummen aus block-effects, Abgleich-Marker aus dem Reconcile-Cron, Historie lazy je Sperre. */
 const PAGE_SIZE=100;
 const STATUSES=['active','inactive','error','pending'] as const;
 type Params={status?:string;category?:string;q?:string;limit?:string};
-const fmt=(value:string)=>new Intl.DateTimeFormat('de-DE',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Berlin'}).format(new Date(value));
-const day=(value:string)=>value.split('-').reverse().join('.');
+const fmt=(value:string)=>berlinDateTime(value);
+const day=(value:string)=>berlinDay(value);
 const euro=(value:number)=>`${value.toFixed(2).replace('.',',')} €`;
 const RECONCILE_LABELS:Record<SourceBlockReconcileMarker['status'],string>={ok:'übereinstimmend',mismatch:'Abweichung',unreachable:'Everflow nicht erreichbar'};
 const effectsRange=()=>{const range=reportingRange('30d');return{from:range.from!,to:range.to}};
@@ -28,12 +31,15 @@ export default async function SourceBlocksPage({searchParams}:{searchParams:Prom
  if(!allowed)return <main className="fatal"><h1>403 · Keine Berechtigung</h1><AccessDeniedHint permission="landingpages.manage und api.manage"/></main>;
  const finance=can(user.access,'finance.view'),filters=await searchParams,store=securityStore();
  const status=(STATUSES as readonly string[]).includes(filters.status||'')?filters.status!:'all',category=isSourceBlockReasonCategory(filters.category)?filters.category:filters.category==='none'?'none':'all',search=(filters.q||'').trim().slice(0,100),limit=Math.min(2000,Math.max(PAGE_SIZE,Math.floor(Number(filters.limit)||PAGE_SIZE)));
+ const dataStatus=await getDataStatus().catch(()=>null);
  const[blocks,effects,markers]=await Promise.all([listSourceBlocks(store),loadBlockEffects(effectsRange()).catch(error=>{console.error('Block effects failed',error);return null}),loadReconcileMarkers(store).catch(error=>{console.error('Reconcile markers failed',error);return new Map<string,SourceBlockReconcileMarker>()})]);
  const effectById=new Map<string,BlockEffect>((effects||[]).map(effect=>[effect.record.id,effect])),needle=search.toLowerCase();
  const matches=(block:SourceBlockRecord)=>(status==='all'||block.status===status)&&(category==='all'||(category==='none'?!block.reasonCategory:block.reasonCategory===category))&&(!needle||[block.affiliateName,String(block.affiliateId),block.offerName,String(block.offerId),block.mainValue||'',block.subValue||''].some(value=>value.toLowerCase().includes(needle)));
  const rows=blocks.filter(matches),visible=rows.slice(0,limit),activeCount=rows.filter(block=>block.status==='active').length,totals=rows.reduce((sum,block)=>{const effect=effectById.get(block.id);return effect?{sois:sum.sois+effect.soisSince,payout:sum.payout+effect.payoutSince}:sum},{sois:0,payout:0});
- const params={status:status==='all'?'':status,category:category==='all'?'':category,q:search};
+ const params={status:status==='all'?'':status,category:category==='all'?'':category,q:search},lastReconcileAt=[...markers.values()].map(marker=>marker.at).sort().pop()??null;
  return <main className="dashboard sourceBlocksPage"><DashboardPageHeader kicker="Traffic-Kontrolle" title="Sperr-Bilanz" status={`${blocks.filter(block=>block.status==='active').length} aktiv`} tone="live" icon="automation" description="Offer-spezifische Payout- und Postback-Sperren mit Verstoßsummen, stündlichem Everflow-Abgleich und lückenloser Historie."/>
+  {dataStatus&&<DataStatusBar status={dataStatus}/>}
+  <p className="sourceBlockReconcileRun" role="status">Letzter Everflow-Abgleich: {lastReconcileAt?fmt(lastReconcileAt):'noch nie gelaufen (Cron stündlich um :27)'}</p>
   <p className="sourceBlockNotice">Traffic wird nicht verworfen. Neue SOIs nach der Sperre bleiben sichtbar; Everflow setzt für die exakte Kombination den Payout auf 0 und unterdrückt den Affiliate-Postback. Tagesdaten am Sperrtag können auch frühere Leads desselben Tages enthalten.{effects===null&&' Verstoßsummen sind gerade nicht verfügbar.'}</p>
   <form className="fraudFilters sourceBlockFilters" method="get"><label>Status<select name="status" defaultValue={status}><option value="all">Alle</option><option value="active">Aktiv</option><option value="inactive">Inaktiv</option><option value="error">Zustand unklar</option><option value="pending">Verifizierung läuft</option></select></label><label>Kategorie<select name="category" defaultValue={category}><option value="all">Alle</option>{SOURCE_BLOCK_REASON_CATEGORIES.map(item=><option key={item} value={item}>{SOURCE_BLOCK_REASON_LABELS[item]}</option>)}<option value="none">ohne Kategorie</option></select></label><label>Partner<input name="q" defaultValue={search} placeholder="Partner, Offer oder Quelle" maxLength={100}/></label><button type="submit">Filtern</button></form>
   <dl className="sourceBlockSummary" aria-label="Summen der gefilterten Sperren"><div><dt>Aktive Sperren</dt><dd>{activeCount}</dd></div><div><dt>Payout trotz Sperre</dt><dd className={finance&&totals.payout>0?'down':undefined}>{finance?euro(totals.payout):'nur mit finance.view'}</dd></div><div><dt>SOIs seit Sperre</dt><dd>{totals.sois}</dd></div></dl>

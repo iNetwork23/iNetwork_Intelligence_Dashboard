@@ -11,10 +11,15 @@ const dim=(row:SnapshotRow,type:string)=>row.columns.find(item=>item.column_type
 /** Gleiche Abbildung wie /source-blocks heute: Snapshot-Zeile → Verstoßzeile (adv1/adv2 aus source_id/sub1). */
 export const metricRowsFromSnapshotRows=(rows:SnapshotRow[]):SourceBlockMetricRow[]=>rows.map(row=>({metric_date:dim(row,'date'),affiliate_id:dim(row,'affiliate'),offer_id:dim(row,'offer'),source_id:dim(row,'source_id'),sub_source:dim(row,'sub1'),sois:Number(row.reporting.cv||0),payout:Number(row.reporting.payout||0),raw:{adv1:dim(row,'source_id'),adv2:dim(row,'sub1')}}));
 /** identityKey (sourceBlockIdentityKey) → Record, alle Status; bei Dubletten gewinnt der zuletzt geänderte Record. */
-export async function loadBlockIndex(store?:SecurityStore):Promise<Map<string,SourceBlockRecord>>{
+async function computeBlockIndex(store:SecurityStore):Promise<Array<[string,SourceBlockRecord]>>{
  const index=new Map<string,SourceBlockRecord>();
- for(const record of await listSourceBlocks(store??securityStore())){const key=sourceBlockIdentityKey(record);if(!index.has(key))index.set(key,record)}
- return index;
+ for(const record of await listSourceBlocks(store)){const key=sourceBlockIdentityKey(record);if(!index.has(key))index.set(key,record)}
+ return[...index.entries()];
+}
+/** Ohne injizierten Store 60 s gecacht (Tag 'source-blocks', von der Sperr-Route nach jeder Mutation invalidiert) – der Prefix-Scan läuft so nicht je Request. */
+export async function loadBlockIndex(store?:SecurityStore):Promise<Map<string,SourceBlockRecord>>{
+ if(store)return new Map(await computeBlockIndex(store));
+ return new Map(await unstable_cache(()=>computeBlockIndex(securityStore()),['block-index-v1'],{revalidate:60,tags:[BLOCK_EFFECTS_CACHE_TAG]})());
 }
 export function blockEffectsFromRows(blocks:SourceBlockRecord[],rowsByAffiliate:Map<string,SourceBlockMetricRow[]>):BlockEffect[]{
  return blocks.filter(record=>record.status==='active').map(record=>{const violations=summarizeSourceBlockViolations(rowsByAffiliate.get(String(record.affiliateId))||[],record);return{record,identityKey:sourceBlockIdentityKey(record),soisSince:violations.sois,payoutSince:violations.payout,lastTrafficDate:violations.lastTrafficDate}});

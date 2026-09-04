@@ -20,6 +20,16 @@ describe('prepareSourceCandidateRows',()=>{
   expect(prepareSourceCandidateRows([base],new Map([[sourceCandidateBlockKey(base),record({status:'inactive'})]]),{finance:true})[0].block).toBeNull();
   expect(prepareSourceCandidateRows([base],new Map([[sourceCandidateBlockKey(base),record({status:'error',error:'Everflow 502'})]]),{finance:true})[0].block).toMatchObject({status:'error',error:'Everflow 502'});
  });
+ it('covers sub-sources through an active main-source block and flags the rest leaf as not blockable',()=>{
+  const sub=candidate({subValue:'camp-1',level:'sub_source'}),rest=candidate({subValue:null,level:'sub_source'});
+  const mainIndex=new Map([[sourceCandidateBlockKey(candidate()),record()]]);
+  const[subRow,restRow]=prepareSourceCandidateRows([sub,rest],mainIndex,{finance:true});
+  expect(subRow.block).toMatchObject({id:'blk-1',status:'active'});expect(subRow.blockable).toBe(true);
+  expect(restRow.block).toMatchObject({id:'blk-1',status:'active'});expect(restRow.blockable).toBe(false);
+  const ownIndex=new Map([[sourceCandidateBlockKey(sub),record({id:'blk-sub',level:'sub_source',subValue:'camp-1'})],[sourceCandidateBlockKey(candidate()),record({status:'inactive'})]]);
+  expect(prepareSourceCandidateRows([sub],ownIndex,{finance:true})[0].block).toMatchObject({id:'blk-sub'});
+  expect(prepareSourceCandidateRows([candidate()],new Map(),{finance:true})[0].blockable).toBe(true);
+ });
  it('strips every money value without finance.view',()=>{
   const[row]=prepareSourceCandidateRows([candidate()],new Map(),{finance:false});
   expect(row.revenue).toBeNull();expect(row.payout).toBeNull();expect(row.profit).toBeNull();expect(row.sois).toBe(60);

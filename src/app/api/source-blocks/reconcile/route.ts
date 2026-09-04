@@ -24,7 +24,8 @@ export async function GET(request:NextRequest){
   if(!lease)return json({...empty(),error:'Sperr-Abgleich läuft bereits'},409);
   try{
    const apiKey=process.env.EVERFLOW_API_KEY||'',errors:string[]=[],result=empty();
-   try{Object.assign(result,await runSourceBlockReconcile({store,readSetting:settingId=>readEverflowSourceBlockSetting(settingId,apiKey)}))}
+   if(!apiKey)errors.push('reconcile: EVERFLOW_API_KEY fehlt');
+   else try{Object.assign(result,await runSourceBlockReconcile({store,readSetting:settingId=>readEverflowSourceBlockSetting(settingId,apiKey)}))}
    catch(error){console.error('Source block reconcile step failed',error);errors.push(`reconcile: ${error instanceof Error?error.message:'unbekannt'}`)}
    try{result.alerts=await runPayoutDespiteBlockAlerts({loadEffects:()=>loadBlockEffects(effectsRange()),enqueue:(dedupeId,payload)=>enqueueSourceBlockManagerAlert(dedupeId,payload,store)})}
    catch(error){console.error('Payout despite block alert failed',error);errors.push(`alerts: ${error instanceof Error?error.message:'unbekannt'}`)}

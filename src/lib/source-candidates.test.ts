@@ -97,6 +97,15 @@ describe('buildSourceCandidatesSnapshot',()=>{
  it('defaults to a 150 second budget',async()=>{const{DEFAULT_CANDIDATE_TIME_BUDGET_MS}=await import('./source-candidates');expect(DEFAULT_CANDIDATE_TIME_BUDGET_MS).toBe(150_000)});
 });
 
+describe('capSourceCandidates',()=>{
+ it('keeps at most the configured rows per action and flags truncation',async()=>{
+  const{capSourceCandidates,CANDIDATE_ROW_LIMITS}=await import('./source-candidates');
+  const make=(action:'ABSCHALTEN'|'BEOBACHTEN'|'SKALIEREN',n:number)=>Array.from({length:n},(_,i)=>({action,profit:-i,affiliateId:'1',offerUrlId:String(i)}) as never);
+  const capped=capSourceCandidates([...make('ABSCHALTEN',CANDIDATE_ROW_LIMITS.ABSCHALTEN+5),...make('SKALIEREN',3)]);
+  expect(capped.truncated).toBe(true);expect(capped.rows.filter(row=>row.action==='ABSCHALTEN')).toHaveLength(CANDIDATE_ROW_LIMITS.ABSCHALTEN);expect(capped.rows.filter(row=>row.action==='SKALIEREN')).toHaveLength(3);
+  expect(capSourceCandidates(make('BEOBACHTEN',2))).toEqual({rows:make('BEOBACHTEN',2),truncated:false});
+ });
+});
 describe('publishSourceCandidates',()=>{
  it('upserts the snapshot under the range key',async()=>{
   const{publishSourceCandidates}=await import('./source-candidates');
@@ -109,6 +118,20 @@ describe('publishSourceCandidates',()=>{
   const{publishSourceCandidates}=await import('./source-candidates');
   loadPortfolioFromCache.mockResolvedValue(portfolio([]));upsert.mockResolvedValue({error:{message:'boom'}});
   await expect(publishSourceCandidates(range)).rejects.toThrow('Supabase source candidates: boom');
+ });
+ it('keeps a complete snapshot younger than 6 h instead of overwriting it with a budget-truncated one',async()=>{
+  const{publishSourceCandidates,INCOMPLETE_OVERWRITE_AFTER_MS}=await import('./source-candidates');
+  loadPortfolioFromCache.mockResolvedValue(portfolio(['1','2','3']));
+  const fresh={version:1,range,generatedAt:new Date(Date.now()-60*60_000).toISOString(),affiliates:3,affiliatesProcessed:3,coverageComplete:true,rows:[{},{}]};
+  maybeSingle.mockResolvedValue({data:{value:fresh},error:null});
+  expect(await publishSourceCandidates(range,{timeBudgetMs:0})).toEqual({rows:2,coverageComplete:true,kept:true});
+  expect(upsert).not.toHaveBeenCalled();
+  maybeSingle.mockResolvedValue({data:{value:{...fresh,generatedAt:new Date(Date.now()-INCOMPLETE_OVERWRITE_AFTER_MS-60_000).toISOString()}},error:null});
+  expect(await publishSourceCandidates(range,{timeBudgetMs:0})).toEqual({rows:0,coverageComplete:false});
+  expect(upsert).toHaveBeenCalledTimes(1);
+  maybeSingle.mockResolvedValue({data:{value:{...fresh,coverageComplete:false}},error:null});
+  expect(await publishSourceCandidates(range,{timeBudgetMs:0})).toEqual({rows:0,coverageComplete:false});
+  expect(upsert).toHaveBeenCalledTimes(2);
  });
 });
 
@@ -141,16 +164,18 @@ describe('rollups route hook',()=>{
  it('publishes both ranges after the portfolio rollups inside their own try/catch',()=>{
   const route=read('src/app/api/sync/rollups/route.ts');
   expect(route).toContain('maxDuration=240');
-  expect(route).toContain("for(const period of['7d','30d']as const)");
+  expect(route).toContain("const CANDIDATE_PERIODS=['30d','7d']as const");
+  expect(route).toContain('for(const[index,period]of CANDIDATE_PERIODS.entries())');
+  expect(route).toContain('sourceCandidateBudgetMs(Date.now()-started,CANDIDATE_PERIODS.length-index)');
   expect(route).toMatch(/try\{const range=reportingRange\(period\);sourceCandidates\[period\]=await publishSourceCandidates\(/);
   expect(route).toContain('catch(error){console.error(`Source candidates ${period} failed`,error)');
   expect(route).toContain('sourceCandidates:await publishSourceCandidateRanges(started)');
   expect(route.indexOf('refreshLongPortfolioRangeSnapshots(getSupabaseAdmin())')).toBeLessThan(route.indexOf('publishSourceCandidateRanges(started)'));
-  expect(route).toContain('Math.max(30_000,200_000-elapsedMs)');
+  expect(route).toContain('Math.max(15_000,Math.floor(Math.max(0,200_000-elapsedMs)/Math.max(1,rangesLeft)))');
  });
  it('keeps the total runtime inside the route budget',async()=>{
   const{sourceCandidateBudgetMs}=await import('@/app/api/sync/rollups/route');
-  expect(sourceCandidateBudgetMs(0)).toBe(200_000);expect(sourceCandidateBudgetMs(60_000)).toBe(140_000);expect(sourceCandidateBudgetMs(190_000)).toBe(30_000);
+  expect(sourceCandidateBudgetMs(0)).toBe(200_000);expect(sourceCandidateBudgetMs(0,2)).toBe(100_000);expect(sourceCandidateBudgetMs(60_000,2)).toBe(70_000);expect(sourceCandidateBudgetMs(190_000)).toBe(15_000);expect(sourceCandidateBudgetMs(230_000,2)).toBe(15_000);
  });
  it('answers with per-range results and never fails the portfolio rollups because of the candidates',async()=>{
   const{GET}=await import('@/app/api/sync/rollups/route');const{NextRequest}=await import('next/server');

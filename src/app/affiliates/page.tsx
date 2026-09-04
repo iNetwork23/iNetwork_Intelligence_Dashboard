@@ -140,7 +140,15 @@ export default async function AffiliateOptimizerPage({
       user.access.role === "partner"
         ? Promise.resolve({})
         : loadBlockIndex()
-            .then(sourceBlockMarkerIndex)
+            .then((index) =>
+              sourceBlockMarkerIndex(
+                [...index].filter(
+                  ([, record]) =>
+                    !query.affiliate ||
+                    String(record.affiliateId) === String(query.affiliate),
+                ),
+              ),
+            )
             .catch((cause) => {
               console.error("Block index failed", cause);
               return {};

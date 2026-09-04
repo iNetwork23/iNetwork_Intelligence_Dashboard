@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { berlinDateTime, berlinDay } from "@/lib/format-berlin";
 import { createPortal } from "react-dom";
 import type {
   SourceBlockLevel,
@@ -40,8 +41,10 @@ type Props = {
   metrics?: SourceBlockDialogMetrics;
   /** Geldwerte im Dialog nur mit finance.view (Default: anzeigen). */
   showMoney?: boolean;
-  /** Wird nach erfolgreicher Aktivierung mit den neuen Records aufgerufen (z. B. Zeilenzustand in Listen). */
+  /** Wird nach erfolgreicher Aktivierung oder Deaktivierung mit den geänderten Records aufgerufen (z. B. Zeilenzustand in Listen). */
   onBlocked?: (records: SourceBlockRecord[]) => void;
+  /** Dialog direkt beim Einhängen öffnen (Deep-Link aus dem Leitstand: Signal → Sperre in drei Schritten). */
+  autoOpen?: boolean;
 };
 
 type AffectedOffer = {
@@ -60,10 +63,13 @@ type HistoryState = {
 };
 
 let sharedLoad: Promise<SourceBlockRecord[]> | null = null;
+let sharedLoadedAt = 0;
+const SHARED_TTL_MS = 60_000;
 
+/** Modulweit geteilt, aber höchstens 60 s alt – Sperren anderer Nutzer erscheinen ohne Reload. */
 const load = () =>
-  sharedLoad ??
-  (sharedLoad = fetch("/api/source-blocks", { cache: "no-store" }).then(
+  (sharedLoad && Date.now() - sharedLoadedAt < SHARED_TTL_MS ? sharedLoad : null) ??
+  ((sharedLoadedAt = Date.now()), sharedLoad = fetch("/api/source-blocks", { cache: "no-store" }).then(
     async (response) => {
       const body = await response.json();
       if (!response.ok) {
@@ -86,10 +92,8 @@ const same = (block: SourceBlockRecord, props: Props) =>
 const euro = (value: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
 const integer = (value: number) => new Intl.NumberFormat("de-DE").format(value);
-const dateTime = (value: string) =>
-  new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Berlin" }).format(new Date(value));
-const day = (value: string) =>
-  new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeZone: "Europe/Berlin" }).format(new Date(value));
+const dateTime = (value: string) => berlinDateTime(value);
+const day = (value: string) => berlinDay(value);
 
 function PowerIcon() {
   return (
@@ -220,6 +224,11 @@ export default function SourceBlockButton(props: Props) {
     setOpen(true);
   };
 
+  const autoOpen = props.autoOpen === true;
+  useEffect(() => {
+    if (autoOpen) openDialog(false);
+  }, [autoOpen]);
+
   const openProductWide = async () => {
     openDialog(true); setConfirmation(""); setAffectedOffers([]); setBusy(true); setError("");
     try {
@@ -300,6 +309,7 @@ export default function SourceBlockButton(props: Props) {
           item.id === body.block.id ? body.block : item,
         ),
       );
+      props.onBlocked?.([body.block]);
       setOpen(false);
     } catch (value) {
       setError(

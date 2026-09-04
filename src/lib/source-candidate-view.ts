@@ -1,5 +1,5 @@
 import{KILL_MATURITY_SOIS}from'./decision-engine';
-import{sourceCandidateBlockKey,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
+import{isBlockableCandidate,sourceCandidateBlockKeys,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
 import type{SourceCandidate}from'./source-candidates';
 import type{SourceBlockRecord}from'./source-blocks';
 /** Reine Anzeige-Logik der partnerübergreifenden Quellenliste (/sources): Sperrzuordnung, Filter, Sortierung, Top-N, Deep-Link-Zeile, Mehrfachauswahl. Client-sicher. */
@@ -10,7 +10,7 @@ export type SourceCandidateBlockFilter='all'|'open'|'blocked';
 export type SourceCandidateSort='profit'|'payout'|'sois'|'clicks';
 export type SourceCandidateFilters={action:SourceCandidateActionFilter;mode:SourceCandidateModeFilter;q:string;blocked:SourceCandidateBlockFilter};
 export type SourceCandidateBlockState={id:string;status:'active'|'pending'|'error';effectiveAt:string;error:string|null};
-export type SourceCandidateRow=Omit<SourceCandidate,'revenue'|'payout'|'profit'>&{key:string;domId:string;revenue:number|null;payout:number|null;profit:number|null;block:SourceCandidateBlockState|null};
+export type SourceCandidateRow=Omit<SourceCandidate,'revenue'|'payout'|'profit'>&{key:string;domId:string;revenue:number|null;payout:number|null;profit:number|null;block:SourceCandidateBlockState|null;blockable:boolean};
 export const SOURCE_CANDIDATE_PAGE_SIZE=50;
 export const BULK_BLOCK_LIMIT=5;
 export const DEFAULT_SOURCE_CANDIDATE_FILTERS:SourceCandidateFilters={action:'all',mode:'all',q:'',blocked:'all'};
@@ -23,9 +23,11 @@ export const verdictLabel=(action:SourceCandidateAction)=>action==='ABSCHALTEN'?
 export const maturityLabel=(m:{sois:number;clicks:number})=>m.sois>=KILL_MATURITY_SOIS?`reif · ${m.sois} SOIs`:`unreif · ${m.sois} von ${KILL_MATURITY_SOIS} SOIs`;
 export const firstSaleRate=(m:{sois:number;firstSales:number})=>m.sois>0?`${(m.firstSales/m.sois*100).toFixed(1).replace('.',',')} %`:'–';
 const blockState=(record:SourceBlockRecord|undefined):SourceCandidateBlockState|null=>record&&record.status!=='inactive'?{id:record.id,status:record.status,effectiveAt:record.effectiveAt,error:record.error??null}:null;
+/** Sperrzustand der Zeile: eigene Ebene zuerst, dann die Hauptquelle (eine Hauptquellen-Sperre deckt Unterquellen ab). */
+export function resolveCandidateBlock(row:Pick<SourceCandidate,'affiliateId'|'offerId'|'offerUrlId'|'trafficMode'|'level'|'mainValue'|'subValue'>,index:Map<string,SourceBlockRecord>):SourceCandidateBlockState|null{for(const key of sourceCandidateBlockKeys(row)){const state=blockState(index.get(key));if(state)return state}return null}
 /** Zeilen für den Client: gemeinsamer Schlüssel/DOM-Id, aktiver Sperr-Record aus loadBlockIndex, Geldwerte nur mit finance.view. */
 export function prepareSourceCandidateRows(rows:SourceCandidate[],index:Map<string,SourceBlockRecord>,options:{finance:boolean}):SourceCandidateRow[]{
- return rows.map(row=>({...row,key:sourceCandidateKey(row),domId:sourceCandidateDomId(row),revenue:options.finance?row.revenue:null,payout:options.finance?row.payout:null,profit:options.finance?row.profit:null,block:blockState(index.get(sourceCandidateBlockKey(row)))}));
+ return rows.map(row=>({...row,key:sourceCandidateKey(row),domId:sourceCandidateDomId(row),revenue:options.finance?row.revenue:null,payout:options.finance?row.payout:null,profit:options.finance?row.profit:null,block:resolveCandidateBlock(row,index),blockable:isBlockableCandidate(row)}));
 }
 const haystack=(row:SourceCandidateRow)=>[row.affiliate,`#${row.affiliateId}`,row.affiliateId,row.offer,`#${row.offerId}`,row.offerId,row.offerUrl,row.mainValue??'',row.subValue??''].join(' ').toLowerCase();
 export const matchesSourceCandidateFilters=(row:SourceCandidateRow,filters:SourceCandidateFilters)=>{

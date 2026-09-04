@@ -71,11 +71,35 @@ describe('Leitstand block status via block index',()=>{
   expect(leitstandRow(rows.mild,map).block.state).toBe('error');
   expect(leitstandRow(rows.tiny,map).block.state).toBe('inactive');
  });
+ it('lets an active main-source block cover its sub-source candidates and keeps the rest leaf non-blockable',async()=>{
+  const{leitstandRow,countLeitstand}=await import('./leitstand');
+  const main=candidate({mainValue:'net',trafficMode:'api'}),sub=candidate({mainValue:'net',subValue:'pl-9',level:'sub_source',trafficMode:'api',profit:-40}),rest=candidate({mainValue:'net',subValue:null,level:'sub_source',trafficMode:'api',profit:-5});
+  const covered=leitstandRow(sub,index([[main,'active']]));
+  expect(covered.block).toEqual({state:'active',since:'2026-09-01T10:15:00Z',id:'blk-net-active'});
+  expect(covered.blockable).toBe(true);
+  expect(leitstandRow(sub,index([[main,'inactive']])).block.state).toBe('inactive');
+  expect(leitstandRow(sub,index([[sub,'inactive'],[main,'active']])).block.state).toBe('active');
+  const restRow=leitstandRow(rest,new Map());
+  expect(restRow.blockable).toBe(false);expect(restRow.block.state).toBe('none');
+  expect(countLeitstand([sub,rest],index([[main,'active']]))).toEqual({openKill:0,activeBlocks:1,incidents:0});
+  expect(countLeitstand([sub,rest],new Map())).toEqual({openKill:1,activeBlocks:0,incidents:0});
+ });
  it('maps API sub-sources onto adv1/adv2 identities like the block index does',async()=>{
   const{leitstandRow}=await import('./leitstand');
   const row=leitstandRow(rows.sub,index([[rows.sub,'active']]));
   expect(row.block.state).toBe('active');
   expect(row.source).toBe('net → pl-7');
+ });
+});
+
+describe('Rollup staleness',()=>{
+ it('warns when the rollup is older than two hours and stays quiet otherwise',async()=>{
+  const{rollupStaleWarning,ROLLUP_STALE_AFTER_MS}=await import('./leitstand');
+  const now=new Date('2026-09-04T15:00:00Z');
+  expect(rollupStaleWarning('2026-09-04T13:47:00Z',now)).toBeNull();
+  expect(rollupStaleWarning('2026-09-04T10:47:00Z',now)).toBe('Rollup ist 4 Stunden alt – der Rollups-Cron (stündlich um :47) hat seitdem nicht geschrieben.');
+  expect(rollupStaleWarning('kaputt',now)).toBeNull();
+  expect(ROLLUP_STALE_AFTER_MS).toBe(7_200_000);
  });
 });
 

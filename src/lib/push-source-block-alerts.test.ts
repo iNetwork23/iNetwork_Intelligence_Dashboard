@@ -5,13 +5,14 @@ import{dispatchPushOutbox,enqueuePushAlert,enqueueSourceBlockManagerAlert,mayRec
 import{parseAccessMetadata}from'./rbac';
 const keys=()=>({p256dh:createECDH('prime256v1').generateKeys().toString('base64url'),auth:Buffer.alloc(16,1).toString('base64url')});
 const subscribe=(store:MemorySecurityStore,userId:string)=>savePushSubscription(userId,{endpoint:`https://fcm.googleapis.com/${userId}`,expirationTime:null,keys:keys()},'test',store);
-const access={manager:parseAccessMetadata({role:'admin'}),employee:parseAccessMetadata({role:'employee',grants:['landingpages.manage','api.manage']}),automationOnly:parseAccessMetadata({role:'employee',grants:['automations.manage','campaigns.edit']}),partner:parseAccessMetadata({role:'partner',grants:['landingpages.manage','api.manage'],scopes:{affiliate:['30']}}),readOnly:parseAccessMetadata({role:'read_only'})};
+const access={manager:parseAccessMetadata({role:'admin'}),employee:parseAccessMetadata({role:'employee',grants:['landingpages.manage','api.manage','finance.view']}),blockerWithoutFinance:parseAccessMetadata({role:'employee',grants:['landingpages.manage','api.manage'],denials:['finance.view']}),automationOnly:parseAccessMetadata({role:'employee',grants:['automations.manage','campaigns.edit']}),partner:parseAccessMetadata({role:'partner',grants:['landingpages.manage','api.manage'],scopes:{affiliate:['30']}}),readOnly:parseAccessMetadata({role:'read_only'})};
 const outboxRows=(store:MemorySecurityStore)=>[...store.values.entries()].filter(([key])=>key.startsWith('push:outbox:v1:')).map(([,value])=>value as Record<string,unknown>);
 
 describe('push audience for source block managers',()=>{
- it('requires an internal role with landingpages.manage and api.manage',()=>{
+ it('requires an internal role with landingpages.manage, api.manage and finance.view (the alert names the amount)',()=>{
   expect(mayReceiveSourceBlockAlerts(access.manager)).toBe(true);
   expect(mayReceiveSourceBlockAlerts(access.employee)).toBe(true);
+  expect(mayReceiveSourceBlockAlerts(access.blockerWithoutFinance)).toBe(false);
   expect(mayReceiveSourceBlockAlerts(access.automationOnly)).toBe(false);
   expect(mayReceiveSourceBlockAlerts(access.partner)).toBe(false);
   expect(mayReceiveSourceBlockAlerts(access.readOnly)).toBe(false);
@@ -21,6 +22,9 @@ describe('push audience for source block managers',()=>{
   expect(await enqueueSourceBlockManagerAlert('payout_despite_block:a:2026-09-04',{title:'Payout trotz Sperre',body:'Text',path:'/source-blocks'},store)).toBe(true);
   expect(await enqueueSourceBlockManagerAlert('payout_despite_block:a:2026-09-04',{title:'Payout trotz Sperre',body:'Text',path:'/source-blocks'},store)).toBe(false);
   expect(outboxRows(store)).toEqual([expect.objectContaining({version:1,audience:{kind:'sperrberechtigte'},payload:{title:'Payout trotz Sperre',body:'Text',path:'/source-blocks',tag:'wlx-alert'}})]);
+  const[deliveredKey]=[...store.values.keys()].filter(key=>key.startsWith('push:outbox:v1:'));await store.set(deliveredKey,{version:2,createdAt:'2026-09-04T09:27:00.000Z',deliveredAt:'2026-09-04T09:27:10.000Z'});
+  expect(await enqueueSourceBlockManagerAlert('payout_despite_block:a:2026-09-04',{title:'Payout trotz Sperre',body:'Text',path:'/source-blocks'},store)).toBe(false);
+  expect(await enqueueSourceBlockManagerAlert('payout_despite_block:a:2026-09-05',{title:'Payout trotz Sperre',body:'Text',path:'/source-blocks'},store)).toBe(true);
   await expect(enqueuePushAlert('x',{title:'T',body:'B',path:'/'},{kind:'sperrberechtigte',affiliateId:1} as unknown as typeof SOURCE_BLOCK_MANAGER_AUDIENCE,store)).rejects.toThrow(/Audience/);
   await expect(enqueuePushAlert('y',{title:'T',body:'B',path:'/'},{kind:'andere'} as unknown as typeof SOURCE_BLOCK_MANAGER_AUDIENCE,store)).rejects.toThrow(/Audience/);
  });

@@ -15,3 +15,8 @@ export const sourceCandidateHref=(row:SourceCandidateIdentity,range:SourceCandid
 /** Identität für den Sperr-Index (sourceBlockIdentityKey): Feldnamen folgen dem Traffic-Modus wie in SourceBreakdown. */
 export const sourceCandidateBlockIdentity=(row:SourceCandidateIdentity)=>({affiliateId:Number(row.affiliateId),offerId:Number(row.offerId),trafficMode:row.trafficMode,level:row.level,mainField:(row.trafficMode==='api'?'adv1':'source_id') as 'adv1'|'source_id',mainValue:row.mainValue,subField:(row.trafficMode==='api'?'adv2':'sub1') as 'adv2'|'sub1',subValue:row.subValue});
 export const sourceCandidateBlockKey=(row:SourceCandidateIdentity)=>sourceBlockIdentityKey(sourceCandidateBlockIdentity(row));
+/** Schlüssel im Sperr-Index, eigene Ebene zuerst: eine aktive Hauptquellen-Sperre deckt ihre Unterquellen ab (wie sourceRowBlockKeys in source-block-markers.ts). */
+export const sourceCandidateBlockKeys=(row:SourceCandidateIdentity)=>{const keys=[sourceCandidateBlockKey(row)];if(row.level==='sub_source')keys.push(sourceCandidateBlockKey({...row,level:'main_source',subValue:null}));return keys};
+/** Das Restblatt „ohne Unterquelle“ (Unterquellen-Ebene ohne Wert) ist nur über die Hauptquelle sperrbar. */
+export const isBlockableCandidate=(row:Pick<SourceCandidateIdentity,'level'|'subValue'>)=>!(row.level==='sub_source'&&row.subValue===null);
+export const NOT_BLOCKABLE_HINT='nur über Hauptquelle sperrbar';

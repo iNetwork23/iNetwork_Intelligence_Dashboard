@@ -10,7 +10,10 @@ import type{ReportRow}from'./portfolio';
 
 /** Accountweite Quell-Kandidaten (Blätter mit Handlungsbedarf) für den Leitstand – im Rollups-Cron je Zeitraum vorberechnet. */
 export type SourceCandidate={affiliateId:string;affiliate:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'tracked'|'api';level:'main_source'|'sub_source';mainValue:string|null;subValue:string|null;action:'SKALIEREN'|'BEOBACHTEN'|'ABSCHALTEN';severity:'positive'|'neutral'|'warning'|'critical';reason:string;clicks:number;sois:number;firstSales:number;rebills:number;revenue:number;payout:number;profit:number;lastLeadDate:string|null;leadStatus:string|null};
-export type SourceCandidatesSnapshot={version:1;range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;rows:SourceCandidate[]};
+export type SourceCandidatesSnapshot={version:1;range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;rows:SourceCandidate[];rowsTruncated?:boolean};
+/** D10: Deckel je Aktion (Verluste zuerst), damit Snapshot, Cache-Eintrag und RSC-Payload begrenzt bleiben. */
+export const CANDIDATE_ROW_LIMITS:Record<SourceCandidate['action'],number>={ABSCHALTEN:800,BEOBACHTEN:400,SKALIEREN:300};
+export function capSourceCandidates(rows:SourceCandidate[]):{rows:SourceCandidate[];truncated:boolean}{const kept:SourceCandidate[]=[],seen:Record<string,number>={};let truncated=false;for(const row of rows){const count=seen[row.action]??0;if(count>=CANDIDATE_ROW_LIMITS[row.action]){truncated=true;continue}seen[row.action]=count+1;kept.push(row)}return{rows:kept,truncated}}
 export const sourceCandidatesKey=(range:{from:string;to:string})=>`source_candidates:v1:${range.from}:${range.to}`;
 export const DEFAULT_CANDIDATE_TIME_BUDGET_MS=150_000,CANDIDATE_CONCURRENCY=4;
 const WINDOW='days30' as const;
@@ -38,15 +41,20 @@ export async function buildSourceCandidatesSnapshot(range:{from:string;to:string
  const coverage=resolveActivityCoverage(activityRange.from,freshness),affiliates=[...portfolio.affiliates].sort((a,b)=>b.sois-a.sois||b.clicks-a.clicks||a.id.localeCompare(b.id)),rows:SourceCandidate[]=[];
  let processed=0,failed=0,cursor=0;
  const worker=async()=>{while(cursor<affiliates.length&&!exhausted()){const affiliate=affiliates[cursor++];
-  try{const raw=await loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),index=await loadAffiliateActivityIndex(affiliate.id,activityRange),evaluated=attachSourceActivityFromIndex(mergeSourceWindows(raw,raw,raw),index,coverage);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name)));processed++}
+  try{const raw=await loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),index=await loadAffiliateActivityIndex(affiliate.id,activityRange),evaluated=attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),index,coverage);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name)));processed++}
   catch(error){failed++;console.error(`Source candidates skipped affiliate ${affiliate.id}`,error)}}};
  await Promise.all(Array.from({length:Math.min(CANDIDATE_CONCURRENCY,Math.max(1,affiliates.length))},worker));
  rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
- return{version:1,range:{from:range.from,to:range.to},generatedAt:new Date().toISOString(),affiliates:affiliates.length,affiliatesProcessed:processed,coverageComplete:processed===affiliates.length&&failed===0,rows};
+ const capped=capSourceCandidates(rows.filter(row=>row.action!=='SKALIEREN').concat([...rows.filter(row=>row.action==='SKALIEREN')].sort((a,b)=>b.profit-a.profit)));
+ capped.rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
+ return{version:1,range:{from:range.from,to:range.to},generatedAt:new Date().toISOString(),affiliates:affiliates.length,affiliatesProcessed:processed,coverageComplete:processed===affiliates.length&&failed===0,rows:capped.rows,...(capped.truncated?{rowsTruncated:true}:{})};
 }
 /** build + upsert sync_state {key:sourceCandidatesKey(range),value:snapshot}. */
-export async function publishSourceCandidates(range:{from:string;to:string},options?:{now?:Date;timeBudgetMs?:number}):Promise<{rows:number;coverageComplete:boolean}>{
+/** Ein unvollständiger Lauf (Zeitbudget) überschreibt einen vollständigen Snapshot erst, wenn dieser älter als 6 h ist; der Leitstand zeigt das Rollup-Alter ohnehin an. */
+export const INCOMPLETE_OVERWRITE_AFTER_MS=6*60*60_000;
+export async function publishSourceCandidates(range:{from:string;to:string},options?:{now?:Date;timeBudgetMs?:number}):Promise<{rows:number;coverageComplete:boolean;kept?:boolean}>{
  const snapshot=await buildSourceCandidatesSnapshot(range,options);
+ if(!snapshot.coverageComplete){const previous=await readStoredSnapshot(range).catch(()=>null);if(previous?.coverageComplete&&Date.parse(snapshot.generatedAt)-Date.parse(previous.generatedAt)<INCOMPLETE_OVERWRITE_AFTER_MS)return{rows:previous.rows.length,coverageComplete:true,kept:true}}
  const{error}=await getSupabaseAdmin().from('sync_state').upsert({key:sourceCandidatesKey(range),value:snapshot},{onConflict:'key'});
  if(error)throw new Error(`Supabase source candidates: ${error.message}`);
  return{rows:snapshot.rows.length,coverageComplete:snapshot.coverageComplete};
@@ -55,11 +63,12 @@ export const isValidSourceCandidatesSnapshot=(value:unknown,range:{from:string;t
 const scopedRow=(row:SourceCandidate)=>({row,affiliate_id:row.affiliateId,offer_id:row.offerId,campaign_id:'0',source_id:row.mainValue??'',sub_source:row.subValue??''});
 /** Partner-Scope wie rbac.filterPartnerRows: leerer Scope → keine Zeilen; jede gesetzte Scope-Dimension muss passen. */
 export const scopeSourceCandidates=(rows:SourceCandidate[],access:AccessMetadata)=>access.role==='partner'?filterPartnerRows(rows.map(scopedRow),access).map(x=>x.row):rows;
-const loadSnapshot=(range:{from:string;to:string})=>unstable_cache(async()=>{
+async function readStoredSnapshot(range:{from:string;to:string}):Promise<SourceCandidatesSnapshot|null>{
  const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',sourceCandidatesKey(range)).maybeSingle();
  if(error)throw new Error(`Supabase source candidates: ${error.message}`);
  return isValidSourceCandidatesSnapshot(data?.value,range)?data.value:null;
-},['source-candidates-v1',range.from,range.to],{revalidate:120,tags:['source-candidates']})();
+}
+const loadSnapshot=(range:{from:string;to:string})=>unstable_cache(()=>readStoredSnapshot(range),['source-candidates-v1',range.from,range.to],{revalidate:120,tags:['source-candidates']})();
 /** Liest den vorberechneten Key (120 s Cache); fehlt er → null (fail-closed). Partner sehen nur Zeilen im eigenen Scope. */
 export async function loadSourceCandidates(range:{from:string;to:string},access:AccessMetadata):Promise<SourceCandidatesSnapshot|null>{
  if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');

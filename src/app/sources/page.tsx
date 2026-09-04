@@ -14,7 +14,8 @@ import AccessDeniedHint from'../components/AccessDeniedHint';
 import InstantLink from'../affiliates/InstantLink';
 import SourceCandidateList from'./SourceCandidateList';
 export const dynamic='force-dynamic';
-const dateTime=(value:string)=>new Intl.DateTimeFormat('de-DE',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Berlin'}).format(new Date(value));
+import{berlinDateTime}from'@/lib/format-berlin';
+import{rollupStaleWarning}from'@/lib/leitstand';
 const RANGE_LABEL={'7d':'7 Tage','30d':'30 Tage'} as const;
 type Params={range?:string;open?:string;action?:string;mode?:string;q?:string;blocked?:string;sort?:string};
 /** Partnerübergreifende Quellenliste aus dem Rollup-Snapshot (Cron :47); Gate wie die anderen internen Datenseiten, Partner sehen nichts (D7). */
@@ -34,7 +35,9 @@ export default async function SourcesPage({searchParams}:{searchParams:Promise<P
   <DataStatusBar status={dataStatus}/>
   {rangeSwitch}
   {snapshot?<>
-   <p className="sourcesRollup" role="status">Rollup vom {dateTime(snapshot.generatedAt)} · {snapshot.affiliatesProcessed} von {snapshot.affiliates} Partnern · {rows.length} Kandidaten</p>
+   <p className="sourcesRollup" role="status">Rollup vom {berlinDateTime(snapshot.generatedAt)} · {snapshot.affiliatesProcessed} von {snapshot.affiliates} Partnern · {rows.length} Kandidaten</p>
+   {rollupStaleWarning(snapshot.generatedAt)&&<section className="sourcesWarning" role="alert"><strong>Rollup veraltet</strong><span>{rollupStaleWarning(snapshot.generatedAt)}</span></section>}
+   {snapshot.rowsTruncated&&<section className="sourcesWarning" role="status"><strong>Liste gekappt</strong><span>Der Rollup enthält je Verdikt nur die wichtigsten Zeilen (Verluste zuerst); weitere Quellen bleiben im Affiliate-Bereich sichtbar.</span></section>}
    {!snapshot.coverageComplete&&<section className="sourcesWarning" role="alert"><strong>Rollup unvollständig</strong><span>{snapshot.affiliatesProcessed} von {snapshot.affiliates} Partnern wurden innerhalb des Zeitbudgets ausgewertet. Quellen fehlender Partner sind nicht bewertet und fehlen in dieser Liste.</span></section>}
    {blockIndexError&&<section className="sourcesWarning" role="alert"><strong>Sperrstatus nicht lesbar</strong><span>Der Sperr-Index konnte nicht geladen werden. Sperrstatus und Sperr-Aktionen sind deshalb ausgeblendet.</span></section>}
    <SourceCandidateList rows={rows} range={range} openKey={openKey} initialFilters={filters} initialSort={sort} mayBlock={mayBlock} finance={finance} blockStatusUnknown={blockIndexError}/>

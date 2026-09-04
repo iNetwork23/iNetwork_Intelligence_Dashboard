@@ -543,3 +543,4 @@ a.blockMarker:hover,a.blockMarker:focus-visible{background:var(--fill-hover);tex
 .cockpitList .topNToggle{margin-top:0;border-width:1px 0 0;border-radius:0}
 .cockpitList li a{min-height:44px}
 .cockpitList li a .cockpitBlocked{grid-column:2/span 2;grid-row:4;margin-top:2px;color:var(--negative);font-size:10px;font-weight:700;line-height:1.4}
+.sourceBlockHistoryToggle{min-height:44px}.sourcesNotBlockable{color:var(--text-muted);font-size:11px}.sourceBlockReconcileRun{margin:6px 0 0;color:var(--text-secondary);font-size:11px}@media(max-width:760px){.leitstandRowTitle,.leitstandPending,.leitstandIncident,.sourcesBlockLink{min-height:44px;display:inline-flex;align-items:center}}
