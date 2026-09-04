@@ -2,6 +2,8 @@ import type { LeadLatencyAnalysis, UrlLeadMaturity } from "@/lib/lead-latency";
 import type { SnapshotFreshness } from "@/lib/snapshot-generation";
 import type { AffiliateVariant } from "@/lib/affiliate-optimizer";
 import { cr, duration, eur, num } from "./affiliate-format";
+import { signTone } from "@/lib/verdict-vocabulary";
+import { toneClass } from "@/lib/verdict-trust";
 
 export function ProfitPeriod({
   label,
@@ -13,7 +15,7 @@ export function ProfitPeriod({
   return (
     <article className="profitPeriod">
       <span>{label}</span>
-      <b className={m.profit >= 0 ? "up" : "down"}>{eur(m.profit)} Profit</b>
+      <b className={toneClass(signTone(m.profit, m))}>{eur(m.profit)} Profit</b>
       <small>
         {eur(m.revenue)} Umsatz – {eur(m.payout)} SOI-Vergütung ={" "}
         {eur(m.profit)} Profit

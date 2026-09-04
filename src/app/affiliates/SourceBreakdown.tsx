@@ -1,8 +1,17 @@
 "use client";
 import SourceGroupPanel from "./SourceTable";
-const moneyVerdict = (profit: number) =>
-  profit > 0 ? ("verdient" as const) : profit < 0 ? ("verbrennt" as const) : ("neutral" as const);
-const moneyVerdictText = { verdient: "Verdient Geld", verbrennt: "Verbrennt Geld", neutral: "Ausgeglichen" } as const;
+import { maturityGateText, signTone, VERDICT_SEVERITY, type Volume } from "../../lib/verdict-vocabulary";
+import { latencyBadge, toneClass, trustLine, type LatencyInput } from "../../lib/verdict-trust";
+import type { VerdictGate } from "../../lib/decision-engine";
+/** Vorzeichen-Verdikt nur über signTone (D15): unter der Reifeschwelle bleibt eine Gruppe neutral, auch bei Verlust. */
+const moneyVerdict = (profit: number, volume: Volume) => {
+  const tone = signTone(profit, volume);
+  return tone === "positive" ? ("verdient" as const) : tone === "negative" ? ("verbrennt" as const) : ("neutral" as const);
+};
+const moneyVerdictText = (profit: number, volume: Volume) => {
+  const verdict = moneyVerdict(profit, volume);
+  return verdict === "verdient" ? "Verdient Geld" : verdict === "verbrennt" ? "Verbrennt Geld" : profit === 0 ? "Ausgeglichen" : "unter Reifeschwelle";
+};
 import CopyValue from "./CopyValue";
 import SourcePairCopy from "./SourcePairCopy";
 import SourcePeriodControls from "./SourcePeriodControls";
@@ -55,10 +64,10 @@ const num = (n: number) => new Intl.NumberFormat("de-DE").format(n),
         : `CVR nicht berechenbar · ${num(m.sois)} SOIs · keine Klicks`,
   actionClass = (action: TrafficAction | string) =>
     action.includes("SKALIEREN")
-      ? "positive"
+      ? VERDICT_SEVERITY.SKALIEREN
       : action.includes("AUSSCHALTEN")
-        ? "critical"
-        : "neutral";
+        ? VERDICT_SEVERITY.AUSSCHALTEN
+        : VERDICT_SEVERITY["WEITER TESTEN"];
 function LeadActivity({ activity }: { activity: LeadActivityModel }) {
   const status = leadActivityStatus(activity),
     date = activity.lastLeadDate
@@ -75,6 +84,16 @@ function LeadActivity({ activity }: { activity: LeadActivityModel }) {
         <em>{status.detail}</em>
       )}
     </span>
+  );
+}
+/** „Trauen oder nicht, und warum“ am Verdikt: Gate der Engine (optional) plus Latenz-Ampel; ohne Gate „Konfidenz: nicht berechnet“. */
+function TrustLine({ gate, metric, latency }: { gate?: VerdictGate; metric: ConversionMetric; latency?: LatencyInput | null }) {
+  const trust = trustLine(gate, metric),
+    badge = latencyBadge(gate, latency);
+  return (
+    <small className={`verdictTrust ${trust.confidence ?? "none"}`} title="Trauen oder nicht, und warum">
+      {trust.text} · <i className={`latencyBadge ${badge.tone}`} title={badge.title}>{badge.label}</i>
+    </small>
   );
 }
 /** Sperrstatus einer Zeile: Link auf /source-blocks nur für Sperrberechtigte (Seite ist dort gegated). */
@@ -101,6 +120,7 @@ export default function SourceBreakdown({
   offerName = "Offer",
   rebillAnalyses = {},
   blocks,
+  latency,
 }: {
   rows: SourceBreakdownRow[];
   apiMode?: boolean;
@@ -115,6 +135,8 @@ export default function SourceBreakdown({
   rebillAnalyses?: Record<string,RebillConcentration>;
   /** Serialisierter Sperr-Index (identityKey → Marker) aus loadBlockIndex; ohne Index keine Marker. */
   blocks?: SourceBlockMarkerIndex;
+  /** Latenz-Aussagekraft des Partners (LeadLatencyAnalysis), falls die Seite sie geladen hat. */
+  latency?: LatencyInput | null;
 }) {
   const reportWindow: BreakdownWindow = "days30",
     [sort, setSort] = useState<BreakdownSort>(initialSort),
@@ -251,7 +273,7 @@ export default function SourceBreakdown({
               <SourceGroupPanel
                 id={disclosureId}
                 key={group.sourceId}
-                verdict={moneyVerdict(group.metric.profit)}
+                verdict={moneyVerdict(group.metric.profit, group.metric)}
                 blocked={Boolean(mainMarker)}
                 head={
                   <>
@@ -274,14 +296,16 @@ export default function SourceBreakdown({
                       >
                         <b>{group.action}</b>
                         <small>{group.actionReason}</small>
+                        <TrustLine gate={(group as { gate?: VerdictGate }).gate ?? (group.leaves.length === 1 ? group.leaves[0].assessment.gate : undefined)} metric={group.metric} latency={latency} />
                       </span>
                     )}
                     <strong>
                       {metric(group.metric, apiMode)}
                       <small
-                        className={group.metric.profit >= 0 ? "up" : "down"}
+                        className={toneClass(signTone(group.metric.profit, group.metric))}
+                        title={moneyVerdict(group.metric.profit, group.metric) === "neutral" && group.metric.profit !== 0 ? maturityGateText : undefined}
                       >
-                        {eur(group.metric.profit)} · {moneyVerdictText[moneyVerdict(group.metric.profit)]}
+                        {eur(group.metric.profit)} · {moneyVerdictText(group.metric.profit, group.metric)}
                       </small>
                     </strong>
                     <i>{apiMode ? "Details" : "Entscheidungen"}</i>
@@ -390,6 +414,7 @@ export default function SourceBreakdown({
                         >
                           <b>{leaf.assessment.action}</b>
                           <small>{leaf.assessment.reason}</small>
+                          <TrustLine gate={leaf.assessment.gate} metric={leaf.metric} latency={latency} />
                         </span>
                       )}
                       <strong>{metric(leaf.metric, apiMode)}</strong>
@@ -403,7 +428,7 @@ export default function SourceBreakdown({
                           leaf.metric.sois === 0 && (
                             <em>Nachlaufender Umsatz ohne neuen Traffic</em>
                           )}
-                        <b className={leaf.metric.profit >= 0 ? "up" : "down"}>
+                        <b className={toneClass(signTone(leaf.metric.profit, leaf.metric))} title={signTone(leaf.metric.profit, leaf.metric) === "neutral" && leaf.metric.profit !== 0 ? maturityGateText : undefined}>
                           {eur(leaf.metric.profit)} Profit
                         </b>
                       </span>
@@ -429,11 +454,11 @@ export default function SourceBreakdown({
           <>
             API · clickless: keine klickbasierten Stop-/Scale-Regeln. Primär
             zählen SOIs, First-Sales, Rebills, Profit und Profit je SOI.{" "}
-            {`Abschalten ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
+            {`Ausschalten ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         ) : (
           <>
-            {`Abschalten ab ${DEAD_TRAFFIC_CLICKS} Klicks ohne SOI, oder ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
+            {`Ausschalten ab ${DEAD_TRAFFIC_CLICKS} Klicks ohne SOI, oder ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         )}
       </footer>

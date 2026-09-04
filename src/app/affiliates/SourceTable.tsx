@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 /**
  * Immer sichtbare Quellen-Gruppe im gemeinsamen Verdikt-Vokabular
- * (verdient / verbrennt / neutral) aller Quellen-Ansichten.
+ * (verdient / verbrennt / neutral) aller Quellen-Ansichten. Das Vorzeichen-Verdikt kommt vom Aufrufer
+ * ausschließlich über signTone (Reife-Gate D15); unter der Reifeschwelle bleibt es neutral.
  * `blocked` kennzeichnet eine Hauptquelle mit aktiver oder unklarer Sperre.
  */
 export default function SourceGroupPanel({
