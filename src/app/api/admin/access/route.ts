@@ -3,11 +3,13 @@ import { cookies } from 'next/headers';
 import { getSupabaseAdmin, getSupabasePasswordAuth } from '@/lib/supabase';
 import { audit, listAudit, requestEvidence, securityStore } from '@/lib/access-store';
 import { currentUser, resolveCurrentUserUncached } from '@/lib/session';
-import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, resolveStoredAccessFromStore, resolveStoredAccessMetadata, STANDARD_ROLES, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
+import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, resolveStoredAccessFromStore, resolveStoredAccessMetadata, STANDARD_ROLES, stripFinance, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
 import { assertRoleIsUnassigned, buildRoleOptions, customRoleBaseRoles, type CustomRoleDefinition } from '@/lib/admin-access-policy';
 import { DuplicateProvisioningIdentityError, parseProvisionedUser, provisionDirectUser, ProvisioningUncertainError } from '@/lib/user-provisioning';
+import { getDashboard } from '@/lib/dashboard-service';
+import { parseScopePreviewInput, previewScopeEntities } from '@/lib/scope-preview';
 export const dynamic = 'force-dynamic';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: securityHeaders });
 type CustomRole = CustomRoleDefinition;
@@ -58,9 +60,23 @@ async function users() {
   }
   return all;
 }
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await currentUser();
   if (!actor) return json({ error: 'Nicht angemeldet' }, 401);
+  const searchParams = new URL(request.url).searchParams;
+  // Etappe 4 (Abnahme G): Scope-Vorschau – welche Partner/Offers würde ein Zugang mit dieser Rolle und diesen Freigaben sehen?
+  // Nur für die Benutzerverwaltung; Portfolio der letzten 30 Tage mit Systemzugriff (nie mit dem Akteur-Scope); Namen und SOIs, keine Geldwerte.
+  if (searchParams.get('preview')==='1') {
+    if (!can(actor.access, 'users.manage')) return json({ error: 'Keine Berechtigung' }, 403);
+    const input = parseScopePreviewInput(searchParams.get('role'), searchParams.get('scopes'));
+    if (!input) return json({ error: 'Ungültige Vorschau-Anfrage' }, 400);
+    try {
+      const portfolio = await getDashboard('30d');
+      return json(stripFinance({ preview: previewScopeEntities(portfolio, input), basis: '30d' }, false));
+    } catch {
+      return json({ error: 'Vorschau derzeit nicht verfügbar' }, 503);
+    }
+  }
   const mayUsers = can(actor.access, 'users.manage'),
     mayRoles = can(actor.access, 'roles.manage'),
     mayAudit = can(actor.access, 'audit.view');
