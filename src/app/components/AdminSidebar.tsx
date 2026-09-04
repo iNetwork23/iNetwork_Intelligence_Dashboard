@@ -25,6 +25,8 @@ type Props={
  maySmartlinks:boolean;
  mayAdmin:boolean;
  maySecurity:boolean;
+ /** Deal-Register (D9): settings.manage, interne Rolle – gleiche Regel wie /settings/deals; Shell übergibt den Wert. */
+ maySettings?:boolean;
  oneSignalConfigured:boolean;
  capabilityLabel:string;
  writeAccess:boolean;
@@ -75,6 +77,7 @@ export default function AdminSidebar(props:Props){
   {href:"/source-blocks",label:"Gesperrte Quellen",icon:"rotation" as const,show:props.maySourceBlocks,badge:props.sourceBlocksBadge,badgeLabel:"aktive Sperren"},
   {href:"/settings/app",label:"App & Hinweise",icon:"monitor" as const,show:!props.impersonating},
   {href:"/settings/security",label:"Sicherheit",icon:"lock" as const,show:props.maySecurity},
+  {href:"/settings/deals",label:"Sonderdeals",icon:"layers" as const,show:props.maySettings===true},
  ];
  const active=(href:string)=>href==="/"?pathname===href:pathname.startsWith(href);
  const orderedItems=[...items].sort((a,b)=>order.indexOf(a.href)-order.indexOf(b.href)),visibleItems=orderedItems.filter(item=>item.show),visibleRoutes=visibleItems.map(item=>item.href);

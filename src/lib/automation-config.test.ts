@@ -87,6 +87,14 @@ describe('automation configuration',()=>{
   expect(rec.rationale.join(' ')).toContain('95');
  });
 
+ it('reads the partner maturity window from the deal register and falls back to 168 h',()=>{
+  const base={variantCount:3,baselineCvr:0.01,clicksPerDay:1500,soisPerDay:15};
+  expect(recommendAutomationThresholds({...base,affiliateId:32}).maturityHours).toBe(168);
+  expect(recommendAutomationThresholds({...base,affiliateId:436},[]).maturityHours).toBe(168);
+  expect(recommendAutomationThresholds({...base,affiliateId:32},[{affiliateId:32,maturityHours:240,note:'',updatedAt:'',updatedBy:'t'}]).maturityHours).toBe(240);
+  expect(recommendAutomationThresholds({...base,affiliateId:32},[{affiliateId:32,campaignId:9,maturityHours:240,note:'',updatedAt:'',updatedBy:'t'}]).maturityHours).toBe(168);
+ });
+
  it('fails closed when no finite traffic baseline is available',()=>{
   const rec=recommendAutomationThresholds({variantCount:9,baselineCvr:Number.NaN,clicksPerDay:0,soisPerDay:0,affiliateId:32});
   expect(rec.confidence).toBe('insufficient_data');
