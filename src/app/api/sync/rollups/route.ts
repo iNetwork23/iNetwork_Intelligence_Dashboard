@@ -16,7 +16,8 @@ type CandidateResult={rows:number;coverageComplete:boolean}|{error:string};
 async function publishSourceCandidateRanges(started:number){
  const sourceCandidates:Record<'7d'|'30d',CandidateResult>={'7d':{error:'nicht gestartet'},'30d':{error:'nicht gestartet'}};
  for(const[index,period]of CANDIDATE_PERIODS.entries()){
-  try{const range=reportingRange(period);sourceCandidates[period]=await publishSourceCandidates({from:range.from!,to:range.to},{timeBudgetMs:sourceCandidateBudgetMs(Date.now()-started,CANDIDATE_PERIODS.length-index)})}
+  const rangeStarted=Date.now();
+  try{const range=reportingRange(period);sourceCandidates[period]=await publishSourceCandidates({from:range.from!,to:range.to},{timeBudgetMs:sourceCandidateBudgetMs(rangeStarted-started,CANDIDATE_PERIODS.length-index)});console.info(`Source candidates ${period}: ${JSON.stringify(sourceCandidates[period])} in ${Date.now()-rangeStarted} ms (route elapsed ${Date.now()-started} ms)`)}
   catch(error){console.error(`Source candidates ${period} failed`,error);sourceCandidates[period]={error:error instanceof Error?error.message:'Quell-Kandidaten konnten nicht berechnet werden'}}
  }
  try{revalidateTag('source-candidates',{expire:0})}catch(error){console.error('Source candidates revalidate failed',error)}

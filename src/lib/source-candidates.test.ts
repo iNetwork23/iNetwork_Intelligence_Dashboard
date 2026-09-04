@@ -166,7 +166,8 @@ describe('rollups route hook',()=>{
   expect(route).toContain('maxDuration=240');
   expect(route).toContain("const CANDIDATE_PERIODS=['30d','7d']as const");
   expect(route).toContain('for(const[index,period]of CANDIDATE_PERIODS.entries())');
-  expect(route).toContain('sourceCandidateBudgetMs(Date.now()-started,CANDIDATE_PERIODS.length-index)');
+  expect(route).toContain('sourceCandidateBudgetMs(rangeStarted-started,CANDIDATE_PERIODS.length-index)');
+  expect(route).toContain('console.info(`Source candidates ${period}:');
   expect(route).toMatch(/try\{const range=reportingRange\(period\);sourceCandidates\[period\]=await publishSourceCandidates\(/);
   expect(route).toContain('catch(error){console.error(`Source candidates ${period} failed`,error)');
   expect(route).toContain('sourceCandidates:await publishSourceCandidateRanges(started)');
