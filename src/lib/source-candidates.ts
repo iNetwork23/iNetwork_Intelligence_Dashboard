@@ -1,15 +1,18 @@
 import{unstable_cache}from'next/cache';
 import{getSupabaseAdmin}from'./supabase';
 import{loadPortfolioFromCache}from'./supabase-reporting';
-import{loadAffiliateActivityIndex,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
+import{loadAffiliateActivityIndex,loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
+import{analyzeLeadLatency}from'./lead-latency';
+import{buildLeadMaturityIndex,noLeadMaturityIndex,type LeadMaturityIndex}from'./lead-maturity';
+import type{VerdictGate}from'./decision-engine';
 import{resolveActivityCoverage}from'./snapshot-generation';
 import{resolveSourcePeriod}from'./source-period';
-import{attachSourceActivityFromIndex,groupSources,leadActivityStatus,mergeSourceWindows,type SourceBreakdownRow,type TrafficLeaf}from'./source-breakdown';
+import{attachSourceActivityFromIndex,attachSourceMaturity,groupSources,leadActivityStatus,mergeSourceWindows,type SourceBreakdownRow,type TrafficLeaf}from'./source-breakdown';
 import{filterPartnerRows,type AccessMetadata}from'./rbac';
 import type{ReportRow}from'./portfolio';
 
 /** Accountweite Quell-Kandidaten (Blätter mit Handlungsbedarf) für den Leitstand – im Rollups-Cron je Zeitraum vorberechnet. */
-export type SourceCandidate={affiliateId:string;affiliate:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'tracked'|'api';level:'main_source'|'sub_source';mainValue:string|null;subValue:string|null;action:'SKALIEREN'|'BEOBACHTEN'|'AUSSCHALTEN';severity:'positive'|'neutral'|'warning'|'critical';reason:string;clicks:number;sois:number;firstSales:number;rebills:number;revenue:number;payout:number;profit:number;lastLeadDate:string|null;leadStatus:string|null};
+export type SourceCandidate={affiliateId:string;affiliate:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'tracked'|'api';level:'main_source'|'sub_source';mainValue:string|null;subValue:string|null;action:'SKALIEREN'|'BEOBACHTEN'|'AUSSCHALTEN';severity:'positive'|'neutral'|'warning'|'critical';reason:string;clicks:number;sois:number;firstSales:number;rebills:number;revenue:number;payout:number;profit:number;lastLeadDate:string|null;leadStatus:string|null;/** „Trauen oder nicht, und warum“ (Etappe 3); ältere Snapshots tragen kein gate. */gate?:VerdictGate};
 export type SourceCandidatesSnapshot={version:1;range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;rows:SourceCandidate[];rowsTruncated?:boolean};
 /** D10: Deckel je Aktion (Verluste zuerst), damit Snapshot, Cache-Eintrag und RSC-Payload begrenzt bleiben. */
 export const CANDIDATE_ROW_LIMITS:Record<SourceCandidate['action'],number>={AUSSCHALTEN:800,BEOBACHTEN:400,SKALIEREN:300};
@@ -30,7 +33,7 @@ export function evaluateSourceCandidates(rows:SourceBreakdownRow[],labels:Labels
  for(const bucket of byUrl.values()){const first=bucket[0],names=labels.paths.get(`${first.offerId}|${first.offerUrlId}`)||{offer:first.offerId,offerUrl:first.offerUrlId};
   for(const group of groupSources(bucket,WINDOW,'sois'))for(const leaf of group.leaves){if(!isCandidate(leaf))continue;
    const source=leaf.subSource===null?bucket.find(row=>row.sourceId===group.sourceId):bucket.find(row=>row.sourceId===group.sourceId&&row.subSource===leaf.subSource),m=leaf.metric,severity=leaf.assessment.action==='BEOBACHTEN'?'warning':leaf.assessment.severity;
-   out.push({affiliateId:first.affiliateId,affiliate:labels.affiliate,offerId:first.offerId,offer:names.offer,offerUrlId:first.offerUrlId,offerUrl:names.offerUrl,trafficMode:first.trafficMode,level:leaf.subSource===null?'main_source':'sub_source',mainValue:source?.mainValue??null,subValue:leaf.subSource===null?null:source?.subValue??null,action:leaf.assessment.action,severity,reason:leaf.assessment.reason,clicks:m.clicks,sois:m.sois,firstSales:m.firstSales,rebills:m.rebills,revenue:money(m.revenue),payout:money(m.payout),profit:money(m.profit),lastLeadDate:leaf.activity.lastLeadDate,leadStatus:leaf.activity.asOf?leadActivityStatus(leaf.activity).label:null})}}
+   out.push({affiliateId:first.affiliateId,affiliate:labels.affiliate,offerId:first.offerId,offer:names.offer,offerUrlId:first.offerUrlId,offerUrl:names.offerUrl,trafficMode:first.trafficMode,level:leaf.subSource===null?'main_source':'sub_source',mainValue:source?.mainValue??null,subValue:leaf.subSource===null?null:source?.subValue??null,action:leaf.assessment.action,severity,reason:leaf.assessment.reason,clicks:m.clicks,sois:m.sois,firstSales:m.firstSales,rebills:m.rebills,revenue:money(m.revenue),payout:money(m.payout),profit:money(m.profit),lastLeadDate:leaf.activity.lastLeadDate,leadStatus:leaf.activity.asOf?leadActivityStatus(leaf.activity).label:null,...(leaf.assessment.gate?{gate:leaf.assessment.gate}:{})})}}
  return out.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
 }
 /** Accountweit mit Systemzugriff (ohne Partner-Scope): Affiliates aus dem Portfolio des Zeitraums, je Affiliate bestehende Cache-Leser; Fehler je Affiliate überspringen, Zeitbudget einhalten. */
@@ -40,8 +43,10 @@ export async function buildSourceCandidatesSnapshot(range:{from:string;to:string
  const[portfolio,freshness]=await Promise.all([loadPortfolioFromCache('custom',getSupabaseAdmin(),now,range),loadSourceSnapshotFreshness(activityRange)]);
  const coverage=resolveActivityCoverage(activityRange.from,freshness),affiliates=[...portfolio.affiliates].sort((a,b)=>b.sois-a.sois||b.clicks-a.clicks||a.id.localeCompare(b.id)),rows:SourceCandidate[]=[];
  let processed=0,failed=0,cursor=0;
+ /** Reife-Index (D3) aus den Conversions des Partners; Fehler → „keine Daten“ (fail-closed), der Partner wird trotzdem bewertet. */
+ const loadMaturity=async(affiliateId:string):Promise<LeadMaturityIndex>=>{try{const conversions=await loadAffiliateConversionsFromCache(affiliateId,90,now);return buildLeadMaturityIndex(conversions,analyzeLeadLatency(conversions,now),range,now)}catch(error){console.error(`Source candidates: lead maturity unavailable for affiliate ${affiliateId}`,error);return noLeadMaturityIndex(range,now)}};
  const worker=async()=>{while(cursor<affiliates.length&&!exhausted()){const affiliate=affiliates[cursor++];
-  try{const raw=await loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),index=await loadAffiliateActivityIndex(affiliate.id,activityRange),evaluated=attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),index,coverage);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name)));processed++}
+  try{const[raw,index,maturity]=await Promise.all([loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),loadAffiliateActivityIndex(affiliate.id,activityRange),loadMaturity(affiliate.id)]),evaluated=attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),index,coverage),maturity);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name)));processed++}
   catch(error){failed++;console.error(`Source candidates skipped affiliate ${affiliate.id}`,error)}}};
  await Promise.all(Array.from({length:Math.min(CANDIDATE_CONCURRENCY,Math.max(1,affiliates.length))},worker));
  rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
