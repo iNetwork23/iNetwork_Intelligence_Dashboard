@@ -26,6 +26,7 @@ export default async function DashboardShell({children}:{children:React.ReactNod
    actorId={user.actorId}
    mayStatistics={mayStatistics}
    mayFraud={mayFraud}
+   maySettings={user.access.role!=='partner'&&can(user.access,'settings.manage')}
    mayPartners={can(user.access,'partners.view')}
    mayAutomation={user.access.role!=='partner'&&can(user.access,'campaigns.edit')&&can(user.access,'finance.view')}
    maySourceBlocks={user.access.role!=='partner'&&can(user.access,'landingpages.manage')&&can(user.access,'api.manage')}

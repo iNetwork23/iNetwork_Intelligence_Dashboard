@@ -3,7 +3,7 @@ import {join} from 'node:path';
 import {describe,expect,it} from 'vitest';
 const read=(path:string)=>readFileSync(join(process.cwd(),'src/app',path),'utf8');
 
-const routes=['page.tsx','affiliates/page.tsx','automation/page.tsx','cohorts/page.tsx','admin/access/page.tsx','settings/security/page.tsx'];
+const routes=['page.tsx','affiliates/page.tsx','automation/page.tsx','cohorts/page.tsx','admin/access/page.tsx','settings/security/page.tsx','settings/deals/page.tsx'];
 
 describe('shared professional dashboard header system',()=>{
  it('uses one reusable header across every protected dashboard page',()=>{

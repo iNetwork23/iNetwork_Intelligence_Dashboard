@@ -6,6 +6,8 @@ import {can,filterPartnerRows,foreignScopeRequested,stripFinance,assertScopesSup
 import {buildDailyMetricsExportQuery,exportTruncated,exportTruncationNotice,loadMonthlyExportRows,parseExportGranularity,type ExportFilters,type ExportRow} from '@/lib/export-query';
 import {securityHeaders} from '@/lib/security';
 export const dynamic='force-dynamic';
+/** Monatsaggregat liest bis zu 25 Seiten Tageszeilen – Zeitlimit statt Vercel-Default. */
+export const maxDuration=60;
 const safeCell=(value:unknown)=>{let text=String(value??'');if(/^[=+\-@]/.test(text))text=`'${text}`;return `"${text.replaceAll('"','""')}"`};
 export async function GET(request:NextRequest){
  const auth=await requirePermission('exports.download');if(!auth.ok)return NextResponse.json({error:auth.status===401?'Nicht angemeldet':'Keine Berechtigung'},{status:auth.status,headers:securityHeaders});
