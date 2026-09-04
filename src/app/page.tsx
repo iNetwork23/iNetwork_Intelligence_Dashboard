@@ -13,6 +13,7 @@ import {buildPortfolioCopyReport} from '@/lib/portfolio-copy-report';
 import {companyResultState,filterCompanies} from '@/lib/portfolio-company-search';
 import {can} from '@/lib/rbac';
 import DashboardPeriodControls from './components/DashboardPeriodControls';
+import LeitstandSection from './components/LeitstandSection';
 export const dynamic='force-dynamic';
 const euro=(n:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n);
 const num=(n:number)=>new Intl.NumberFormat('de-DE').format(n);
@@ -25,6 +26,7 @@ export default async function DashboardPage({searchParams}:{searchParams:Promise
  const dataStatus=await getDataStatus(),header=user.access.role==='partner'?partnerHeaderStatus(dataStatus):headerStatus(dataStatus);
  return <main className="dashboard"><DashboardPageHeader kicker="ME Media · Everflow Monitor" title={user.access.role==='partner'?'Freigegebene Partnerdaten':'Gesamter Account'} status={header.label} tone={header.tone} icon="monitor" description={user.access.role==='partner'?'Ausschließlich Ihr zugeordneter Datenscope':'Alle Offers, Affiliates, Smartlinks und Direkt-Traffic auf einen Blick.'}/>
  <DataStatusBar status={dataStatus} audience={user.access.role==='partner'?'partner':'internal'}/>
+ {user.access.role!=='partner'&&<LeitstandSection access={user.access}/>}
  <DashboardPeriodControls period={period} rangeLabel={data.range.label} maxDate={reportingRange('today').to} from={data.range.from??undefined} to={data.range.to}/>
  <section className="kpis">{finance&&<><article className="kpi hero"><span>Account-Profit</span><strong className={data.totals.profit>=0?'up':'down'}>{euro(data.totals.profit)}</strong><small>Profit-EPC {euro(data.totals.profitEpc)}</small></article><article className="kpi"><span>Umsatz</span><strong>{euro(data.totals.revenue)}</strong><small>{euro(data.totals.payout)} Payout</small></article></>}<article className="kpi"><span>Traffic</span><strong>{num(data.totals.clicks)}</strong><small>Klicks</small></article><article className="kpi"><span>SOIs</span><strong>{num(data.totals.sois)}</strong><small>CVR {pct(data.totals.cvr)}</small></article><article className="kpi"><span>Monetarisierung</span><strong>{data.totals.firstSales} / {data.totals.rebills}</strong><small>First-Sales / Rebills</small></article></section>
  {finance&&<section className="portfolioCopyBar"><div><span>PARTNERFERTIGE ÜBERSICHTEN</span><b>Nur Leads und gebuchte Payouts weitergeben</b><small>Umsatz und Profit werden nie kopiert. Es erscheinen nur Firmen und Brands mit Leads.</small></div><PortfolioCopyButton text={buildPortfolioCopyReport(copyInput,{scope:'total'})} label="Gesamtübersicht kopieren"/></section>}
