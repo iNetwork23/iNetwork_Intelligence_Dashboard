@@ -19,7 +19,7 @@ export default function TrafficActionLists({rows,urls,sourcePeriodLabel,blocks,c
   const all=rankSourceMatches(buildActionCandidates(rows,'days30'),deferredQuery,item=>[item.sourceId,item.subSource]);
   const {visible,hidden}=partitionBlockedCandidates(all,blocks);
   return{
-   stop:visible.filter(item=>item.assessment.action==='ABSCHALTEN'),
+   stop:visible.filter(item=>item.assessment.action==='AUSSCHALTEN'),
    scale:visible.filter(item=>item.assessment.action==='SKALIEREN'),
    watch:visible.filter(item=>item.assessment.action==='BEOBACHTEN'),
    hidden,
@@ -33,6 +33,6 @@ export default function TrafficActionLists({rows,urls,sourcePeriodLabel,blocks,c
   <div className="trafficActionSearch"><SourceSearchField value={query} onChange={setQuery} placeholder="Source oder Sub1 in der Maßnahmenliste suchen" scopeId="traffic-actions"/></div>
   <div className="actionReportSummary"><span><b className="down">{stop.length}</b> Abschalten</span><span><b className="up">{scale.length}</b> Skalieren</span><span><b>{watch.length}</b> Beobachten</span></div>
   {hidden.length>0&&<p className="blockedHidden">{hiddenBlockedText(hidden.length)}{canManage&&<a href={SOURCE_BLOCKS_HREF}>Sperren ansehen</a>}</p>}
-  <div className="actionReportColumns"><section><h3>ABSCHALTEN</h3>{list(stop,'stop')}</section><section><h3>SKALIEREN</h3>{list(scale,'scale')}</section></div>
+  <div className="actionReportColumns"><section><h3>AUSSCHALTEN</h3>{list(stop,'stop')}</section><section><h3>SKALIEREN</h3>{list(scale,'scale')}</section></div>
  </section>;
 }

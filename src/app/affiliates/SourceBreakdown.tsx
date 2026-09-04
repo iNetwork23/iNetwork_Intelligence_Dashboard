@@ -56,7 +56,7 @@ const num = (n: number) => new Intl.NumberFormat("de-DE").format(n),
   actionClass = (action: TrafficAction | string) =>
     action.includes("SKALIEREN")
       ? "positive"
-      : action.includes("ABSCHALTEN")
+      : action.includes("AUSSCHALTEN")
         ? "critical"
         : "neutral";
 function LeadActivity({ activity }: { activity: LeadActivityModel }) {

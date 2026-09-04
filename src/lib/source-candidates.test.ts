@@ -31,11 +31,11 @@ describe('sourceCandidatesKey',()=>{it('uses the agreed sync_state namespace',as
 
 describe('evaluateSourceCandidates',()=>{
  const labels={affiliate:'Partner 376',paths:new Map([['8|2766',{offer:'Flirt DE',offerUrl:'LP 2766'}]])};
- it('keeps only leaves with ABSCHALTEN, SKALIEREN or negative BEOBACHTEN and mirrors the partner page leaf logic',async()=>{
+ it('keeps only leaves with AUSSCHALTEN, SKALIEREN or negative BEOBACHTEN and mirrors the partner page leaf logic',async()=>{
   const{evaluateSourceCandidates}=await import('./source-candidates');
   const rows=[bRow({mainValue:'dead',subValue:null,metric:{clicks:150,sois:0}}),bRow({mainValue:'good',subValue:null,metric:{clicks:1000,sois:40,firstSales:5,profit:120.456,revenue:300.001,payout:179.545}}),bRow({mainValue:'young',subValue:null,metric:{clicks:20,sois:2,profit:5}}),bRow({mainValue:'negative',subValue:null,metric:{clicks:50,sois:3,profit:-4}})];
   const out=evaluateSourceCandidates(rows,labels);
-  expect(out.map(x=>[x.mainValue,x.action,x.severity])).toEqual([['negative','BEOBACHTEN','warning'],['dead','ABSCHALTEN','critical'],['good','SKALIEREN','positive']]);
+  expect(out.map(x=>[x.mainValue,x.action,x.severity])).toEqual([['negative','BEOBACHTEN','warning'],['dead','AUSSCHALTEN','critical'],['good','SKALIEREN','positive']]);
   expect(out[2]).toMatchObject({affiliateId:'376',affiliate:'Partner 376',offerId:'8',offer:'Flirt DE',offerUrlId:'2766',offerUrl:'LP 2766',trafficMode:'tracked',level:'main_source',mainValue:'good',subValue:null,clicks:1000,sois:40,firstSales:5,rebills:0,profit:120.46,revenue:300,payout:179.55,lastLeadDate:'2026-09-03',leadStatus:'Kürzlich aktiv'});
   expect(Object.keys(out[0]).sort()).toEqual(['action','affiliate','affiliateId','clicks','firstSales','lastLeadDate','leadStatus','level','mainValue','offer','offerId','offerUrl','offerUrlId','payout','profit','reason','rebills','revenue','severity','sois','subValue','trafficMode'].sort());
  });
@@ -43,15 +43,15 @@ describe('evaluateSourceCandidates',()=>{
   const{evaluateSourceCandidates}=await import('./source-candidates');
   const rows=[bRow({mainValue:'11000',subValue:'news',metric:{clicks:200,sois:0}}),bRow({mainValue:'11000',subValue:null,metric:{clicks:400,sois:30,firstSales:4,profit:50}}),bRow({mainValue:null,subValue:null,metric:{clicks:120,sois:0}})];
   const out=evaluateSourceCandidates(rows,labels);
-  expect(out.map(x=>[x.level,x.mainValue,x.subValue,x.action])).toEqual([['sub_source','11000','news','ABSCHALTEN'],['main_source',null,null,'ABSCHALTEN'],['sub_source','11000',null,'SKALIEREN']]);
+  expect(out.map(x=>[x.level,x.mainValue,x.subValue,x.action])).toEqual([['sub_source','11000','news','AUSSCHALTEN'],['main_source',null,null,'AUSSCHALTEN'],['sub_source','11000',null,'SKALIEREN']]);
  });
  it('uses the offer-URL benchmark like the source breakdown and includes API offers',async()=>{
   const{evaluateSourceCandidates}=await import('./source-candidates');
   const api=[bRow({trafficMode:'api',offerId:'9',offerUrlId:'0',mainValue:'adv-strong',subValue:null,metric:{sois:200,firstSales:60,profit:900}}),bRow({trafficMode:'api',offerId:'9',offerUrlId:'0',mainValue:'adv-weak',subValue:null,metric:{sois:80,firstSales:0,profit:-30}})];
   const out=evaluateSourceCandidates(api,{affiliate:'P',paths:new Map([['9|0',{offer:'Flirt API',offerUrl:'Default'}]])});
-  expect(out.map(x=>[x.mainValue,x.action,x.trafficMode])).toEqual([['adv-weak','ABSCHALTEN','api'],['adv-strong','SKALIEREN','api']]);
+  expect(out.map(x=>[x.mainValue,x.action,x.trafficMode])).toEqual([['adv-weak','AUSSCHALTEN','api'],['adv-strong','SKALIEREN','api']]);
   const underperformer=[bRow({mainValue:'strong',subValue:null,metric:{clicks:1000,sois:200,firstSales:60,profit:900}}),bRow({mainValue:'weak',subValue:null,metric:{clicks:900,sois:80,firstSales:1,profit:-30}})];
-  expect(evaluateSourceCandidates(underperformer,labels).find(x=>x.mainValue==='weak')).toMatchObject({action:'ABSCHALTEN',reason:expect.stringContaining('halber Vergleichswert')});
+  expect(evaluateSourceCandidates(underperformer,labels).find(x=>x.mainValue==='weak')).toMatchObject({action:'AUSSCHALTEN',reason:expect.stringContaining('halber Vergleichswert')});
   expect(evaluateSourceCandidates([underperformer[1]],labels)[0]).toMatchObject({action:'BEOBACHTEN',severity:'warning'});
  });
  it('reports an unknown lead status when the activity index has no coverage',async()=>{
@@ -73,7 +73,7 @@ describe('buildSourceCandidatesSnapshot',()=>{
   expect(loadRows).toHaveBeenCalledWith(range,'376');
   expect(loadIndex).toHaveBeenCalledWith('376',{from:'2025-09-05',to:'2026-09-04'});
   expect(snapshot).toMatchObject({version:1,range,affiliates:3,affiliatesProcessed:2,coverageComplete:false});
-  expect(snapshot.rows.map(x=>[x.affiliateId,x.affiliate,x.offer,x.trafficMode,x.mainValue,x.action])).toEqual([['412','Partner 412','Flirt API','api','adv7','ABSCHALTEN'],['376','Partner 376','Flirt DE','tracked','dead','ABSCHALTEN']]);
+  expect(snapshot.rows.map(x=>[x.affiliateId,x.affiliate,x.offer,x.trafficMode,x.mainValue,x.action])).toEqual([['412','Partner 412','Flirt API','api','adv7','AUSSCHALTEN'],['376','Partner 376','Flirt DE','tracked','dead','AUSSCHALTEN']]);
   expect(snapshot.rows[1]).toMatchObject({lastLeadDate:'2026-06-01',leadStatus:'Vermutlich inaktiv',offerUrl:'LP 2766'});
   expect(Date.parse(snapshot.generatedAt)).toBeGreaterThan(0);
  });
@@ -100,9 +100,9 @@ describe('buildSourceCandidatesSnapshot',()=>{
 describe('capSourceCandidates',()=>{
  it('keeps at most the configured rows per action and flags truncation',async()=>{
   const{capSourceCandidates,CANDIDATE_ROW_LIMITS}=await import('./source-candidates');
-  const make=(action:'ABSCHALTEN'|'BEOBACHTEN'|'SKALIEREN',n:number)=>Array.from({length:n},(_,i)=>({action,profit:-i,affiliateId:'1',offerUrlId:String(i)}) as never);
-  const capped=capSourceCandidates([...make('ABSCHALTEN',CANDIDATE_ROW_LIMITS.ABSCHALTEN+5),...make('SKALIEREN',3)]);
-  expect(capped.truncated).toBe(true);expect(capped.rows.filter(row=>row.action==='ABSCHALTEN')).toHaveLength(CANDIDATE_ROW_LIMITS.ABSCHALTEN);expect(capped.rows.filter(row=>row.action==='SKALIEREN')).toHaveLength(3);
+  const make=(action:'AUSSCHALTEN'|'BEOBACHTEN'|'SKALIEREN',n:number)=>Array.from({length:n},(_,i)=>({action,profit:-i,affiliateId:'1',offerUrlId:String(i)}) as never);
+  const capped=capSourceCandidates([...make('AUSSCHALTEN',CANDIDATE_ROW_LIMITS.AUSSCHALTEN+5),...make('SKALIEREN',3)]);
+  expect(capped.truncated).toBe(true);expect(capped.rows.filter(row=>row.action==='AUSSCHALTEN')).toHaveLength(CANDIDATE_ROW_LIMITS.AUSSCHALTEN);expect(capped.rows.filter(row=>row.action==='SKALIEREN')).toHaveLength(3);
   expect(capSourceCandidates(make('BEOBACHTEN',2))).toEqual({rows:make('BEOBACHTEN',2),truncated:false});
  });
 });
@@ -136,7 +136,7 @@ describe('publishSourceCandidates',()=>{
 });
 
 describe('loadSourceCandidates',()=>{
- const stored=(rows:Array<Partial<Record<string,unknown>>>)=>({version:1,range,generatedAt:'2026-09-04T10:00:00Z',affiliates:2,affiliatesProcessed:2,coverageComplete:true,rows:rows.map(row=>({affiliateId:'376',affiliate:'P',offerId:'8',offer:'O',offerUrlId:'2766',offerUrl:'LP',trafficMode:'tracked',level:'main_source',mainValue:'s1',subValue:null,action:'ABSCHALTEN',severity:'critical',reason:'r',clicks:1,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0,lastLeadDate:null,leadStatus:null,...row}))});
+ const stored=(rows:Array<Partial<Record<string,unknown>>>)=>({version:1,range,generatedAt:'2026-09-04T10:00:00Z',affiliates:2,affiliatesProcessed:2,coverageComplete:true,rows:rows.map(row=>({affiliateId:'376',affiliate:'P',offerId:'8',offer:'O',offerUrlId:'2766',offerUrl:'LP',trafficMode:'tracked',level:'main_source',mainValue:'s1',subValue:null,action:'AUSSCHALTEN',severity:'critical',reason:'r',clicks:1,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0,lastLeadDate:null,leadStatus:null,...row}))});
  it('returns null when the key is missing or belongs to another range (fail-closed)',async()=>{
   const{loadSourceCandidates}=await import('./source-candidates');
   expect(await loadSourceCandidates(range,access('admin'))).toBeNull();

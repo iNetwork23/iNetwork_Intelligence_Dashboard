@@ -25,9 +25,9 @@ const byLoss=(a:SourceCandidate,b:SourceCandidate)=>a.profit-b.profit||b.sois-a.
 const byGain=(a:SourceCandidate,b:SourceCandidate)=>b.profit-a.profit||b.sois-a.sois||identity(a).localeCompare(identity(b));
 /** Erster nicht-inaktiver Record über eigene Ebene und Hauptquelle (eine Hauptquellen-Sperre deckt Unterquellen ab). */
 const blockOf=(row:SourceCandidate,index:BlockIndex)=>{let inactive:SourceBlockRecord|undefined;for(const key of sourceCandidateBlockKeys(row)){const record=index.get(key);if(!record)continue;if(record.status!=='inactive')return record;inactive??=record}return inactive};
-const isOpenKill=(row:SourceCandidate,index:BlockIndex)=>row.action==='ABSCHALTEN'&&isBlockableCandidate(row)&&!RUNNING.has(blockOf(row,index)?.status as SourceBlockRecord['status']);
+const isOpenKill=(row:SourceCandidate,index:BlockIndex)=>row.action==='AUSSCHALTEN'&&isBlockableCandidate(row)&&!RUNNING.has(blockOf(row,index)?.status as SourceBlockRecord['status']);
 /** Top-N Verlustquellen: nur AUSSCHALTEN-Kandidaten, Profit aufsteigend (größter Verlust zuerst). */
-export const rankLosses=(rows:SourceCandidate[],limit=LEITSTAND_TOP_N)=>rows.filter(row=>row.action==='ABSCHALTEN').sort(byLoss).slice(0,limit);
+export const rankLosses=(rows:SourceCandidate[],limit=LEITSTAND_TOP_N)=>rows.filter(row=>row.action==='AUSSCHALTEN').sort(byLoss).slice(0,limit);
 /** Top-N Skalierungskandidaten: nur SKALIEREN, Profit absteigend. */
 export const rankWinners=(rows:SourceCandidate[],limit=LEITSTAND_TOP_N)=>rows.filter(row=>row.action==='SKALIEREN').sort(byGain).slice(0,limit);
 /** Zeile mit Sperrstatus aus dem Sperr-Index (Identität über sourceCandidateBlockKey) und Deep-Link auf /sources. */

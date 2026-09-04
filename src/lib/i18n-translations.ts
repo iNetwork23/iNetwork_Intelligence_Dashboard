@@ -290,7 +290,6 @@ export const translations = {
   "Jetzt ausschalten": "Turn off now",
   "Ausgeschaltet": "Turned off",
   "SKALIEREN": "SCALE",
-  "ABSCHALTEN": "SHUT OFF",
   "Gewählter Zeitraum": "Selected period",
   "ADV1-/ADV2-QUELLENAUSWERTUNG": "ADV1/ADV2 SOURCE EVALUATION",
   "SOURCE-/SUB-SOURCE-ENTSCHEIDUNGEN": "SOURCE/SUB-SOURCE DECISIONS",

@@ -9,10 +9,10 @@ import{filterPartnerRows,type AccessMetadata}from'./rbac';
 import type{ReportRow}from'./portfolio';
 
 /** Accountweite Quell-Kandidaten (Blätter mit Handlungsbedarf) für den Leitstand – im Rollups-Cron je Zeitraum vorberechnet. */
-export type SourceCandidate={affiliateId:string;affiliate:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'tracked'|'api';level:'main_source'|'sub_source';mainValue:string|null;subValue:string|null;action:'SKALIEREN'|'BEOBACHTEN'|'ABSCHALTEN';severity:'positive'|'neutral'|'warning'|'critical';reason:string;clicks:number;sois:number;firstSales:number;rebills:number;revenue:number;payout:number;profit:number;lastLeadDate:string|null;leadStatus:string|null};
+export type SourceCandidate={affiliateId:string;affiliate:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'tracked'|'api';level:'main_source'|'sub_source';mainValue:string|null;subValue:string|null;action:'SKALIEREN'|'BEOBACHTEN'|'AUSSCHALTEN';severity:'positive'|'neutral'|'warning'|'critical';reason:string;clicks:number;sois:number;firstSales:number;rebills:number;revenue:number;payout:number;profit:number;lastLeadDate:string|null;leadStatus:string|null};
 export type SourceCandidatesSnapshot={version:1;range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;rows:SourceCandidate[];rowsTruncated?:boolean};
 /** D10: Deckel je Aktion (Verluste zuerst), damit Snapshot, Cache-Eintrag und RSC-Payload begrenzt bleiben. */
-export const CANDIDATE_ROW_LIMITS:Record<SourceCandidate['action'],number>={ABSCHALTEN:800,BEOBACHTEN:400,SKALIEREN:300};
+export const CANDIDATE_ROW_LIMITS:Record<SourceCandidate['action'],number>={AUSSCHALTEN:800,BEOBACHTEN:400,SKALIEREN:300};
 export function capSourceCandidates(rows:SourceCandidate[]):{rows:SourceCandidate[];truncated:boolean}{const kept:SourceCandidate[]=[],seen:Record<string,number>={};let truncated=false;for(const row of rows){const count=seen[row.action]??0;if(count>=CANDIDATE_ROW_LIMITS[row.action]){truncated=true;continue}seen[row.action]=count+1;kept.push(row)}return{rows:kept,truncated}}
 export const sourceCandidatesKey=(range:{from:string;to:string})=>`source_candidates:v1:${range.from}:${range.to}`;
 export const DEFAULT_CANDIDATE_TIME_BUDGET_MS=150_000,CANDIDATE_CONCURRENCY=4;
@@ -63,10 +63,13 @@ export const isValidSourceCandidatesSnapshot=(value:unknown,range:{from:string;t
 const scopedRow=(row:SourceCandidate)=>({row,affiliate_id:row.affiliateId,offer_id:row.offerId,campaign_id:'0',source_id:row.mainValue??'',sub_source:row.subValue??''});
 /** Partner-Scope wie rbac.filterPartnerRows: leerer Scope → keine Zeilen; jede gesetzte Scope-Dimension muss passen. */
 export const scopeSourceCandidates=(rows:SourceCandidate[],access:AccessMetadata)=>access.role==='partner'?filterPartnerRows(rows.map(scopedRow),access).map(x=>x.row):rows;
+/** Snapshots vor der Vokabular-Umstellung (D13) tragen noch das alte Urteilswort; beim Lesen wird es angeglichen. */
+const LEGACY_KILL_WORD='AB'+'SCHALTEN';
+export const normalizeSourceCandidatesSnapshot=(snapshot:SourceCandidatesSnapshot):SourceCandidatesSnapshot=>snapshot.rows.some(row=>(row.action as string)===LEGACY_KILL_WORD)?{...snapshot,rows:snapshot.rows.map(row=>(row.action as string)===LEGACY_KILL_WORD?{...row,action:'AUSSCHALTEN'}:row)}:snapshot;
 async function readStoredSnapshot(range:{from:string;to:string}):Promise<SourceCandidatesSnapshot|null>{
  const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',sourceCandidatesKey(range)).maybeSingle();
  if(error)throw new Error(`Supabase source candidates: ${error.message}`);
- return isValidSourceCandidatesSnapshot(data?.value,range)?data.value:null;
+ return isValidSourceCandidatesSnapshot(data?.value,range)?normalizeSourceCandidatesSnapshot(data.value):null;
 }
 const loadSnapshot=(range:{from:string;to:string})=>unstable_cache(()=>readStoredSnapshot(range),['source-candidates-v1',range.from,range.to],{revalidate:120,tags:['source-candidates']})();
 /** Liest den vorberechneten Key (120 s Cache); fehlt er → null (fail-closed). Partner sehen nur Zeilen im eigenen Scope. */

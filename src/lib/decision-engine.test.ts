@@ -57,7 +57,7 @@ describe('unified decision engine',()=>{
 
 describe('source projection',()=>{
   it('maps the five actions onto the three source actions consistently',()=>{
-    expect(projectSourceAction('AUSSCHALTEN')).toBe('ABSCHALTEN');
+    expect(projectSourceAction('AUSSCHALTEN')).toBe('AUSSCHALTEN');
     expect(projectSourceAction('SKALIEREN')).toBe('SKALIEREN');
     for(const action of ['WEITERLAUFEN','WEITER TESTEN','BEOBACHTEN'] as const)
       expect(projectSourceAction(action)).toBe('BEOBACHTEN');

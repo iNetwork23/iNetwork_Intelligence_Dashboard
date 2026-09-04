@@ -26,11 +26,32 @@ export type UnitAction =
   | "BEOBACHTEN"
   | "AUSSCHALTEN";
 export type UnitSeverity = "positive" | "neutral" | "warning" | "critical";
+/** Reife der SOIs einer Einheit gegen die typische Wartezeit des Partners (Etappe 3, Entscheidung D3). */
+export type LeadMaturityInput = {
+  matureSois: number;
+  totalSois: number;
+  p75Hours: number | null;
+  confidence: "hoch" | "mittel" | "niedrig" | "keine Daten";
+};
+/** „Trauen oder nicht, und warum“: Reifefortschritt, Wilson-Band der First-Sale-Rate, Benchmark und Konfidenz je Verdikt. */
+export type VerdictGate = {
+  matureSois: number;
+  totalSois: number;
+  requiredSois: number;
+  maturityReached: boolean;
+  p75Hours: number | null;
+  latencyConfidence: LeadMaturityInput["confidence"] | "nicht geprüft";
+  rateLow: number;
+  rateHigh: number;
+  benchmarkRate: number | null;
+  confidence: "belastbar" | "unsicher";
+};
 export type UnitVerdict = {
   action: UnitAction;
   severity: UnitSeverity;
   reason: string;
   evidence: string[];
+  gate?: VerdictGate;
 };
 export type UnitMetrics = {
   clicks: number;
@@ -47,6 +68,8 @@ export type UnitContext = {
    * Offer-Gesamtrate auf Source-Ebene), als Anteil (0.05 = 5 %).
    */
   benchmarkRate?: number;
+  /** Reife der SOIs gegen die Partner-Latenz; ohne Angabe bleiben K1/K2 wie bisher (Etappe 3 koppelt sie). */
+  leadMaturity?: LeadMaturityInput;
 };
 
 export function wilsonLower(successes: number, trials: number, z = Z) {
@@ -167,8 +190,8 @@ export function assessUnit(m: UnitMetrics, context: UnitContext = {}): UnitVerdi
 /** Projektion auf die drei Aktionen der Source-Ebene. */
 export function projectSourceAction(
   action: UnitAction,
-): "SKALIEREN" | "ABSCHALTEN" | "BEOBACHTEN" {
-  if (action === "AUSSCHALTEN") return "ABSCHALTEN";
+): "SKALIEREN" | "AUSSCHALTEN" | "BEOBACHTEN" {
+  if (action === "AUSSCHALTEN") return "AUSSCHALTEN";
   if (action === "SKALIEREN") return "SKALIEREN";
   return "BEOBACHTEN";
 }

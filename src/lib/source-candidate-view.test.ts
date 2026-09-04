@@ -4,7 +4,7 @@ import{sourceCandidateBlockKey,sourceCandidateDomId,sourceCandidateKey}from'./so
 import type{SourceCandidate}from'./source-candidates';
 import type{SourceBlockRecord}from'./source-blocks';
 
-const candidate=(over:Partial<SourceCandidate>={}):SourceCandidate=>({affiliateId:'436',affiliate:'Partner A',offerId:'12',offer:'Offer Zwölf',offerUrlId:'7',offerUrl:'Default',trafficMode:'tracked',level:'main_source',mainValue:'fb',subValue:null,action:'ABSCHALTEN',severity:'critical',reason:'50 SOIs ohne Sale',clicks:900,sois:60,firstSales:0,rebills:0,revenue:10,payout:120,profit:-110,lastLeadDate:'2026-09-03',leadStatus:'Heute aktiv',...over});
+const candidate=(over:Partial<SourceCandidate>={}):SourceCandidate=>({affiliateId:'436',affiliate:'Partner A',offerId:'12',offer:'Offer Zwölf',offerUrlId:'7',offerUrl:'Default',trafficMode:'tracked',level:'main_source',mainValue:'fb',subValue:null,action:'AUSSCHALTEN',severity:'critical',reason:'50 SOIs ohne Sale',clicks:900,sois:60,firstSales:0,rebills:0,revenue:10,payout:120,profit:-110,lastLeadDate:'2026-09-03',leadStatus:'Heute aktiv',...over});
 const record=(over:Partial<SourceBlockRecord>={}):SourceBlockRecord=>({id:'blk-1',status:'active',affiliateId:436,affiliateName:'Partner A',offerId:12,offerName:'Offer Zwölf',originCampaignId:null,trafficMode:'tracked',level:'main_source',mainField:'source_id',mainValue:'fb',subField:'sub1',subValue:null,variables:[],reason:'',effectiveAt:'2026-09-01T10:00:00.000Z',createdAt:'2026-09-01T10:00:00.000Z',createdBy:'u1',updatedAt:'2026-09-01T10:00:00.000Z',updatedBy:'u1',everflowSettingId:5,lastVerifiedAt:null,error:null,...over});
 const rows=(...items:SourceCandidate[])=>prepareSourceCandidateRows(items,new Map(),{finance:true});
 
@@ -69,11 +69,11 @@ describe('selectSourceCandidates',()=>{
   expect(SOURCE_CANDIDATE_PAGE_SIZE).toBe(50);expect(result.rows).toHaveLength(50);expect(result.hidden).toBe(10);expect(result.rows[0].offerUrlId).toBe('59');
  });
  it('always shows the deep-linked row even outside the top N or the active filter',()=>{
-  const many=rows(...Array.from({length:60},(_,i)=>candidate({offerUrlId:String(i),profit:-i,action:i===0?'SKALIEREN':'ABSCHALTEN'})));
+  const many=rows(...Array.from({length:60},(_,i)=>candidate({offerUrlId:String(i),profit:-i,action:i===0?'SKALIEREN':'AUSSCHALTEN'})));
   const openKey=many.find(row=>row.offerUrlId==='0')!.key;
   const outside=selectSourceCandidates(many,none,'profit',50,openKey);
   expect(outside.rows).toHaveLength(51);expect(outside.rows.at(-1)!.offerUrlId).toBe('0');expect(outside.openIncluded).toBe(true);expect(outside.hidden).toBe(9);
-  const filtered=selectSourceCandidates(many,{...none,action:'ABSCHALTEN'},'profit',50,openKey);
+  const filtered=selectSourceCandidates(many,{...none,action:'AUSSCHALTEN'},'profit',50,openKey);
   expect(filtered.rows.some(row=>row.key===openKey)).toBe(true);expect(filtered.openIncluded).toBe(true);
   expect(selectSourceCandidates(many,none,'profit',50,'436|1|999|tracked|main_source||').openIncluded).toBe(false);
  });
@@ -90,13 +90,13 @@ describe('bulk selection',()=>{
 });
 
 describe('labels and parsers',()=>{
- it('uses AUSSCHALTEN as the single verdict word on this level (D13)',()=>{expect(verdictLabel('ABSCHALTEN')).toBe('AUSSCHALTEN');expect(verdictLabel('SKALIEREN')).toBe('SKALIEREN');expect(verdictLabel('BEOBACHTEN')).toBe('BEOBACHTEN')});
+ it('uses AUSSCHALTEN as the single verdict word on this level (D13)',()=>{expect(verdictLabel('AUSSCHALTEN')).toBe('AUSSCHALTEN');expect(verdictLabel('SKALIEREN')).toBe('SKALIEREN');expect(verdictLabel('BEOBACHTEN')).toBe('BEOBACHTEN')});
  it('describes maturity from the engine constant and the first-sale rate from SOIs',()=>{
   expect(maturityLabel({sois:60,clicks:900})).toBe('reif · 60 SOIs');expect(maturityLabel({sois:12,clicks:900})).toBe('unreif · 12 von 50 SOIs');
   expect(firstSaleRate({sois:60,firstSales:3})).toBe('5,0 %');expect(firstSaleRate({sois:0,firstSales:0})).toBe('–');
  });
  it('validates URL filter values fail-closed',()=>{
-  expect(isSourceCandidateAction('ABSCHALTEN')).toBe(true);expect(isSourceCandidateAction('AUSSCHALTEN')).toBe(false);expect(isSourceCandidateMode('api')).toBe(true);expect(isSourceCandidateMode('x')).toBe(false);
+  expect(isSourceCandidateAction('AUSSCHALTEN')).toBe(true);expect(isSourceCandidateAction('AB'+'SCHALTEN')).toBe(false);expect(isSourceCandidateMode('api')).toBe(true);expect(isSourceCandidateMode('x')).toBe(false);
   expect(isSourceCandidateBlockFilter('blocked')).toBe(true);expect(isSourceCandidateBlockFilter('yes')).toBe(false);expect(isSourceCandidateSort('sois')).toBe(true);expect(isSourceCandidateSort('name')).toBe(false);
  });
  it('exposes the row type with nullable money fields',()=>{const row:SourceCandidateRow=rows(candidate())[0];expect(typeof row.profit).toBe('number')});
@@ -105,10 +105,10 @@ describe('labels and parsers',()=>{
 import{buildSourceCandidateQuery,parseSourceCandidateFilters}from'./source-candidate-view';
 describe('list URL state',()=>{
  it('round-trips filters and sort, omits defaults and keeps range and open',()=>{
-  const query=buildSourceCandidateQuery('7d',{action:'ABSCHALTEN',mode:'api',q:' fb ',blocked:'open'},'sois','436|12|7|tracked|main_source|fb|');
-  expect(query).toBe('range=7d&action=ABSCHALTEN&mode=api&q=fb&blocked=open&sort=sois&open=436%7C12%7C7%7Ctracked%7Cmain_source%7Cfb%7C');
+  const query=buildSourceCandidateQuery('7d',{action:'AUSSCHALTEN',mode:'api',q:' fb ',blocked:'open'},'sois','436|12|7|tracked|main_source|fb|');
+  expect(query).toBe('range=7d&action=AUSSCHALTEN&mode=api&q=fb&blocked=open&sort=sois&open=436%7C12%7C7%7Ctracked%7Cmain_source%7Cfb%7C');
   expect(buildSourceCandidateQuery('30d',{action:'all',mode:'all',q:'',blocked:'all'},'profit',null)).toBe('range=30d');
-  expect(parseSourceCandidateFilters(Object.fromEntries(new URLSearchParams(query)))).toEqual({filters:{action:'ABSCHALTEN',mode:'api',q:'fb',blocked:'open'},sort:'sois'});
-  expect(parseSourceCandidateFilters({action:'AUSSCHALTEN',sort:'x'})).toEqual({filters:{action:'all',mode:'all',q:'',blocked:'all'},sort:'profit'});
+  expect(parseSourceCandidateFilters(Object.fromEntries(new URLSearchParams(query)))).toEqual({filters:{action:'AUSSCHALTEN',mode:'api',q:'fb',blocked:'open'},sort:'sois'});
+  expect(parseSourceCandidateFilters({action:'AB'+'SCHALTEN',sort:'x'})).toEqual({filters:{action:'all',mode:'all',q:'',blocked:'all'},sort:'profit'});
  });
 });
