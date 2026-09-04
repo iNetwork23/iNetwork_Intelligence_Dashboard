@@ -148,5 +148,8 @@ export async function loadPortfolioDailyVariantProfitFromCache(client:CacheClien
  if(access)assertScopesSupported(access,['affiliate','offer','campaign']);
  const points:Array<{date:string;key:string;value:number}>=[];
  for(const day of loaded.days)for(const row of scopedDayRows(loaded.byDay.get(day)||[],access))if(String(row.campaign_id)==='0')points.push({date:day,key:variantDailyKey(row),value:Number(row.profit)||0});
- return dailySeriesByKey(points,loaded.days);
+ return capDailySeries(dailySeriesByKey(points,loaded.days),DAILY_VARIANT_SERIES_LIMIT);
 }
+/** Cache-Eintrag begrenzen (2-MB-Grenze des Data-Cache): nur die Varianten mit der größten Profit-Wirkung behalten. */
+export const DAILY_VARIANT_SERIES_LIMIT=1500;
+export function capDailySeries(series:DailyByKey,limit:number):DailyByKey{const keys=Object.keys(series);if(keys.length<=limit)return series;const weight=(key:string)=>series[key].reduce((sum,value)=>sum+Math.abs(value),0);return Object.fromEntries(keys.sort((a,b)=>weight(b)-weight(a)||a.localeCompare(b)).slice(0,limit).map(key=>[key,series[key]]))}
