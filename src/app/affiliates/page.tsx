@@ -1003,7 +1003,7 @@ export default async function AffiliateOptimizerPage({
                     <small>
                       {o.variants.length} {o.variants.length === 1 ? "Pfad" : "Pfade"} ·{" "}
                       {o.stopCount
-                        ? `${o.stopCount} stoppen`
+                        ? `${o.stopCount} auszuschalten`
                         : o.scaleCount
                           ? `${o.scaleCount} skalieren`
                           : "beobachten"}
@@ -1194,7 +1194,15 @@ export default async function AffiliateOptimizerPage({
                   latency={leadLatency ?? undefined}
                   affiliateName={selected.affiliate}
                   offerName={activeOffer.offer}
-                  dailyByKey={sourceDaily}
+                  dailyByKey={
+                    // Nur die Tageswerte des aktiven Offers wandern zum Client (Schlüssel beginnen mit offer|affiliate|…).
+                    sourceDaily &&
+                    Object.fromEntries(
+                      Object.entries(sourceDaily).filter(([key]) =>
+                        key.startsWith(`${activeOffer.offerId}|`),
+                      ),
+                    )
+                  }
                 />
               )}
           </section>
