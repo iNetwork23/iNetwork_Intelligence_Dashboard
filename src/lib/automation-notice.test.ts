@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import{readFileSync}from'node:fs';import{join}from'node:path';
-import {automationDecisionLabel,automationNotice} from './automation-notice';
+import {automationCompensationLabel,automationDecisionLabel,automationDecisionSummary,automationNotice} from './automation-notice';
 
 describe('automationNotice',()=>{
  it('describes a run by its decision and write count instead of claiming a verified write',()=>{
@@ -13,6 +13,13 @@ describe('automationNotice',()=>{
   expect(automationDecisionLabel({type:'promote',reasonCode:'champion'})).toBe('Champion gesetzt');
   expect(automationDecisionLabel(undefined)).toBe('unbekannt');
  });
+ it('summarizes a decision with the affected landingpages for push bodies',()=>{
+  expect(automationDecisionSummary({type:'replace_slot',reasonCode:'mature_economic_loser',fromOfferUrlIds:[12],toOfferUrlIds:[34]})).toBe('Slot ersetzt · LP #12 → LP #34');
+  expect(automationDecisionSummary({type:'rotate_round',reasonCode:'matched_round_complete',fromOfferUrlIds:[1,2],toOfferUrlIds:[3,4]})).toBe('Runde rotiert · LP #1, #2 → LP #3, #4');
+  expect(automationDecisionSummary({type:'promote',reasonCode:'robust_sale_first_leader',toOfferUrlIds:[7]})).toBe('Champion gesetzt · LP #7');
+  expect(automationDecisionSummary({type:'hold',reasonCode:'test_running'})).toBe('Halten (test_running)');
+ });
+ it.each([['not_needed','nicht nötig'],['verified','verifiziert'],['failed','fehlgeschlagen'],['uncertain','unklar'],['whatever','whatever']])('labels compensation %s as %s',(value,label)=>{expect(automationCompensationLabel(value)).toBe(label)});
  it.each([['create','Entwurf gespeichert'],['update','Konfiguration aktualisiert'],['request_live','Live angefordert'],['activate_live','Live aktiviert'],['pause','Pausiert'],['resume','Fortgesetzt'],['complete','Beendet'],['import_legacy','Als Entwurf importiert']])('labels %s as %s',(action,label)=>{expect(automationNotice(action,{ok:true})).toBe(label)});
  it('falls back to a neutral label for unknown actions and missing run data',()=>{
   expect(automationNotice('whatever',{ok:true})).toBe('Aktion ausgeführt');

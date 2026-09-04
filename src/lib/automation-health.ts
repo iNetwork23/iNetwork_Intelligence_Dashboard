@@ -32,3 +32,10 @@ export function automationCampaignLabel(campaign: AutomationCampaignHealth, gene
   if (isAutomationCampaignHealthy(campaign, generatedAt, now)) return 'LIVE';
   return campaign.enabled && campaign.mode === 'live' ? 'FEHLER' : 'PAUSIERT';
 }
+
+export function automationJournalFreshness(generatedAt: string | undefined, now = Date.now()): { ageHours: number | null; stale: boolean; label: string } {
+  const journal = timestamp(generatedAt), ageMs = now - journal;
+  if (!Number.isFinite(journal) || ageMs < -MAX_CLOCK_SKEW_MS) return { ageHours: null, stale: true, label: 'Journal-Stand unbekannt' };
+  const ageHours = Math.max(0, Math.floor(ageMs / 3_600_000)), stale = ageMs > MAX_JOURNAL_AGE_MS;
+  return { ageHours, stale, label: ageHours >= 1 ? `Journal-Stand vor ${ageHours} h` : `Journal-Stand vor ${Math.max(0, Math.floor(ageMs / 60_000))} min` };
+}
