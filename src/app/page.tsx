@@ -15,7 +15,7 @@ import {can} from '@/lib/rbac';
 import {loadLeitstand} from '@/lib/leitstand';
 import PeriodControls from './components/PeriodControls';
 import Sparkline from './components/Sparkline';
-import {resolveGlobalPeriod,todayPartialNote} from '@/lib/period-controls';
+import {resolveGlobalPeriod,sparklinePartialNote,todayPartialNote} from '@/lib/period-controls';
 import {buildHomeKpis,euro,num,pct,toneClass} from '@/lib/home-kpis';
 import {signTone} from '@/lib/verdict-vocabulary';
 import LeitstandSection from './components/LeitstandSection';
@@ -32,6 +32,7 @@ export default async function DashboardPage({searchParams}:{searchParams:Promise
  {user.access.role!=='partner'&&<LeitstandSection access={user.access} view={leitstand??undefined}/>}
  <PeriodControls dimension="global" period={period} rangeLabel={data.range.label} maxDate={reportingRange('today').to} from={period==='custom'?data.range.from??undefined:undefined} to={period==='custom'?data.range.to:undefined} todayNote={todayPartialNote(dataStatus)}/>
  <section className="kpis">{kpis.map(tile=><InstantLink key={tile.key} className={`kpi${tile.hero?' hero':''}`} href={tile.href} aria-label={`${tile.label} · ${tile.hrefLabel}`}><span>{tile.label}</span><strong className={toneClass(tile.valueTone)}>{tile.value}</strong><small>{tile.sub}</small><div className="kpiTrend"><Sparkline points={tile.points} label={tile.sparkLabel} tone={tile.tone}/><em className={`kpiDelta ${toneClass(tile.deltaTone)}`.trim()} title={tile.delta.reason??undefined}>{tile.deltaLabel} {tile.delta.text}</em>{tile.delta.reason&&<small className="kpiDeltaReason">{tile.delta.reason}</small>}</div></InstantLink>)}</section>
+ {(data.daily?.length??0)>1&&data.range.to===reportingRange('today').to?<small className="kpiPartialDay" role="note">{sparklinePartialNote(dataStatus)}</small>:null}
  {finance&&<section className="portfolioCopyBar"><div><span>PARTNERFERTIGE ÜBERSICHTEN</span><b>Nur Leads und gebuchte Payouts weitergeben</b><small>Umsatz und Profit werden nie kopiert. Es erscheinen nur Firmen und Brands mit Leads.</small></div><PortfolioCopyButton text={buildPortfolioCopyReport(copyInput,{scope:'total'})} label="Gesamtübersicht kopieren"/></section>}
  <section className="portfolioScope"><div><b>{data.offers.length}</b><span>Offers</span></div><div><b>{data.affiliates.length}</b><span>Affiliates</span></div><div><b>{data.paths.length}</b><span>Traffic-Pfade / LPs</span></div><div><b>{data.paths.filter(x=>x.trafficType==='Smartlink').length}</b><span>Smartlink-Pfade</span></div><div><b>{data.paths.filter(x=>x.trafficType==='Direkt').length}</b><span>Direkte Pfade</span></div></section>
  <div className="viewTabs">{([['offers','Brands / Offers'],['affiliates','Firmen / Affiliates'],['paths','Landingpages & Pfade']] as const).map(([value,label])=><InstantLink key={value} className={view===value?'active':''} href={`/?${periodQuery}&view=${value}`}>{label}</InstantLink>)}</div>

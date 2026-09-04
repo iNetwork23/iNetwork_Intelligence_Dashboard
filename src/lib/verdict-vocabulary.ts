@@ -9,7 +9,7 @@ export const VERDICT_WORDS:readonly VerdictWord[]=['AUSSCHALTEN','SKALIEREN','WE
 export const VERDICT_SEVERITY:Record<VerdictWord,UnitSeverity>={AUSSCHALTEN:'critical',SKALIEREN:'positive',WEITERLAUFEN:'positive','WEITER TESTEN':'neutral',BEOBACHTEN:'warning'};
 export const isVerdictWord=(value:unknown):value is VerdictWord=>typeof value==='string'&&(VERDICT_WORDS as readonly string[]).includes(value);
 /** Klasse 2 · Aktionen (Schaltflächen, Menüs). */
-export const ACTION_WORDS={block:'Vergütung sperren',blockAcrossOffers:'Produktweit sperren',blockSelected:'Ausgewählte sperren',unblock:'Sperre aufheben',verifyThenUnblock:'Nach Everflow-Prüfung deaktivieren',pause:'Pausieren',resume:'Fortsetzen'} as const;
+export const ACTION_WORDS={block:'Vergütung sperren',blockAcrossOffers:'Produktweit sperren',blockSelected:'Ausgewählte sperren',unblock:'Sperre aufheben',verifyThenUnblock:'Nach Everflow-Prüfung deaktivieren',blockAcrossOffersScoped:(scope:string)=>`${scope} überall sperren`,blockAcrossOffersConfirm:(scope:string)=>`${scope} in allen gefundenen Produkten sperren`,pause:'Pausieren',resume:'Fortsetzen'} as const;
 /** Klasse 3 · Zustände (Marker, Badges). */
 export const STATE_WORDS={blockedSince:(date:string)=>`Gesperrt seit ${date}`,notBlocked:'Nicht gesperrt',unclear:'Zustand unklar',verifying:'Verifizierung läuft',blockedAcrossOffers:'Produktweit gesperrt',frozen:'eingefroren',partialDay:'Teiltag'} as const;
 /** Vier Severities → CSS-Token (bestehende Variablen aus globals.css). */

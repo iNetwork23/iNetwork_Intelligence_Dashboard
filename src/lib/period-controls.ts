@@ -64,3 +64,5 @@ export function todayPartialNote(status:{todayPartial:boolean;syncAt:string|null
  const time=status?.syncAt?berlinTime(status.syncAt):null;
  return status?.todayPartial&&time?`${STATE_WORDS.partialDay} bis ${time} Uhr`:`${STATE_WORDS.partialDay} bis Sync-Zeit`;
 }
+/** Sparkline-Hinweis der Startseite: enthält das Fenster heute, ist der letzte Punkt ein Teiltag bis zur Sync-Zeit. */
+export const sparklinePartialNote=(status:Parameters<typeof todayPartialNote>[0])=>`letzter Punkt: ${todayPartialNote(status)}`;

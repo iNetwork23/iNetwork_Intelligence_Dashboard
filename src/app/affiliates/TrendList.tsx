@@ -10,6 +10,10 @@ import { latencyBadge, rebillEvidence, toneClass, trendCells, trendReason, trust
 import { eur, num, variantIdentityLine } from "./affiliate-format";
 
 const pct = (n: number) => `${n.toFixed(2).replace(".", ",")} %`;
+/** Vertrauenszeile ohne Latenz-Teil: die Latenz steht daneben als Ampel (latencyBadge), nicht doppelt als Text (≤ 10 s lesbar). */
+const withoutLatency = (text: string) => text.replace(/ · Latenz p75 .*$/, "");
+/** Tracker-Kandidaten haben keine Vorperiode auf Quellen-Ebene – der Grund für „–“ sagt genau das. */
+const SOURCE_NO_PREVIOUS = "keine Vorperiode auf Quellen-Ebene";
 /** Sekundärzeile: Landingpage-Identität bzw. Source/Sub-Source unter ihrer Offer-URL. */
 const identityLine = (item: PriorityItem) =>
   item.kind === "source"
@@ -64,16 +68,22 @@ export function PriorityRow({
         {finance && <b className={`priorityProfit ${toneClass(tone)}`}>{eur(item.metrics.profit)}</b>}
       </div>
       <p className="priorityReason">{item.reason}</p>
-      <p className={`priorityTrust ${trust.confidence ?? "none"}`} title="Trauen oder nicht, und warum">{trust.text}</p>
+      <p className={`priorityTrust ${trust.confidence ?? "none"}`} title="Trauen oder nicht, und warum">{withoutLatency(trust.text)}</p>
       <p className="priorityEvidence">
         <span className={`latencyBadge ${badge.tone}`} title={badge.title}>{badge.label}</span>
         <span>{volumeLine(item)}</span>
         <span>{rebillEvidence(item.metrics)}</span>
       </p>
       <div className="priorityTrend">
-        {cell("Δ SOIs", trend.sois)}
-        {item.trafficMode !== "api" && cell("Δ CVR", trend.cvr)}
-        {finance && cell("Δ Profit", trend.profit)}
+        {item.kind === "source" && !item.previous ? (
+          cell("Δ Vorperiode", { ...trend.sois, reason: SOURCE_NO_PREVIOUS })
+        ) : (
+          <>
+            {cell("Δ SOIs", trend.sois)}
+            {item.trafficMode !== "api" && cell("Δ CVR", trend.cvr)}
+            {finance && cell("Δ Profit", trend.profit)}
+          </>
+        )}
         {item.daily && item.daily.length > 1 && (
           <span className="prioritySpark"><Sparkline points={item.daily} label={`Tagesverlauf ${item.kind === "source" ? item.subSource ?? item.sourceId : item.offerUrl}`} tone={tone} /></span>
         )}

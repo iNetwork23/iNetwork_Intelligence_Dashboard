@@ -21,8 +21,9 @@ describe('home KPI tiles (Abnahme D/G)',()=>{
   expect(profit.delta.direction).toBe('up');expect(profit.delta.text).toBe('+150,00 € (+60 %)');expect(profit.delta.reason).toBeNull();
   expect(profit.deltaTone).toBe('positive');expect(profit.valueTone).toBe('positive');expect(profit.href).toBe('/?period=7d&view=affiliates');
   expect(tiles[2].points).toEqual([100,120,130]);expect(tiles[2].delta.text).toBe('+200 (+20 %)');expect(tiles[2].href).toBe('/?period=7d&view=paths');
-  expect(tiles[3].delta.text).toBe('+10 (+20 %)');expect(tiles[3].deltaLabel).toBe('Δ SOIs');
-  const cvr=tiles[4];expect(cvr.deltaLabel).toBe('Δ CVR');expect(cvr.delta.direction).toBe('flat');expect(cvr.delta.text).toBe('0,00 pp');expect(cvr.deltaTone).toBe('neutral');expect(cvr.points).toEqual([1,0,2]);
+  expect(tiles[3].delta.text).toBe('+10 (+20 %)');expect(tiles[3].deltaLabel).toBe('Δ SOIs');expect(tiles[3].sub).toBe('CVR 5,00 % · Δ CVR 0,00 pp');
+  const sales=tiles[4];expect(sales.deltaLabel).toBe('Δ First-Sales');expect(sales.delta.direction).toBe('up');expect(sales.delta.text).toBe('+2 (+50 %)');expect(sales.deltaTone).toBe('positive');expect(sales.points).toEqual([1,0,2]);expect(sales.sub).not.toContain('pp');
+  const cvrUp=buildHomeKpis({...base,totals:metrics({...totals,cvr:5.25}),previous,daily});expect(cvrUp[3].sub).toBe('CVR 5,25 % · Δ CVR +0,25 pp');
   for(const tile of tiles)expect(tile.href.startsWith('/?period=7d&view=')).toBe(true);
  });
  it('keeps every sign colour neutral below the maturity gate and explains every dash',()=>{
@@ -30,6 +31,7 @@ describe('home KPI tiles (Abnahme D/G)',()=>{
   const tiles=buildHomeKpis({...base,totals,previous,daily:[day('2026-08-30',{profit:-4}),day('2026-08-31',{profit:-8})]});
   for(const tile of tiles){expect(tile.delta.text).toBe('–');expect(tile.delta.reason).toBe(maturityGateText);expect(tile.deltaTone).toBe('neutral');expect(tile.tone).toBe('neutral');expect(toneClass(tile.deltaTone)).toBe('')}
   expect(tiles[0].valueTone).toBe('neutral');expect(toneClass(tiles[0].valueTone)).toBe('');
+  expect(tiles[3].sub).toBe('CVR 0,00 %');
  });
  it('drops series and previous period beyond 45 days with a stated reason instead of a bare dash',()=>{
   const tiles=buildHomeKpis({...base,dayCount:90,totals:metrics({clicks:5000,sois:200,profit:100}),previous:null,daily:undefined});

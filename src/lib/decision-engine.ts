@@ -139,7 +139,7 @@ export function applyLeadMaturity(verdict: UnitVerdict, m: UnitMetrics, context:
       ...verdict,
       action: "BEOBACHTEN",
       severity: "warning",
-      reason: "Reife nicht prüfbar – keine Conversion-Daten; Abschaltung erst nach geprüfter Wartezeit.",
+      reason: "Reife nicht prüfbar – keine Conversion-Daten; Ausschalten erst nach geprüfter Wartezeit.",
       gate,
     };
   if (!gate.maturityReached)
@@ -147,7 +147,7 @@ export function applyLeadMaturity(verdict: UnitVerdict, m: UnitMetrics, context:
       ...verdict,
       action: "WEITER TESTEN",
       severity: "neutral",
-      reason: `${gate.matureSois} von ${gate.totalSois} SOIs reif (Wartezeit p75 ${hoursText(gate.p75Hours)}); Abschaltung erst ab ${KILL_MATURITY_SOIS} reifen SOIs.`,
+      reason: `${gate.matureSois} von ${gate.totalSois} SOIs reif (Wartezeit p75 ${hoursText(gate.p75Hours)}); Ausschalten erst ab ${KILL_MATURITY_SOIS} reifen SOIs.`,
       gate,
     };
   return { ...verdict, gate };
@@ -225,7 +225,7 @@ function assessUnitBase(m: UnitMetrics, context: UnitContext): UnitVerdict {
     return verdict(
       "BEOBACHTEN",
       "warning",
-      "Monetarisiert, aber im Zeitraum negativ; Abschaltung nur bei belegter Unterperformance.",
+      "Monetarisiert, aber im Zeitraum negativ; Ausschalten nur bei belegter Unterperformance.",
     );
 
   // T1 · Jung: erst Evidenz sammeln.
@@ -233,7 +233,7 @@ function assessUnitBase(m: UnitMetrics, context: UnitContext): UnitVerdict {
     return verdict(
       "WEITER TESTEN",
       "neutral",
-      "Testquote noch nicht reif; vor einer Abschaltung mehr Evidenz sammeln.",
+      "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.",
     );
 
   if (!api && m.clicks === 0)
