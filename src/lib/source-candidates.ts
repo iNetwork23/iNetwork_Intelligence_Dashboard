@@ -49,10 +49,10 @@ export async function buildSourceCandidatesSnapshot(range:{from:string;to:string
  const coverage=resolveActivityCoverage(activityRange.from,freshness),affiliates=[...portfolio.affiliates].sort((a,b)=>b.sois-a.sois||b.clicks-a.clicks||a.id.localeCompare(b.id)),rows:SourceCandidate[]=[];
  let processed=0,failed=0,maturityUnavailable=0,cursor=0;
  /** Reife-Index (D3) aus den Conversions des Partners; Fehler → „keine Daten“ (fail-closed, gezählt), der Partner wird trotzdem bewertet. */
- const loadMaturity=async(affiliateId:string):Promise<LeadMaturityIndex>=>{try{const conversions=await conversionsFor(affiliateId,now);return buildLeadMaturityIndex(conversions,analyzeLeadLatency(conversions,now),range,now)}catch(error){maturityUnavailable++;console.error(`Source candidates: lead maturity unavailable for affiliate ${affiliateId}`,error);return noLeadMaturityIndex(range,now)}};
+ const loadMaturity=async(affiliateId:string):Promise<{index:LeadMaturityIndex;unavailable:boolean}>=>{try{const conversions=await conversionsFor(affiliateId,now);return{index:buildLeadMaturityIndex(conversions,analyzeLeadLatency(conversions,now),range,now),unavailable:false}}catch(error){console.error(`Source candidates: lead maturity unavailable for affiliate ${affiliateId}`,error);return{index:noLeadMaturityIndex(range,now),unavailable:true}}};
  const persistMaturity=async(affiliateId:string,index:LeadMaturityIndex)=>{if(!options?.persistMaturity||index.confidence==='keine Daten')return;try{const{error}=await getSupabaseAdmin().from('sync_state').upsert({key:leadMaturitySummaryKey(affiliateId),value:summarizeLeadMaturity(index,affiliateId)},{onConflict:'key'});if(error)throw new Error(error.message)}catch(error){console.error(`Source candidates: lead maturity summary not persisted for affiliate ${affiliateId}`,error)}};
  const worker=async()=>{while(cursor<affiliates.length&&!exhausted()){const affiliate=affiliates[cursor++];
-  try{const[raw,index,maturity]=await Promise.race([Promise.all([loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),loadAffiliateActivityIndex(affiliate.id,activityRange),loadMaturity(affiliate.id)]),rejectAfter(remaining()+(options?.loadGraceMs??AFFILIATE_LOAD_GRACE_MS),`Zeitbudget für Partner ${affiliate.id} überschritten`)]),evaluated=attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),index,coverage),maturity);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name)));processed++;await persistMaturity(affiliate.id,maturity)}
+  try{const[raw,index,maturity]=await Promise.race([Promise.all([loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),loadAffiliateActivityIndex(affiliate.id,activityRange),loadMaturity(affiliate.id)]),rejectAfter(remaining()+(options?.loadGraceMs??AFFILIATE_LOAD_GRACE_MS),`Zeitbudget für Partner ${affiliate.id} überschritten`)]),evaluated=attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),index,coverage),maturity.index);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name)));processed++;if(maturity.unavailable)maturityUnavailable++;else await persistMaturity(affiliate.id,maturity.index)}
   catch(error){failed++;console.error(`Source candidates skipped affiliate ${affiliate.id}`,error)}}};
  await Promise.all(Array.from({length:Math.min(CANDIDATE_CONCURRENCY,Math.max(1,affiliates.length))},worker));
  rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
@@ -89,4 +89,11 @@ export async function loadSourceCandidates(range:{from:string;to:string},access:
  const snapshot=await loadSnapshot(range);
  if(!snapshot)return null;
  return access.role==='partner'?{...snapshot,rows:scopeSourceCandidates(snapshot.rows,access)}:snapshot;
+}
+
+/** Memo für einen Cron-Lauf: Conversions je Partner einmal laden (beide Zeiträume nutzen dieselben 90 Tage); Fehler werden nicht memoisiert. */
+export function memoizedConversionsLoader(load:(affiliateId:string,now:Date)=>Promise<ConversionRow[]>=(affiliateId,now)=>loadAffiliateConversionsFromCache(affiliateId,90,now)){
+ const memo=new Map<string,Promise<ConversionRow[]>>();
+ const conversionsFor=(affiliateId:string,now:Date)=>{let pending=memo.get(affiliateId);if(!pending){pending=load(affiliateId,now);memo.set(affiliateId,pending);pending.catch(()=>memo.delete(affiliateId))}return pending};
+ return{conversionsFor,clear:()=>memo.clear(),size:()=>memo.size};
 }

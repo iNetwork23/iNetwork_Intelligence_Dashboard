@@ -5,7 +5,7 @@ import{candidateDailyKey,dailySeriesByKey,dateRange,type DailyByKey}from'./daily
 import{analyzeAffiliateTraffic}from'./affiliate-optimizer';
 import{loadAffiliateActivityIndex,loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
 import{analyzeLeadLatency}from'./lead-latency';
-import{buildLeadMaturityIndex,isLeadYoungSummary,LEAD_MATURITY_SUMMARY_PREFIX,noLeadMaturityIndex,urlLeadMaturityForReport,urlLeadMaturityFromSummary,type LeadMaturityIndex,type LeadYoungSummary}from'./lead-maturity';
+import{buildLeadMaturityIndex,guardMaturityCoverage,isLeadYoungSummary,LEAD_MATURITY_SUMMARY_PREFIX,maturityCoverage,noLeadMaturityIndex,summaryAppliesTo,urlLeadMaturityForReport,urlLeadMaturityFromSummary,urlMaturityKey,type LeadMaturityIndex,type LeadYoungSummary}from'./lead-maturity';
 import type{LeadMaturityInput}from'./decision-engine';
 import{applyLeadMaturity,type VerdictGate}from'./decision-engine';
 import type{AffiliateAnalysis,AffiliateVariant,RecommendationAction}from'./affiliate-optimizer';
@@ -41,28 +41,31 @@ const urlBenchmarkRate=(variants:AffiliateVariant[])=>{const rates=variants.map(
 /** Reife-Auflösung je Offer-URL gegen die SOIs der Berichtszeile; undefined = ungegated (Gate „nicht geprüft“). */
 export type UrlMaturityResolver=(offerId:string,offerUrlId:string,reportSois:number)=>LeadMaturityInput|undefined;
 export const resolverFromIndex=(index:LeadMaturityIndex):UrlMaturityResolver=>(offerId,offerUrlId,sois)=>urlLeadMaturityForReport(index,offerId,offerUrlId,sois);
+/** Frischer Index mit Abdeckungsprüfung gegen die URL-Zeilen des Partners (Sync-Lücke/Identitätsabweichung → „keine Daten“, fail-closed). */
+const guardedIndexResolver=(index:LeadMaturityIndex,variants:AffiliateVariant[])=>resolverFromIndex(guardMaturityCoverage(index,maturityCoverage(index.byUrl,variants.map(v=>({key:urlMaturityKey(v.offerId,v.offerUrlId),sois:v.days30.sois})))));
 export const resolverFromSummary=(summary:LeadYoungSummary):UrlMaturityResolver=>(offerId,offerUrlId,sois)=>urlLeadMaturityFromSummary(summary,offerId,offerUrlId,sois);
 /** URL-Verdikte eines Partners durch das Reife-Gate D3 (applyLeadMaturity) – gate an jeder Empfehlung, Reihenfolge und Zusammenfassung wie analyzeAffiliateTraffic. */
 export function gateAffiliateAnalysis<T extends AffiliateAnalysis>(analysis:T,maturity:LeadMaturityIndex|UrlMaturityResolver):T{
- const resolve:UrlMaturityResolver=typeof maturity==='function'?maturity:resolverFromIndex(maturity),benchmarkRate=urlBenchmarkRate(analysis.variants);
+ const resolve:UrlMaturityResolver=typeof maturity==='function'?maturity:guardedIndexResolver(maturity,analysis.variants),benchmarkRate=urlBenchmarkRate(analysis.variants);
  const variants=analysis.variants.map(v=>{const m=v.days30,verdict=applyLeadMaturity(v.recommendation,{clicks:m.clicks,sois:m.sois,firstSales:m.firstSales,rebills:m.rebills,profit:m.profit},{api:v.trafficMode==='api',benchmarkRate,leadMaturity:resolve(v.offerId,v.offerUrlId,m.sois)}),recommendation:GatedRecommendation={...v.recommendation,action:verdict.action,severity:verdict.severity,reason:verdict.reason,gate:verdict.gate};return{...v,recommendation}}).sort((a,b)=>ACTION_ORDER[a.recommendation.action]-ACTION_ORDER[b.recommendation.action]||b.days30.profit-a.days30.profit);
  const stop=variants.filter(x=>x.recommendation.action==='AUSSCHALTEN').length,scale=variants.filter(x=>x.recommendation.action==='SKALIEREN').length;
  return{...analysis,variants,bestVariantKey:variants[0]?.key??analysis.bestVariantKey,summary:`${variants.length} direkte Offer-/URL-Varianten · ${stop} Ausschaltkandidaten · ${scale} Skalierungskandidaten`};
 }
 /** Persistierte Reife-Kurzfassungen aller Partner (Rollups-Cron), 300 s gecacht unter Tag 'lead-maturity'; Fehler → leere Map (Übersicht bleibt ungegated, Gate „nicht geprüft“). */
 export const loadLeadYoungSummaries=():Promise<Record<string,LeadYoungSummary>>=>unstable_cache(async()=>{
- const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',LEAD_MATURITY_SUMMARY_PREFIX).lt('key',`${LEAD_MATURITY_SUMMARY_PREFIX.slice(0,-1)};`);
+ // Prefix-Suche wie access-store.list (LIKE mit maskierten Wildcards) – ein Bereichsscan über Sonderzeichen hängt an der Kollation.
+ const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').like('key',`${LEAD_MATURITY_SUMMARY_PREFIX.replace(/[%_]/g,'\\$&')}%`).limit(2000);
  if(error)throw new Error(`Supabase lead maturity summaries: ${error.message}`);
  const out:Record<string,LeadYoungSummary>={};
  for(const item of data||[]){const value=(item as{value:unknown}).value;if(isLeadYoungSummary(value))out[value.affiliateId]=value}
  return out;
 },['lead-maturity-summaries-v1'],{revalidate:300,tags:['lead-maturity']})().catch((error:unknown)=>{console.error('Lead maturity summaries unavailable',error);return{} as Record<string,LeadYoungSummary>});
-/** Gate für alle sichtbaren Partner: der gewählte Partner (options.leadMaturityFor) bekommt den frischen Index aus seinen Conversions, alle anderen die Kurzfassung des letzten Rollups; ohne Kurzfassung bleibt der Partner ungegated. */
-async function gateAffiliates<T extends AffiliateAnalysis>(analyses:T[],range:{from:string;to:string},access:AccessMetadata,options?:LeadMaturityOptions):Promise<T[]>{
+/** Gate für alle sichtbaren Partner: der gewählte Partner (options.leadMaturityFor) bekommt den frischen Index aus seinen Conversions, alle anderen die Kurzfassung des letzten Rollups – nur wenn das Fenster heute enthält und der Rollup höchstens zwei Stunden alt ist; sonst bleibt der Partner ungegated (Gate „nicht geprüft“). */
+async function gateAffiliates<T extends AffiliateAnalysis>(analyses:T[],range:{from:string;to:string},access:AccessMetadata,options?:LeadMaturityOptions,now=new Date()):Promise<T[]>{
  if(!analyses.length)return analyses;
  const selectedId=options?.leadMaturityFor,selectedVisible=Boolean(selectedId&&analyses.some(a=>a.affiliateId===selectedId)&&!foreignScopeRequested(access,{affiliate:selectedId}));
  const[summaries,selectedIndex]=await Promise.all([loadLeadYoungSummaries(),selectedVisible?maturityWindow(selectedId!,range):Promise.resolve(null)]);
- return analyses.map(a=>{if(selectedIndex&&a.affiliateId===selectedId)return gateAffiliateAnalysis(a,selectedIndex);const summary=summaries[a.affiliateId];return summary?gateAffiliateAnalysis(a,resolverFromSummary(summary)):a});
+ return analyses.map(a=>{if(selectedIndex&&a.affiliateId===selectedId)return gateAffiliateAnalysis(a,selectedIndex);const summary=summaries[a.affiliateId];return summary&&summaryAppliesTo(summary,range,now)?gateAffiliateAnalysis(a,resolverFromSummary(summary)):a});
 }
 
 const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();

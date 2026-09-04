@@ -71,3 +71,19 @@ describe('report-based maturity (long windows, unknown leaves) and persisted sum
   expect(leadMaturitySummaryKey('376')).toBe(`${LEAD_MATURITY_SUMMARY_PREFIX}376`);
  });
 });
+
+describe('coverage plausibility and p75 cap',()=>{
+ const{maturityCoverage,guardMaturityCoverage,MIN_MATURITY_COVERAGE,LEAD_MATURITY_MAX_P75_HOURS}=maturity;
+ it('measures the share of report sois whose key exists in the index and downgrades to „keine Daten“ below the minimum',()=>{
+  const index=buildLeadMaturityIndex([conv(5),conv(200)],analysis(30,'hoch'),range,now),key='8|2766|tracked|11000|news';
+  expect(maturityCoverage(index.byLeaf,[{key,sois:60},{key:'8|2766|tracked|11000|unbekannt',sois:20}])).toBeCloseTo(0.75,5);
+  expect(maturityCoverage(index.byLeaf,[])).toBeNull();
+  expect(guardMaturityCoverage(index,0.75).confidence).toBe('hoch');
+  expect(guardMaturityCoverage(index,MIN_MATURITY_COVERAGE-0.01).confidence).toBe('keine Daten');
+  expect(guardMaturityCoverage(index,null).confidence).toBe('hoch');
+ });
+ it('caps the effective p75 at 30 days so young sois always sit inside the 30-day rollup window',()=>{
+  expect(effectiveP75Hours(analysis(2000,'hoch'))).toEqual({p75Hours:LEAD_MATURITY_MAX_P75_HOURS,fallbackUsed:false});
+  expect(LEAD_MATURITY_MAX_P75_HOURS).toBe(720);
+ });
+});

@@ -26,3 +26,11 @@ describe('lead maturity gate in the source breakdown (Etappe 3, D3)',()=>{
   expect(candidates.find(x=>x.subSource==='dead')?.assessment).toMatchObject({action:'AUSSCHALTEN',gate:{latencyConfidence:'keine Daten'}});
  });
 });
+describe('maturity coverage guard in the breakdown',()=>{
+ it('treats an index that covers too few report sois as „keine Daten“ (fail-closed) instead of full maturity',()=>{
+  const merged=mergeSourceWindows([],[],[row('A','bad',300,60,-90),row('A','other',300,60,-90)]);
+  const rows=attachSourceMaturity(merged,{byLeaf:{'8|2766|tracked|A|zzz':{matureSois:5,totalSois:5,p75Hours:48,confidence:'hoch'}},byUrl:{},confidence:'hoch',p75Hours:48,fallbackUsed:false,range:{from:'2026-08-06',to:'2026-09-04'},generatedAt:'2026-09-04T12:00:00Z'});
+  expect(rows[0].maturity?.confidence).toBe('keine Daten');
+  expect(assessTraffic(rows[0].days30,undefined,rows[0].maturity)).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten',matureSois:0}});
+ });
+});

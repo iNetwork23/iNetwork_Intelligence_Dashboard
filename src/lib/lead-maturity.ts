@@ -17,7 +17,9 @@ export const normalizedLeafValue=(value:unknown)=>{if(value===undefined||value==
 export const leafMaturityKey=(id:LeadMaturityIdentity)=>`${id.offerId}|${id.offerUrlId}|${id.trafficMode}|${normalizedLeafValue(id.mainValue)??''}|${normalizedLeafValue(id.subValue)??''}`;
 export const urlMaturityKey=(offerId:string,offerUrlId:string)=>`${offerId}|${offerUrlId}`;
 /** p75 der Analyse; Fallback 72 h ohne belastbare Latenz (p75 fehlt oder Konfidenz niedrig/keine Daten). */
-export const effectiveP75Hours=(analysis:Pick<LeadLatencyAnalysis,'p75Hours'|'confidence'>)=>analysis.p75Hours!==null&&Number.isFinite(analysis.p75Hours)&&(analysis.confidence==='hoch'||analysis.confidence==='mittel')?{p75Hours:analysis.p75Hours,fallbackUsed:false}:{p75Hours:LEAD_MATURITY_FALLBACK_HOURS,fallbackUsed:true};
+/** Obergrenze der Wartezeit für Reifezwecke (30 Tage): so liegen junge SOIs immer im 30-Tage-Rollup-Fenster und die Kurzfassung gilt für jedes Fenster, das heute enthält. */
+export const LEAD_MATURITY_MAX_P75_HOURS=720;
+export const effectiveP75Hours=(analysis:Pick<LeadLatencyAnalysis,'p75Hours'|'confidence'>)=>analysis.p75Hours!==null&&Number.isFinite(analysis.p75Hours)&&(analysis.confidence==='hoch'||analysis.confidence==='mittel')?{p75Hours:Math.min(LEAD_MATURITY_MAX_P75_HOURS,analysis.p75Hours),fallbackUsed:false}:{p75Hours:LEAD_MATURITY_FALLBACK_HOURS,fallbackUsed:true};
 type Raw=ConversionRow&{adv1?:string|null;adv2?:string|null;sub2?:string|null};
 /** Blattidentität einer Conversion wie in aggregateSourceRows: API → adv1/adv2, sonst source_id/sub1 (Klick-IDs in sub1 über sub2 kanonisiert). */
 export function conversionLeafIdentity(row:ConversionRow):LeadMaturityIdentity{const raw=row as Raw,trafficMode=raw.traffic_mode==='api'?'api' as const:'tracked' as const,main=trafficMode==='api'?raw.adv1:raw.source_id,subRaw=trafficMode==='api'?raw.adv2:raw.sub1,sub=canonicalTrackedSub(String(subRaw??''),trafficMode==='api'?'':String(raw.sub2??''));return{offerId:String(row.relationship?.offer?.network_offer_id||0),offerUrlId:String(row.relationship?.offer_url?.network_offer_url_id||0),trafficMode,mainValue:normalizedLeafValue(main),subValue:normalizedLeafValue(sub.value)}}
@@ -73,4 +75,25 @@ export const isLeadYoungSummary=(value:unknown):value is LeadYoungSummary=>{cons
 export function urlLeadMaturityFromSummary(summary:LeadYoungSummary,offerId:string,offerUrlId:string,reportSois:number):LeadMaturityInput{
  const young=Math.max(0,Number(summary.youngByUrl[urlMaturityKey(offerId,offerUrlId)])||0);
  return leadMaturityFromReport(summary,young?{matureSois:0,totalSois:young,p75Hours:summary.p75Hours,confidence:summary.confidence}:undefined,reportSois);
+}
+
+/** Plausibilität der Abdeckung: Anteil der Berichts-SOIs, deren Schlüssel im Index vorkommt. Unter MIN_MATURITY_COVERAGE gilt der Index als „keine Daten“ (fail-closed) – fängt Sync-Lücken und Identitäts-Abweichungen zwischen Conversions und Berichtszeilen. */
+export const MIN_MATURITY_COVERAGE=0.5;
+export function maturityCoverage(bucket:Record<string,LeadMaturityInput>,rows:Array<{key:string;sois:number}>):number|null{
+ let total=0,covered=0;
+ for(const row of rows){const sois=Math.max(0,Number(row.sois)||0);total+=sois;if(bucket[row.key])covered+=sois}
+ return total>0?covered/total:null;
+}
+/** Index mit ausreichender Abdeckung unverändert; sonst derselbe Index mit Konfidenz „keine Daten“ (Engine: BEOBACHTEN statt AUSSCHALTEN). */
+export function guardMaturityCoverage(index:LeadMaturityIndex,coverage:number|null):LeadMaturityIndex{
+ if(index.confidence==='keine Daten'||coverage===null||coverage>=MIN_MATURITY_COVERAGE)return index;
+ return{...index,confidence:'keine Daten'};
+}
+/** Kurzfassung nur anwenden, wenn das Fenster heute (Berlin) enthält und der Rollup jung genug ist; sonst ungegated (Gate „nicht geprüft“). */
+export const LEAD_MATURITY_SUMMARY_MAX_AGE_MS=2*60*60_000;
+const berlinToday=(now:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+export function summaryAppliesTo(summary:Pick<LeadYoungSummary,'generatedAt'>,range:{from:string;to:string},now=new Date()):boolean{
+ if(range.to!==berlinToday(now))return false;
+ const at=Date.parse(summary.generatedAt);
+ return Number.isFinite(at)&&now.getTime()-at<=LEAD_MATURITY_SUMMARY_MAX_AGE_MS&&at<=now.getTime()+60_000;
 }

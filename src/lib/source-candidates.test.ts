@@ -175,6 +175,18 @@ describe('cron options: conversions memo, persisted maturity summary, budget gra
   expect(snapshot).toMatchObject({affiliates:1,affiliatesProcessed:0,coverageComplete:false,rows:[]});
  });
 });
+describe('memoizedConversionsLoader',()=>{
+ it('loads each affiliate once across ranges, forgets failures and can be cleared',async()=>{
+  const{memoizedConversionsLoader}=await import('./source-candidates');
+  let calls=0;const load=vi.fn(async(affiliateId:string)=>{calls++;if(affiliateId==='bad')throw new Error('down');return[]});
+  const memo=memoizedConversionsLoader(load),now=new Date();
+  await memo.conversionsFor('376',now);await memo.conversionsFor('376',now);
+  expect(calls).toBe(1);expect(memo.size()).toBe(1);
+  await expect(memo.conversionsFor('bad',now)).rejects.toThrow('down');await Promise.resolve();
+  expect(memo.size()).toBe(1);
+  memo.clear();expect(memo.size()).toBe(0);
+ });
+});
 describe('capSourceCandidates',()=>{
  it('keeps at most the configured rows per action and flags truncation',async()=>{
   const{capSourceCandidates,CANDIDATE_ROW_LIMITS}=await import('./source-candidates');

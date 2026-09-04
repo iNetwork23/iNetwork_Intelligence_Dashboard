@@ -779,8 +779,22 @@ export default async function AffiliateOptimizerPage({
                     (sum, t) => sum + (t.status === "ok" ? t.profitDelta : 0),
                     0,
                   );
+                  // Reife-Gate über das kleinere Volumen beider Perioden (wie die Trendzellen der Varianten).
+                  const previousVolume = verdicts.reduce(
+                    (acc, t) => {
+                      const previous = t.status === "ok" ? t.previous : undefined;
+                      return previous
+                        ? { clicks: acc.clicks + previous.clicks, sois: acc.sois + previous.sois }
+                        : acc;
+                    },
+                    { clicks: 0, sois: 0 },
+                  );
+                  const gateVolume = {
+                    clicks: Math.min(selected.totals30.clicks, previousVolume.clicks),
+                    sois: Math.min(selected.totals30.sois, previousVolume.sois),
+                  };
                   return (
-                    <em className={`heroTrend ${toneClass(signTone(delta, selected.totals30))}`}>
+                    <em className={`heroTrend ${toneClass(signTone(delta, gateVolume))}`}>
                       {delta >= 0 ? "+" : ""}{eur(delta)} vs. Vorperiode
                     </em>
                   );
