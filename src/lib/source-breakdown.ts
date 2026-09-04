@@ -1,5 +1,5 @@
 import{assessUnit,projectSourceAction,type LeadMaturityInput,type VerdictGate}from'./decision-engine';
-import{leadMaturityFor,sumLeadMaturity,type LeadMaturityIndex}from'./lead-maturity';
+import{leadMaturityFor,leadMaturityFromReport,sumLeadMaturity,type LeadMaturityIndex}from'./lead-maturity';
 import{canonicalTrackedSub}from'./click-id-sub-source';
 import type{ReportRow}from'./portfolio';
 import{sourceRowBlockKeys}from'./source-block-markers';
@@ -22,8 +22,10 @@ const activityOf=(row:SourceBreakdownRow)=>row.activity;
 const activityLatest=(items:LeadActivity[]):LeadActivity=>({lastLeadDate:items.map(x=>x.lastLeadDate).filter((x):x is string=>Boolean(x)).sort().at(-1)||null,asOf:items.map(x=>x.asOf).filter(Boolean).sort().at(-1)||'',coverageComplete:items.every(x=>x.coverageComplete),lookbackDays:Math.max(...items.map(x=>x.lookbackDays),365)});
 const calendarDays=(from:string,to:string)=>Math.max(0,Math.round((Date.parse(`${to}T12:00:00Z`)-Date.parse(`${from}T12:00:00Z`))/86_400_000));
 export function leadActivityStatus(activity:LeadActivity):LeadActivityStatus{if(!activity.coverageComplete)return{label:'Status unbekannt',detail:activity.lastLeadDate?`Letzter bekannter Lead: ${activity.lastLeadDate.split('-').reverse().join('.')}`:`Historie unvollständig`,tone:'unknown'};if(!activity.lastLeadDate)return{label:'Kein Lead gefunden',detail:`Kein Lead in ${activity.lookbackDays} Tagen`,tone:'stale'};const days=calendarDays(activity.lastLeadDate,activity.asOf),date=activity.lastLeadDate.split('-').reverse().join('.');if(days===0)return{label:'Heute aktiv',detail:`Letzter Lead: heute`,tone:'active'};if(days===1)return{label:'Kürzlich aktiv',detail:`Letzter Lead: gestern (${date})`,tone:'recent'};if(days===2)return{label:'Kürzlich aktiv',detail:`Letzter Lead: ${date} · vor 2 Tagen`,tone:'recent'};return{label:days>=7?'Vermutlich inaktiv':'Keine neuen Leads',detail:`Seit ${days} Tagen keine neuen Leads`,tone:'stale'}}
+/** maturity = Index-Eintrag des Blatts (Conversions-Zählung); die Reife gegen die Berichtszeile ergibt sich als SOIs − junge SOIs (leadMaturityFromReport). */
 export function assessTraffic(m:ConversionMetric,benchmarkRate?:number,maturity?:LeadMaturityInput):TrafficAssessment{
- const verdict=assessUnit({clicks:m.clicks,sois:m.sois,firstSales:m.firstSales,rebills:m.rebills,profit:m.profit},{benchmarkRate,leadMaturity:maturity});
+ const leadMaturity=maturity?leadMaturityFromReport(maturity,maturity,m.sois):undefined;
+ const verdict=assessUnit({clicks:m.clicks,sois:m.sois,firstSales:m.firstSales,rebills:m.rebills,profit:m.profit},{benchmarkRate,leadMaturity});
  const action=projectSourceAction(verdict.action);
  return{action,severity:action==='SKALIEREN'?'positive':action==='AUSSCHALTEN'?'critical':'neutral',reason:verdict.reason,gate:verdict.gate};
 }

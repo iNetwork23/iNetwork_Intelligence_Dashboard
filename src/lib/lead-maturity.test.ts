@@ -1,3 +1,4 @@
+import * as maturity from'./lead-maturity';
 import{describe,expect,it}from'vitest';import type{ConversionRow}from'./everflow';import{analyzeLeadLatency}from'./lead-latency';import{buildLeadMaturityIndex,conversionLeafIdentity,effectiveP75Hours,leadMaturityFor,leafMaturityKey,noLeadMaturityIndex,sumLeadMaturity,urlLeadMaturityFor,LEAD_MATURITY_FALLBACK_HOURS}from'./lead-maturity';
 const now=new Date('2026-09-04T12:00:00Z'),epoch=now.getTime()/1000,range={from:'2026-08-06',to:'2026-09-04'};
 type Extra={mode?:'api'|'tracked';source?:string|null;sub?:string|null;sub2?:string|null;adv1?:string|null;adv2?:string|null;url?:string;offer?:string;campaign?:number;event?:string;isEvent?:boolean};
@@ -46,3 +47,27 @@ describe('buildLeadMaturityIndex',()=>{
  it('does not leak the index entry by reference',()=>{const index=buildLeadMaturityIndex([conv(100)],analysis(30,'hoch'),range,now),id={offerId:'8',offerUrlId:'2766',trafficMode:'tracked' as const,mainValue:'11000',subValue:'news'};leadMaturityFor(index,id).matureSois=99;expect(leadMaturityFor(index,id).matureSois).toBe(1)});
 });
 describe('sumLeadMaturity',()=>{it('adds counts, keeps the weakest confidence and returns undefined without inputs',()=>{expect(sumLeadMaturity([])).toBeUndefined();expect(sumLeadMaturity([undefined])).toBeUndefined();expect(sumLeadMaturity([{matureSois:3,totalSois:5,p75Hours:30,confidence:'hoch'},undefined,{matureSois:1,totalSois:1,p75Hours:30,confidence:'niedrig'}])).toEqual({matureSois:4,totalSois:6,p75Hours:30,confidence:'niedrig'})})});
+
+describe('report-based maturity (long windows, unknown leaves) and persisted summaries',()=>{
+ const{leadMaturityFromReport,leafLeadMaturityForReport,urlLeadMaturityForReport,summarizeLeadMaturity,isLeadYoungSummary,urlLeadMaturityFromSummary,leadMaturitySummaryKey,LEAD_MATURITY_SUMMARY_PREFIX}=maturity;
+ it('derives mature = report sois − young sois, so a 12-month window with 400 sois and 30 recent young ones stays killable',()=>{
+  const index=buildLeadMaturityIndex([...Array.from({length:30},()=>conv(5)),...Array.from({length:10},()=>conv(200))],analysis(30,'hoch'),range,now);
+  const id={offerId:'8',offerUrlId:'2766',trafficMode:'tracked' as const,mainValue:'11000',subValue:'news'};
+  expect(leafLeadMaturityForReport(index,id,400)).toEqual({matureSois:370,totalSois:400,p75Hours:30,confidence:'hoch'});
+  expect(urlLeadMaturityForReport(index,'8','2766',400)).toEqual({matureSois:370,totalSois:400,p75Hours:30,confidence:'hoch'});
+  expect(leafLeadMaturityForReport(index,{...id,subValue:'unbekannt'},55)).toEqual({matureSois:55,totalSois:55,p75Hours:30,confidence:'hoch'});
+  expect(leadMaturityFromReport(index,{matureSois:0,totalSois:80,p75Hours:30,confidence:'hoch'},55)).toMatchObject({matureSois:0,totalSois:55});
+ });
+ it('keeps „keine Daten“ fail-closed with zero mature sois against the report row',()=>{
+  const index=noLeadMaturityIndex(range,now);
+  expect(leafLeadMaturityForReport(index,{offerId:'8',offerUrlId:'2766',trafficMode:'tracked',mainValue:'11000',subValue:null},120)).toEqual({matureSois:0,totalSois:120,p75Hours:72,confidence:'keine Daten'});
+ });
+ it('summarises only urls with young sois, validates the shape and resolves urls from the summary',()=>{
+  const index=buildLeadMaturityIndex([...Array.from({length:3},()=>conv(5)),conv(200)],analysis(30,'hoch'),range,now),summary=summarizeLeadMaturity(index,'376');
+  expect(summary).toMatchObject({version:1,affiliateId:'376',p75Hours:30,confidence:'hoch',fallbackUsed:false,youngByUrl:{'8|2766':3}});
+  expect(isLeadYoungSummary(summary)).toBe(true);expect(isLeadYoungSummary({...summary,version:2})).toBe(false);expect(isLeadYoungSummary(null)).toBe(false);
+  expect(urlLeadMaturityFromSummary(summary,'8','2766',60)).toEqual({matureSois:57,totalSois:60,p75Hours:30,confidence:'hoch'});
+  expect(urlLeadMaturityFromSummary(summary,'8','999',60)).toEqual({matureSois:60,totalSois:60,p75Hours:30,confidence:'hoch'});
+  expect(leadMaturitySummaryKey('376')).toBe(`${LEAD_MATURITY_SUMMARY_PREFIX}376`);
+ });
+});

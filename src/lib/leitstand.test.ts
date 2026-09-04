@@ -127,7 +127,8 @@ describe('Leitstand model',()=>{
   expect(complete.losses.map(row=>row.source)).toEqual(['worst','bad','net → pl-7']);
   expect(complete.winners.map(row=>row.source)).toEqual(['star','good','ok']);
   expect(complete.counters).toEqual({openKill:5,activeBlocks:0,incidents:0});
-  expect(describeRollup(complete)).toEqual({source:'Rollup vom 04.09.2026, 12:47 · 12 von 12 Partnern',warning:null});
+  expect(describeRollup(complete)).toEqual({source:'Rollup vom 04.09.2026, 12:47 · 12 von 12 Partnern',warning:null,maturityWarning:null});
+  expect(describeRollup({...complete,maturityUnavailable:3}).maturityWarning).toBe('Reife für 3 Partner nicht prüfbar (Conversions nicht ladbar) – deren Ausschalt-Kandidaten stehen auf BEOBACHTEN.');
   const partial=buildLeitstand(snapshot({affiliatesProcessed:7,coverageComplete:false}),new Map())!;
   expect(describeRollup(partial).warning).toBe('Rollup unvollständig: 7 von 12 Partnern ausgewertet – Zeitbudget erreicht oder Partner übersprungen.');
  });

@@ -111,7 +111,7 @@ describe('gateAffiliateAnalysis',()=>{
  it('is pure and re-sorts by action order then profit',async()=>{
   const{gateAffiliateAnalysis}=await import('./affiliate-optimizer-service');const{analyzeAffiliateTraffic}=await import('./affiliate-optimizer');const{buildLeadMaturityIndex}=await import('./lead-maturity');
   const analysis=analyzeAffiliateTraffic(current()).find(a=>a.affiliateId==='376')!;
-  const gated=gateAffiliateAnalysis(analysis,buildLeadMaturityIndex([soi(5,'1')],{p75Hours:null,confidence:'keine Daten'},range,now));
+  const gated=gateAffiliateAnalysis(analysis,buildLeadMaturityIndex(Array.from({length:20},()=>soi(5,'1')),{p75Hours:null,confidence:'keine Daten'},range,now));
   expect(analysis.variants.find(v=>v.offerUrlId==='1')?.recommendation.action).toBe('AUSSCHALTEN');
   expect(gated.variants.map(v=>[v.offerUrlId,v.recommendation.action])).toEqual([['2','SKALIEREN'],['1','WEITER TESTEN']]);
   expect(gated.bestVariantKey).toBe('376|8|2');

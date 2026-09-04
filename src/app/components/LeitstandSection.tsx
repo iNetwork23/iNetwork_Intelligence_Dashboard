@@ -41,6 +41,7 @@ export default async function LeitstandSection({access,view:pending}:{access:Acc
  return <section className="leitstand" aria-labelledby="leitstand-title">
   {head(rollup.source)}
   {rollup.warning&&<p className="leitstandWarning" role="status">{rollup.warning}</p>}
+  {rollup.maturityWarning&&<p className="leitstandWarning" role="status">{rollup.maturityWarning}</p>}
   {stale&&<p className="leitstandWarning" role="status">{stale}</p>}
   {view.blockIndexUnavailable&&<p className="leitstandWarning" role="status">Sperrstatus derzeit nicht lesbar – Sperren auf /sources prüfen.</p>}
   <div className="leitstandGrid">

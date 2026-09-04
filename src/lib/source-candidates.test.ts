@@ -147,6 +147,34 @@ describe('lead maturity in the cron (Etappe 3, D3)',()=>{
  });
 });
 
+describe('cron options: conversions memo, persisted maturity summary, budget grace, maturity counter',()=>{
+ it('loads conversions through options.conversionsFor and persists a young summary per affiliate only when asked',async()=>{
+  const{buildSourceCandidatesSnapshot}=await import('./source-candidates');
+  const now=new Date();loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','11000','news',{total_click:900,cv:60,profit:-90})]);
+  const conversionsFor=vi.fn(async()=>[...Array.from({length:12},()=>soi('376',200,{main:'11000',sub:'news',now})),...Array.from({length:48},()=>soi('376',3,{main:'11000',sub:'news',now}))]);
+  const snapshot=await buildSourceCandidatesSnapshot(range,{now,conversionsFor,persistMaturity:true});
+  expect(conversionsFor).toHaveBeenCalledWith('376',now);expect(loadConversions).not.toHaveBeenCalled();
+  expect(snapshot.rows[0]).toMatchObject({action:'BEOBACHTEN',gate:{matureSois:12,totalSois:60,maturityReached:false}});
+  expect(upsert).toHaveBeenCalledWith({key:'lead_maturity:v1:376',value:expect.objectContaining({version:1,affiliateId:'376',confidence:'niedrig',youngByUrl:{'8|2766':48}})},{onConflict:'key'});
+  upsert.mockClear();
+  await buildSourceCandidatesSnapshot(range,{now,conversionsFor});
+  expect(upsert).not.toHaveBeenCalled();
+ });
+ it('counts affiliates whose maturity could not be loaded and keeps them evaluated fail-closed',async()=>{
+  const{buildSourceCandidatesSnapshot}=await import('./source-candidates');
+  loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','11000','news',{total_click:900,cv:60,profit:-90})]);
+  const snapshot=await buildSourceCandidatesSnapshot(range,{conversionsFor:async()=>{throw new Error('conversions down')}});
+  expect(snapshot).toMatchObject({affiliatesProcessed:1,coverageComplete:true,maturityUnavailable:1});
+  expect(snapshot.rows[0]).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten'}});
+  expect(upsert).not.toHaveBeenCalled();
+ });
+ it('gives up on an affiliate whose loads overrun the budget plus grace and reports incomplete coverage',async()=>{
+  const{buildSourceCandidatesSnapshot}=await import('./source-candidates');
+  loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockImplementation(()=>new Promise(()=>{}));
+  const snapshot=await buildSourceCandidatesSnapshot(range,{timeBudgetMs:20,loadGraceMs:1});
+  expect(snapshot).toMatchObject({affiliates:1,affiliatesProcessed:0,coverageComplete:false,rows:[]});
+ });
+});
 describe('capSourceCandidates',()=>{
  it('keeps at most the configured rows per action and flags truncation',async()=>{
   const{capSourceCandidates,CANDIDATE_ROW_LIMITS}=await import('./source-candidates');
@@ -222,11 +250,14 @@ describe('rollups route hook',()=>{
   expect(route).toContain('catch(error){console.error(`Source candidates ${period} failed`,error)');
   expect(route).toContain('sourceCandidates:await publishSourceCandidateRanges(started)');
   expect(route.indexOf('refreshLongPortfolioRangeSnapshots(getSupabaseAdmin())')).toBeLessThan(route.indexOf('publishSourceCandidateRanges(started)'));
-  expect(route).toContain('Math.max(15_000,Math.floor(Math.max(0,200_000-elapsedMs)/Math.max(1,rangesLeft)))');
+  expect(route).toContain('Math.max(15_000,Math.floor(Math.max(0,CANDIDATE_TOTAL_BUDGET_MS-elapsedMs)/Math.max(1,rangesLeft)))');
+  expect(route).toContain('CANDIDATE_TOTAL_BUDGET_MS=180_000');
+  expect(route).toContain('conversionsFor,persistMaturity:index===0');
+  expect(route).toContain("revalidateTag('lead-maturity',{expire:0})");
  });
  it('keeps the total runtime inside the route budget',async()=>{
   const{sourceCandidateBudgetMs}=await import('@/app/api/sync/rollups/route');
-  expect(sourceCandidateBudgetMs(0)).toBe(200_000);expect(sourceCandidateBudgetMs(0,2)).toBe(100_000);expect(sourceCandidateBudgetMs(60_000,2)).toBe(70_000);expect(sourceCandidateBudgetMs(190_000)).toBe(15_000);expect(sourceCandidateBudgetMs(230_000,2)).toBe(15_000);
+  expect(sourceCandidateBudgetMs(0)).toBe(180_000);expect(sourceCandidateBudgetMs(0,2)).toBe(90_000);expect(sourceCandidateBudgetMs(60_000,2)).toBe(60_000);expect(sourceCandidateBudgetMs(170_000)).toBe(15_000);expect(sourceCandidateBudgetMs(230_000,2)).toBe(15_000);
  });
  it('answers with per-range results and never fails the portfolio rollups because of the candidates',async()=>{
   const{GET}=await import('@/app/api/sync/rollups/route');const{NextRequest}=await import('next/server');

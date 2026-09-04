@@ -42,3 +42,35 @@ export const leadMaturityFor=(index:LeadMaturityIndex,identity:LeadMaturityIdent
 export const urlLeadMaturityFor=(index:LeadMaturityIndex,offerId:string,offerUrlId:string):LeadMaturityInput=>({...(index.byUrl[urlMaturityKey(offerId,offerUrlId)]||empty(index))});
 /** Summe mehrerer Blätter (Hauptquellen-Blatt über seine Unterquellen); ohne Eingaben undefined. */
 export function sumLeadMaturity(items:Array<LeadMaturityInput|undefined>):LeadMaturityInput|undefined{const present=items.filter((x):x is LeadMaturityInput=>Boolean(x));if(!present.length)return undefined;const order:Record<LeadMaturityInput['confidence'],number>={'keine Daten':0,niedrig:1,mittel:2,hoch:3};return present.reduce((acc,x)=>({matureSois:acc.matureSois+x.matureSois,totalSois:acc.totalSois+x.totalSois,p75Hours:acc.p75Hours??x.p75Hours,confidence:order[x.confidence]<order[acc.confidence]?x.confidence:acc.confidence}),{matureSois:0,totalSois:0,p75Hours:null as number|null,confidence:'hoch' as LeadMaturityInput['confidence']})}
+
+/**
+ * Reife gegen die Berichtszeile: Nur junge SOIs (Alter < p75) fehlen an der Reife – sie liegen immer in den letzten Tagen und damit
+ * im 90-Tage-Conversions-Fenster, egal wie lang der Berichtszeitraum ist. reif = SOIs der Berichtszeile − junge SOIs des Index-Eintrags;
+ * ohne Eintrag gilt 0 junge SOIs; ohne eine einzige Conversion („keine Daten“) bleibt die Reife unbekannt (fail-closed in der Engine).
+ */
+const youngOf=(entry:LeadMaturityInput|undefined)=>entry?Math.max(0,entry.totalSois-entry.matureSois):0;
+export function leadMaturityFromReport(index:{confidence:LeadMaturityInput['confidence'];p75Hours:number|null},entry:LeadMaturityInput|undefined,reportSois:number):LeadMaturityInput{
+ const sois=Math.max(0,Math.round(Number(reportSois)||0)),p75Hours=index.p75Hours??LEAD_MATURITY_FALLBACK_HOURS;
+ if(index.confidence==='keine Daten')return{matureSois:0,totalSois:sois,p75Hours,confidence:'keine Daten'};
+ return{matureSois:Math.max(0,sois-youngOf(entry)),totalSois:sois,p75Hours,confidence:index.confidence};
+}
+/** Reife eines Blatts gegen die Berichtszeile (SourceBreakdown, Cron). */
+export const leafLeadMaturityForReport=(index:LeadMaturityIndex,identity:LeadMaturityIdentity,reportSois:number)=>leadMaturityFromReport(index,index.byLeaf[leafMaturityKey(identity)],reportSois);
+/** Reife einer Offer-URL gegen die Berichtszeile (URL-Verdikte des Cockpits). */
+export const urlLeadMaturityForReport=(index:LeadMaturityIndex,offerId:string,offerUrlId:string,reportSois:number)=>leadMaturityFromReport(index,index.byUrl[urlMaturityKey(offerId,offerUrlId)],reportSois);
+/** Persistierte Kurzfassung je Partner (Rollups-Cron, sync_state lead_maturity:v1:{affiliateId}): nur junge SOIs je Offer-URL, damit die Übersicht aller Partner ohne Conversions-Ladung gegated werden kann. */
+export type LeadYoungSummary={version:1;affiliateId:string;generatedAt:string;p75Hours:number;confidence:LeadMaturityInput['confidence'];fallbackUsed:boolean;youngByUrl:Record<string,number>};
+export const LEAD_MATURITY_SUMMARY_PREFIX='lead_maturity:v1:';
+export const leadMaturitySummaryKey=(affiliateId:string)=>`${LEAD_MATURITY_SUMMARY_PREFIX}${affiliateId}`;
+export function summarizeLeadMaturity(index:LeadMaturityIndex,affiliateId:string):LeadYoungSummary{
+ const youngByUrl:Record<string,number>={};
+ for(const[key,entry]of Object.entries(index.byUrl)){const young=youngOf(entry);if(young>0)youngByUrl[key]=young}
+ return{version:1,affiliateId:String(affiliateId),generatedAt:index.generatedAt,p75Hours:index.p75Hours,confidence:index.confidence,fallbackUsed:index.fallbackUsed,youngByUrl};
+}
+const CONFIDENCES:LeadMaturityInput['confidence'][]=['hoch','mittel','niedrig','keine Daten'];
+export const isLeadYoungSummary=(value:unknown):value is LeadYoungSummary=>{const s=value as LeadYoungSummary|null;return Boolean(s&&typeof s==='object'&&s.version===1&&typeof s.affiliateId==='string'&&typeof s.generatedAt==='string'&&typeof s.p75Hours==='number'&&CONFIDENCES.includes(s.confidence)&&s.youngByUrl&&typeof s.youngByUrl==='object')};
+/** Reife einer Offer-URL aus der persistierten Kurzfassung gegen die Berichtszeile. */
+export function urlLeadMaturityFromSummary(summary:LeadYoungSummary,offerId:string,offerUrlId:string,reportSois:number):LeadMaturityInput{
+ const young=Math.max(0,Number(summary.youngByUrl[urlMaturityKey(offerId,offerUrlId)])||0);
+ return leadMaturityFromReport(summary,young?{matureSois:0,totalSois:young,p75Hours:summary.p75Hours,confidence:summary.confidence}:undefined,reportSois);
+}
