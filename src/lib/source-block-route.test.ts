@@ -20,3 +20,36 @@ describe('source block lifecycle contract (Etappe 2, F2)',()=>{
  it('serves history, product-wide preview sums with block state and optional effects only behind the manage gate',()=>{const source=route(),gate=source.indexOf('export async function GET'),manage=source.indexOf('if(!mayManage(auth.user.access))',gate);expect(manage).toBeGreaterThan(gate);expect(source).toContain('offers=sourceBlockOfferSummariesFromSnapshotRows(rows,block)');for(const marker of ["action==='history'","listSourceBlockHistory(id,store)","action==='preview_across_offers'",'resolveProductWideOffers(input,auth.user.access)','loadBlockIndex(store)',"?.status==='active'","url.searchParams.get('effects')==='1'",'loadBlockEffects({from,to}',"json(stripFinance({blocks,effects},can(auth.user.access,'finance.view')))","json(stripFinance({offers:"])expect(source.indexOf(marker,manage)).toBeGreaterThan(manage)});
  it('expires the block effect cache after every mutation outcome without new Everflow write paths',()=>{const source=route();expect(source.split('expireBlockCaches();')).toHaveLength(5);expect(source).toContain("revalidateTag(BLOCK_EFFECTS_CACHE_TAG,{expire:0})");expect(read('src/lib/block-effects.ts')).toContain("BLOCK_EFFECTS_CACHE_TAG='source-blocks'");expect(source).not.toContain('input.variables');expect(source).not.toContain('input.payout_amount')});
 });
+
+describe('source block reference metrics contract (Etappe 4, Maßnahmen-Bilanz)',()=>{
+ const route=()=>read('src/app/api/source-blocks/route.ts');
+ it('computes metricsAtBlock server-side from the already loaded snapshot rows for both activation paths and never adopts client values',()=>{
+  const source=route();
+  expect(source).not.toContain('input.metricsAtBlock');
+  expect(source).toContain('rows=await assertVisibleSource(requested,auth.user.access)');
+  expect(source).toContain('withMetrics:SourceBlockInput={...requested,metricsAtBlock:sourceBlockMetricsFromSnapshotRows(rows,normalizeSourceBlockInput(requested))}');
+  expect(source).toContain('activateSourceBlock(store,withMetrics,');
+  expect(source).toContain('campaignId:undefined,metricsAtBlock:sourceBlockMetricsFromSnapshotRows(rows,{...block,offerId:Number(offerId),originCampaignId:null},{now})');
+  expect(source.split('const requested={...input,reasonCategory,reason} as unknown as SourceBlockInput')).toHaveLength(3);
+ });
+ it('keeps the Everflow write path and the visibility check unchanged',()=>{
+  const source=route();
+  expect(source).toContain('activate:(block:Parameters<typeof activateEverflowSourceBlock>[0],id:string)=>activateEverflowSourceBlock(block,id,apiKey)');
+  expect(source).toContain('deactivate:(id:number,block:Parameters<typeof deactivateEverflowSourceBlock>[1])=>deactivateEverflowSourceBlock(id,block,apiKey)');
+  expect(source).toContain("if(!sourceBlockVisibleInSnapshotRows(rows,block))throw new Error(");
+  expect(source).not.toContain('input.variables');expect(source).not.toContain('input.payout_amount');
+ });
+ it('lets the service accept only a validated reference and store it additively in the record',()=>{
+  const service=read('src/lib/source-block-service.ts'),model=read('src/lib/source-blocks.ts');
+  expect(service).toContain('metricsAtBlock = isSourceBlockMetricsAtBlock(input.metricsAtBlock) ? input.metricsAtBlock : undefined');
+  expect(service).toContain('...(metricsAtBlock ? { metricsAtBlock } : {})');
+  expect(model).toContain('error:string|null;metricsAtBlock?:SourceBlockMetricsAtBlock;reasonCategory?:SourceBlockReasonCategory}');
+ });
+ it('renders the balance columns and the measures total on /source-blocks only with finance.view and colours signs via signTone',()=>{
+  const page=read('src/app/source-blocks/page.tsx');
+  for(const marker of ['<dt>Vermiedener Payout</dt>','<dt>Entgangener Umsatz</dt>','<dt>Bilanz</dt>','<dt>Maßnahmen-Bilanz</dt>','vor Etappe 4 gesperrt','keine SOIs im Referenzfenster',"import{signTone,type SignTone}from'@/lib/verdict-vocabulary'",'balanceTone(effect,effect.balance.net)','signTone(totals.net,{clicks:totals.clicks,sois:totals.refSois})'])expect(page).toContain(marker);
+  expect(page.split("!finance?'nur mit finance.view':effect.balance?euro(")).toHaveLength(4);
+  expect(page).toContain("{!finance?'nur mit finance.view':totals.withBalance?euro(totals.net):'–'}");
+  expect(page).not.toMatch(/balance\.net[<>]0\?'(up|down)'/);
+ });
+});

@@ -978,5 +978,12 @@ export const translations = {
   "First-Sales und positivem Profit.": "first sales and positive profit.",
   "Reife nicht prüfbar – keine Conversion-Daten; Ausschalten erst nach geprüfter Wartezeit.": "Maturity not verifiable – no conversion data; switch off only after the waiting time has been checked.",
   "Monetarisiert, aber im Zeitraum negativ; Ausschalten nur bei belegter Unterperformance.": "Monetised, but negative in the period; switch off only with proven underperformance.",
-  "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.": "Test quota not yet mature; gather more evidence before switching off."
+  "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.": "Test quota not yet mature; gather more evidence before switching off.",
+  "Vermiedener Payout": "Avoided payout",
+  "Entgangener Umsatz": "Forgone revenue",
+  "Bilanz": "Balance",
+  "Maßnahmen-Bilanz": "Measures balance",
+  "vor Etappe 4 gesperrt": "blocked before stage 4",
+  "keine SOIs im Referenzfenster": "no SOIs in the reference window",
+  "keine Sperre mit Referenzwerten": "no block with reference values"
 } as const;

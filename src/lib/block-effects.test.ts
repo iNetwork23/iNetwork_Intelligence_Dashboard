@@ -50,3 +50,30 @@ describe('block effects',()=>{
   expect(effects[0]).toMatchObject({soisSince:0,payoutSince:0,lastTrafficDate:null});
  });
 });
+
+describe('block balance (Etappe 4)',()=>{
+ it('derives saved payout, lost revenue and net from SOIs since block times the reference rates',async()=>{
+  const {blockBalance}=await import('./block-effects');
+  const metricsAtBlock={windowDays:30,clicks:300,sois:30,payout:90,revenue:45,capturedAt:'2026-08-01T00:00:00.000Z'};
+  expect(blockBalance({metricsAtBlock},10)).toEqual({savedPayout:30,lostRevenue:15,net:15});
+  expect(blockBalance({metricsAtBlock:{...metricsAtBlock,revenue:120}},10)).toEqual({savedPayout:30,lostRevenue:40,net:-10});
+  expect(blockBalance({metricsAtBlock:{...metricsAtBlock,payout:10,revenue:0}},3)).toEqual({savedPayout:1,lostRevenue:0,net:1});
+  expect(blockBalance({metricsAtBlock},0)).toEqual({savedPayout:0,lostRevenue:0,net:0});
+ });
+ it('returns null without a reference (blocked before Etappe 4) or without SOIs in the reference window',async()=>{
+  const {blockBalance}=await import('./block-effects');
+  expect(blockBalance({},10)).toBeNull();
+  expect(blockBalance({metricsAtBlock:{windowDays:30,clicks:50,sois:0,payout:0,revenue:0,capturedAt:'2026-08-01T00:00:00.000Z'}},10)).toBeNull();
+ });
+ it('attaches the balance to every effect and keeps it null for pre-Etappe-4 records',async()=>{
+  const {loadBlockEffects}=await import('./block-effects');
+  store.values.clear();loadRows.mockReset();
+  vi.useFakeTimers();vi.setSystemTime(new Date('2026-08-20T09:00:00Z'));
+  const withReference=await activateSourceBlock(store,{...input,metricsAtBlock:{windowDays:30,clicks:100,sois:10,payout:30,revenue:12,capturedAt:'2026-08-20T09:00:00.000Z'}},writer),legacy=await activateSourceBlock(store,{...input,mainValue:'src-2'},writer);
+  vi.useRealTimers();
+  loadRows.mockResolvedValue([row('2026-08-21','30','25','src-1','a',5,1.5),row('2026-08-21','30','25','src-2','a',4,4)]);
+  const effects=await loadBlockEffects({from:'2026-08-01',to:'2026-08-31'}),byId=new Map(effects.map(effect=>[effect.record.id,effect]));
+  expect(byId.get(withReference.id)?.balance).toEqual({savedPayout:15,lostRevenue:6,net:9});
+  expect(byId.get(legacy.id)?.balance).toBeNull();
+ });
+});
