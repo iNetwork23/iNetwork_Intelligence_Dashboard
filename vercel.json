@@ -23,6 +23,10 @@
     {
       "path": "/api/push/dispatch",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/source-blocks/reconcile",
+      "schedule": "27 * * * *"
     }
   ],
   "regions": [
