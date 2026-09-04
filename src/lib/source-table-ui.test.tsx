@@ -54,29 +54,29 @@ describe('Sperrstatus in der Quellenauswertung (Etappe 2)',()=>{
     const html=render(marker(keys('Source A','sub-1')[0],'active'),true);
     expect(html).toContain('Gesperrt seit 03.09.2026');
     expect(html).toContain('<a class="blockMarker active" href="/source-blocks">Gesperrt seit 03.09.2026</a>');
-    expect(html).not.toContain('Sub1 sub-1 ausschalten');
-    expect(html).toContain('Sub1 sub-2 ausschalten');
-    expect(html).toContain('Source Source A ausschalten');
+    expect(html).not.toContain('Sub1 sub-1: Vergütung sperren');
+    expect(html).toContain('Sub1 sub-2: Vergütung sperren');
+    expect(html).toContain('Source Source A: Vergütung sperren');
     expect(html.match(/Gesperrt seit/g)).toHaveLength(1);
   });
   it('markiert eine gesperrte Hauptquelle im Kopf, verlinkt im Sperrbereich und deckt ihre Unterquellen ab',()=>{
     const html=render(marker(keys('Source A')[0],'active'),true);
     expect(html).toContain('sourceGroupPanel verdient blocked');
     expect(html).toContain('<span class="blockMarker active">Gesperrt seit 03.09.2026</span>');
-    expect(html).not.toContain('Source Source A ausschalten');
-    expect(html).not.toContain('Sub1 sub-1 ausschalten');
-    expect(html).toContain('Source Source B ausschalten');
+    expect(html).not.toContain('Source Source A: Vergütung sperren');
+    expect(html).not.toContain('Sub1 sub-1: Vergütung sperren');
+    expect(html).toContain('Source Source B: Vergütung sperren');
   });
-  it('zeigt unklare Sperren als „Sperre unklar“ und ohne Link für Rollen ohne Sperrrecht',()=>{
+  it('zeigt unklare Sperren als „Zustand unklar“ (STATE_WORDS) und ohne Link für Rollen ohne Sperrrecht',()=>{
     const html=render(marker(keys('Source A','sub-1')[0],'error'),false);
-    expect(html).toContain('<span class="blockMarker unclear">Sperre unklar</span>');
+    expect(html).toContain('<span class="blockMarker unclear">Zustand unklar</span>');
     expect(html).not.toContain('href="/source-blocks"');
-    expect(html).not.toContain('ausschalten</span>');
+    expect(html).not.toContain('Vergütung sperren</span>');
   });
   it('rendert ohne Index oder bei inaktiven Datensätzen unverändert Sperrknöpfe',()=>{
     expect(render(undefined,true)).not.toContain('blockMarker');
     const inactive=render(marker(keys('Source A','sub-1')[0],'inactive'),true);
     expect(inactive).not.toContain('blockMarker');
-    expect(inactive).toContain('Sub1 sub-1 ausschalten');
+    expect(inactive).toContain('Sub1 sub-1: Vergütung sperren');
   });
 });

@@ -46,7 +46,7 @@ describe('Marker-Index',()=>{
   expect(findBlockMarker(indexOf(record({id:'b1',status:'inactive'})),row)).toBeNull();
   expect(findBlockMarker(indexOf(record({id:'b1',status:'active',offerId:21})),row)).toBeNull();
   expect(findBlockMarker(indexOf(record({id:'b1',status:'active'})),{...row,trafficMode:'api'})).toBeNull();
-  expect(blockMarkerText(findBlockMarker(indexOf(record({id:'b1',status:'error'})),row)!)).toBe('Sperre unklar');
+  expect(blockMarkerText(findBlockMarker(indexOf(record({id:'b1',status:'error'})),row)!)).toBe('Zustand unklar');
   expect(blockMarkerText(findBlockMarker(indexOf(record({id:'b1',status:'pending'})),row)!)).toBe('Verifizierung läuft');
   expect(findBlockMarker(undefined,row)).toBeNull();
  });

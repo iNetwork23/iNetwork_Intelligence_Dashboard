@@ -22,7 +22,7 @@ describe('Tracker-Liste mit Sperrstatus',()=>{
   expect(html).toContain('Sub-Source: sub-2');
   expect(html).toContain('1 gesperrte Quelle ausgeblendet');
   expect(html).toContain('href="/source-blocks"');
-  expect(html).toContain('<b class="down">1</b> Abschalten');
+  expect(html).toContain('<b class="critical">1</b> AUSSCHALTEN');
   const readOnly=render(rows,marker(subKey('Source A','sub-1'),'active'));
   expect(readOnly).toContain('1 gesperrte Quelle ausgeblendet');
   expect(readOnly).not.toContain('href="/source-blocks"');
@@ -30,7 +30,7 @@ describe('Tracker-Liste mit Sperrstatus',()=>{
  it('zeigt unklare Sperren als Marker in der Liste statt sie auszublenden',()=>{
   const html=render([stopRow('Source A','sub-1')],marker(subKey('Source A','sub-1'),'error'));
   expect(html).toContain('Sub-Source: sub-1');
-  expect(html).toContain('Sperre unklar');
+  expect(html).toContain('Zustand unklar');
   expect(html).not.toContain('ausgeblendet');
  });
  it('zeigt ohne Sperr-Index alle Kandidaten unverändert',()=>{
@@ -45,7 +45,7 @@ describe('Tracker-Liste mit Sperrstatus',()=>{
   expect(html).toContain('Sub-Source: sub-04');
   expect(html).not.toContain('Sub-Source: sub-03');
   expect(html).toContain('Mehr anzeigen · 4 weitere');
-  expect(html).toContain('<b class="down">14</b> Abschalten');
+  expect(html).toContain('<b class="critical">14</b> AUSSCHALTEN');
   expect(render(rows.slice(0,10))).not.toContain('Mehr anzeigen');
  });
 });
@@ -57,5 +57,7 @@ describe('Klickflächen für mobile Kontrolle (D20)',()=>{
   expect(css).toMatch(/\.blockMarker\{[^}]*min-height:44px/);
   expect(css).toMatch(/\.blockedHidden a\{[^}]*min-height:44px/);
   expect(css).toMatch(/\.cockpitList li a\{[^}]*min-height:44px/);
+  expect(css).toMatch(/\.priorityList li a\{[^}]*min-height:44px/);
+  expect(css).toMatch(/\.priorityList\{[^}]*overflow-x:hidden/);
  });
 });

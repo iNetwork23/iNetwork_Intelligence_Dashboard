@@ -14,7 +14,7 @@ export const LEITSTAND_ROLLUP_PENDING='Quellen-Rollup steht noch aus (läuft st�
 export type LeitstandBlockState='none'|'active'|'pending'|'error'|'inactive';
 export type LeitstandRow={key:string;href:string;title:string;affiliate:string;offer:string;source:string;action:SourceCandidate['action'];severity:SourceCandidate['severity'];reason:string;profit:number;sois:number;clicks:number;leadStatus:string|null;block:{state:LeitstandBlockState;since:string|null;id:string|null};blockable:boolean};
 export type LeitstandCounters={openKill:number;activeBlocks:number;incidents:number};
-export type LeitstandModel={range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;losses:LeitstandRow[];winners:LeitstandRow[];counters:LeitstandCounters};
+export type LeitstandModel={range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;maturityUnavailable?:number;losses:LeitstandRow[];winners:LeitstandRow[];counters:LeitstandCounters};
 export type LeitstandView={model:LeitstandModel|null;failed:boolean;blockIndexUnavailable:boolean};
 type BlockIndex=Map<string,SourceBlockRecord>;
 const RUNNING:ReadonlySet<SourceBlockRecord['status']>=new Set(['active','pending','error']);
@@ -25,9 +25,9 @@ const byLoss=(a:SourceCandidate,b:SourceCandidate)=>a.profit-b.profit||b.sois-a.
 const byGain=(a:SourceCandidate,b:SourceCandidate)=>b.profit-a.profit||b.sois-a.sois||identity(a).localeCompare(identity(b));
 /** Erster nicht-inaktiver Record über eigene Ebene und Hauptquelle (eine Hauptquellen-Sperre deckt Unterquellen ab). */
 const blockOf=(row:SourceCandidate,index:BlockIndex)=>{let inactive:SourceBlockRecord|undefined;for(const key of sourceCandidateBlockKeys(row)){const record=index.get(key);if(!record)continue;if(record.status!=='inactive')return record;inactive??=record}return inactive};
-const isOpenKill=(row:SourceCandidate,index:BlockIndex)=>row.action==='ABSCHALTEN'&&isBlockableCandidate(row)&&!RUNNING.has(blockOf(row,index)?.status as SourceBlockRecord['status']);
+const isOpenKill=(row:SourceCandidate,index:BlockIndex)=>row.action==='AUSSCHALTEN'&&isBlockableCandidate(row)&&!RUNNING.has(blockOf(row,index)?.status as SourceBlockRecord['status']);
 /** Top-N Verlustquellen: nur AUSSCHALTEN-Kandidaten, Profit aufsteigend (größter Verlust zuerst). */
-export const rankLosses=(rows:SourceCandidate[],limit=LEITSTAND_TOP_N)=>rows.filter(row=>row.action==='ABSCHALTEN').sort(byLoss).slice(0,limit);
+export const rankLosses=(rows:SourceCandidate[],limit=LEITSTAND_TOP_N)=>rows.filter(row=>row.action==='AUSSCHALTEN').sort(byLoss).slice(0,limit);
 /** Top-N Skalierungskandidaten: nur SKALIEREN, Profit absteigend. */
 export const rankWinners=(rows:SourceCandidate[],limit=LEITSTAND_TOP_N)=>rows.filter(row=>row.action==='SKALIEREN').sort(byGain).slice(0,limit);
 /** Zeile mit Sperrstatus aus dem Sperr-Index (Identität über sourceCandidateBlockKey) und Deep-Link auf /sources. */
@@ -42,15 +42,15 @@ export function countLeitstand(rows:SourceCandidate[],index:BlockIndex):Leitstan
 }
 export function buildLeitstand(snapshot:SourceCandidatesSnapshot|null,index:BlockIndex,limit=LEITSTAND_TOP_N):LeitstandModel|null{
  if(!snapshot)return null;
- return{range:snapshot.range,generatedAt:snapshot.generatedAt,affiliates:snapshot.affiliates,affiliatesProcessed:snapshot.affiliatesProcessed,coverageComplete:snapshot.coverageComplete,losses:rankLosses(snapshot.rows,limit).map(row=>leitstandRow(row,index)),winners:rankWinners(snapshot.rows,limit).map(row=>leitstandRow(row,index)),counters:countLeitstand(snapshot.rows,index)};
+ return{range:snapshot.range,generatedAt:snapshot.generatedAt,affiliates:snapshot.affiliates,affiliatesProcessed:snapshot.affiliatesProcessed,coverageComplete:snapshot.coverageComplete,...(snapshot.maturityUnavailable?{maturityUnavailable:snapshot.maturityUnavailable}:{}),losses:rankLosses(snapshot.rows,limit).map(row=>leitstandRow(row,index)),winners:rankWinners(snapshot.rows,limit).map(row=>leitstandRow(row,index)),counters:countLeitstand(snapshot.rows,index)};
 }
 /** Geldwert nur mit finance.view, sonst Volumen (SOIs · Klicks). */
 export const leitstandAmount=(row:Pick<LeitstandRow,'profit'|'sois'|'clicks'>,finance:boolean)=>finance?euro.format(row.profit):`${integer.format(row.sois)} SOIs · ${integer.format(row.clicks)} Klicks`;
 export const formatBlockSince=(effectiveAt:string)=>`Gesperrt seit ${berlinDate.format(new Date(effectiveAt))}`;
 /** Datenherkunft: Rollup-Zeit und Abdeckung; Warnung, wenn der Cron nicht alle Partner geschafft hat. */
-export function describeRollup(model:Pick<LeitstandModel,'generatedAt'|'affiliates'|'affiliatesProcessed'|'coverageComplete'>):{source:string;warning:string|null}{
+export function describeRollup(model:Pick<LeitstandModel,'generatedAt'|'affiliates'|'affiliatesProcessed'|'coverageComplete'>&{maturityUnavailable?:number}):{source:string;warning:string|null;maturityWarning:string|null}{
  const time=Number.isFinite(Date.parse(model.generatedAt))?berlinDateTime.format(new Date(model.generatedAt)):'unbekannt';
- return{source:`Rollup vom ${time} · ${model.affiliatesProcessed} von ${model.affiliates} Partnern`,warning:model.coverageComplete?null:`Rollup unvollständig: ${model.affiliatesProcessed} von ${model.affiliates} Partnern ausgewertet – Zeitbudget erreicht oder Partner übersprungen.`};
+ return{source:`Rollup vom ${time} · ${model.affiliatesProcessed} von ${model.affiliates} Partnern`,warning:model.coverageComplete?null:`Rollup unvollständig: ${model.affiliatesProcessed} von ${model.affiliates} Partnern ausgewertet – Zeitbudget erreicht oder Partner übersprungen.`,maturityWarning:model.maturityUnavailable?`Reife für ${model.maturityUnavailable} Partner nicht prüfbar (Conversions nicht ladbar) – deren Ausschalt-Kandidaten stehen auf BEOBACHTEN.`:null};
 }
 /** Cron-Ausfall sichtbar (Abnahme H): Rollup älter als zwei Stunden → Warnung; null, wenn frisch oder Zeit unlesbar. */
 export const ROLLUP_STALE_AFTER_MS=2*60*60_000;

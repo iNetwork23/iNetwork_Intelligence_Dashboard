@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { ACTION_WORDS, STATE_WORDS } from "@/lib/verdict-vocabulary";
 import { berlinDateTime, berlinDay } from "@/lib/format-berlin";
 import { createPortal } from "react-dom";
 import type {
@@ -186,7 +187,7 @@ export default function SourceBlockButton(props: Props) {
   const activating = !((active || recovering) && !productWide);
   const lockedHintId = useId();
   const lockedHint = "Manuelle Prüfung laut Runbook nötig";
-  const lockedLabel = uncertain ? "Zustand unklar" : "Verifizierung läuft";
+  const lockedLabel = uncertain ? STATE_WORDS.unclear : STATE_WORDS.verifying;
   const lockedTitle = uncertain
     ? `${uncertain.error || "Zustand unklar"} · Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow. ${lockedHint}.`
     : `Verifizierung läuft · Everflow-Bestätigung steht noch aus. ${lockedHint}.`;
@@ -198,14 +199,14 @@ export default function SourceBlockButton(props: Props) {
   const sub = props.subValue || "nicht übermittelt";
   const isSubSource = props.level === "sub_source";
   const controlScope = isSubSource ? fieldSub : fieldMain;
-  const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source} ${active ? "wieder aktivieren" : "ausschalten"}`;
+  const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source}: ${active ? ACTION_WORDS.unblock : ACTION_WORDS.block}`;
   const blockStatusLabel = active
-    ? `Gesperrt seit ${day(active.effectiveAt)}`
+    ? STATE_WORDS.blockedSince(day(active.effectiveAt))
     : pending
-      ? "Verifizierung läuft"
+      ? STATE_WORDS.verifying
       : uncertain
-        ? "Zustand unklar"
-        : "Nicht gesperrt";
+        ? STATE_WORDS.unclear
+        : STATE_WORDS.notBlocked;
   const identity = {
     affiliateId: props.affiliateId,
     affiliateName: props.affiliateName,
@@ -345,7 +346,7 @@ export default function SourceBlockButton(props: Props) {
           <span>
             <small>{isSubSource ? "Unterquelle" : "Hauptquelle"}</small>
             <b id="source-block-title">
-              {recovering ? `${controlScope} nach Everflow-Prüfung deaktivieren` : active&&!productWide ? `${controlScope} wieder aktivieren` : productWide ? `${controlScope} überall sperren` : `${controlScope} ausschalten`}
+              {recovering ? `${controlScope}: ${ACTION_WORDS.verifyThenUnblock}` : active&&!productWide ? `${controlScope}: ${ACTION_WORDS.unblock}` : productWide ? ACTION_WORDS.blockAcrossOffersScoped(controlScope) : `${controlScope}: ${ACTION_WORDS.block}`}
             </b>
           </span>
           <button
@@ -506,8 +507,8 @@ export default function SourceBlockButton(props: Props) {
               : recovering
                 ? "Nach Everflow-Prüfung deaktivieren"
                 : active&&!productWide
-                ? `${controlScope} aktivieren`
-                : productWide ? `${controlScope} in allen gefundenen Produkten sperren` : `${controlScope} jetzt ausschalten`}
+                ? `${ACTION_WORDS.unblock} · ${controlScope}`
+                : productWide ? ACTION_WORDS.blockAcrossOffersConfirm(controlScope) : `${ACTION_WORDS.block} · ${controlScope}`}
           </button>
         </footer>
       </div>
@@ -550,14 +551,14 @@ export default function SourceBlockButton(props: Props) {
           aria-pressed={Boolean(active)}
         >
           <PowerIcon />
-          <span>{active ? `${controlScope} ausgeschaltet` : `${controlScope} ausschalten`}</span>
+          <span>{active ? blockStatusLabel : ACTION_WORDS.block}</span>
         </button>
       )}
       {locked && (
         <small id={lockedHintId} className="sourceBlockLockedHint">{lockedHint}</small>
       )}
       {!locked && !recoverable && (
-        <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
+        <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{ACTION_WORDS.blockAcrossOffersScoped(controlScope)}</button>
       )}
       {error && (
         <small className="sourceBlockError" role="alert">

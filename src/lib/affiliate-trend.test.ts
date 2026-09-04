@@ -19,7 +19,7 @@ const m=(x:Partial<Metrics>):Metrics=>({clicks:0,sois:0,cvr:0,firstSales:0,first
 
 describe('variantTrend',()=>{
   it('reports a rising trend when both windows are mature',()=>{
-    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:200,profit:100}))).toEqual({status:'ok',profitDelta:200,profitPercent:200,direction:'steigend'});
+    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:200,profit:100}))).toEqual({status:'ok',profitDelta:200,profitPercent:200,direction:'steigend',previous:{clicks:200,sois:0,cvr:0,profit:100}});
   });
   it('reports a falling trend',()=>{
     expect(variantTrend(m({sois:40,profit:50}),m({sois:40,profit:100}))).toMatchObject({status:'ok',profitDelta:-50,direction:'fallend'});
@@ -28,19 +28,19 @@ describe('variantTrend',()=>{
     expect(variantTrend(m({clicks:200,profit:102}),m({clicks:200,profit:100}))).toMatchObject({direction:'stabil'});
   });
   it('refuses a verdict when the current window is immature',()=>{
-    expect(variantTrend(m({clicks:99,sois:19,profit:300}),m({clicks:200,profit:100}))).toEqual({status:'insufficient',reason:'Aktueller Zeitraum unter 100 Klicks und 20 SOIs'});
+    expect(variantTrend(m({clicks:99,sois:19,profit:300}),m({clicks:200,profit:100}))).toEqual({status:'insufficient',reason:'Aktueller Zeitraum unter 100 Klicks und 20 SOIs',previous:{clicks:200,sois:0,cvr:0,profit:100}});
   });
   it('refuses a verdict when the previous window is immature',()=>{
-    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:5,profit:1}))).toEqual({status:'insufficient',reason:'Vergleichszeitraum unter 100 Klicks und 20 SOIs'});
+    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:5,profit:1}))).toEqual({status:'insufficient',reason:'Vergleichszeitraum unter 100 Klicks und 20 SOIs',previous:{clicks:5,sois:0,cvr:0,profit:1}});
   });
   it('refuses a verdict when there is no previous window',()=>{
     expect(variantTrend(m({clicks:200,profit:300}),undefined)).toEqual({status:'insufficient',reason:'Kein Vergleichszeitraum verfügbar'});
   });
   it('omits the percentage when the previous profit is zero',()=>{
-    expect(variantTrend(m({clicks:200,profit:80}),m({clicks:200,profit:0}))).toEqual({status:'ok',profitDelta:80,profitPercent:null,direction:'steigend'});
+    expect(variantTrend(m({clicks:200,profit:80}),m({clicks:200,profit:0}))).toMatchObject({status:'ok',profitDelta:80,profitPercent:null,direction:'steigend'});
   });
   it('omits the percentage on a negative base — sign flips carry the delta alone',()=>{
-    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:200,profit:-100}))).toEqual({status:'ok',profitDelta:400,profitPercent:null,direction:'steigend'});
+    expect(variantTrend(m({clicks:200,profit:300}),m({clicks:200,profit:-100}))).toMatchObject({status:'ok',profitDelta:400,profitPercent:null,direction:'steigend'});
   });
 });
 
@@ -76,6 +76,14 @@ describe('buildCockpitLists',()=>{
   });
   it('carries the partner identity onto every row',()=>{
     expect(lists().losses[1]).toMatchObject({affiliateId:'200',affiliate:'Partner 200',reason:'Grund c'});
+  });
+  it('carries verdict, volume, traffic mode and the (still optional) gate onto every row and keeps the full list',()=>{
+    const all=lists().all;
+    expect(all.map(r=>r.variantKey)).toEqual(['a','b','c','d']);
+    expect(all[0]).toMatchObject({action:'AUSSCHALTEN',severity:'neutral',trafficMode:'tracked',sois:30,clicks:0,cvr:0,firstSales:0,rebills:0,revenue:0});
+    expect(all[0].gate).toBeUndefined();
+    const withGate={...variant('g','AUSSCHALTEN',-1,null),recommendation:{...variant('g','AUSSCHALTEN',-1,null).recommendation,gate:{matureSois:50,totalSois:60,requiredSois:50,maturityReached:true,p75Hours:30,latencyConfidence:'hoch' as const,rateLow:0,rateHigh:0.05,benchmarkRate:0.04,confidence:'belastbar' as const}}};
+    expect(buildCockpitLists([analysis('1',[withGate])]).all[0].gate?.matureSois).toBe(50);
   });
 });
 

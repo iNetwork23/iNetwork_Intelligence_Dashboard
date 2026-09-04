@@ -15,7 +15,7 @@ vi.mock('./block-effects',()=>({loadBlockIndex:(...a:unknown[])=>loadBlockIndex(
 
 const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
 const access=(role:'admin'|'partner'|'employee'|'read_only',extra:{grants?:string[];denials?:string[]}={})=>parseAccessMetadata({role,status:'active',grants:extra.grants??[],denials:extra.denials??[],version:1,scopes:{}});
-const candidate=(x:Partial<SourceCandidate>&{mainValue:string|null}):SourceCandidate=>({affiliateId:'376',affiliate:'Partner 376',offerId:'8',offer:'Flirt DE',offerUrlId:'2766',offerUrl:'LP 2766',trafficMode:'tracked',level:'main_source',subValue:null,action:'ABSCHALTEN',severity:'critical',reason:'0 SOIs bei 150 Klicks',clicks:150,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0,lastLeadDate:null,leadStatus:'Kein Lead gefunden',...x});
+const candidate=(x:Partial<SourceCandidate>&{mainValue:string|null}):SourceCandidate=>({affiliateId:'376',affiliate:'Partner 376',offerId:'8',offer:'Flirt DE',offerUrlId:'2766',offerUrl:'LP 2766',trafficMode:'tracked',level:'main_source',subValue:null,action:'AUSSCHALTEN',severity:'critical',reason:'0 SOIs bei 150 Klicks',clicks:150,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0,lastLeadDate:null,leadStatus:'Kein Lead gefunden',...x});
 const record=(row:SourceCandidate,status:SourceBlockRecord['status'],effectiveAt='2026-09-01T10:15:00Z'):SourceBlockRecord=>({id:`blk-${row.mainValue}-${status}`,affiliateId:Number(row.affiliateId),affiliateName:row.affiliate,offerId:Number(row.offerId),offerName:row.offer,originCampaignId:null,trafficMode:row.trafficMode,level:row.level,mainField:row.trafficMode==='api'?'adv1':'source_id',mainValue:row.mainValue,subField:row.trafficMode==='api'?'adv2':'sub1',subValue:row.subValue,variables:[],reason:'',status,effectiveAt,createdAt:effectiveAt,createdBy:'admin',updatedAt:effectiveAt,updatedBy:'admin',everflowSettingId:status==='active'?700:null,lastVerifiedAt:null,error:status==='error'?'Everflow-Antwort nicht bestätigt':null});
 const index=(entries:Array<[SourceCandidate,SourceBlockRecord['status']]>)=>new Map(entries.map(([row,status])=>[sourceCandidateBlockKey(row),record(row,status)]));
 const rows={
@@ -127,7 +127,8 @@ describe('Leitstand model',()=>{
   expect(complete.losses.map(row=>row.source)).toEqual(['worst','bad','net → pl-7']);
   expect(complete.winners.map(row=>row.source)).toEqual(['star','good','ok']);
   expect(complete.counters).toEqual({openKill:5,activeBlocks:0,incidents:0});
-  expect(describeRollup(complete)).toEqual({source:'Rollup vom 04.09.2026, 12:47 · 12 von 12 Partnern',warning:null});
+  expect(describeRollup(complete)).toEqual({source:'Rollup vom 04.09.2026, 12:47 · 12 von 12 Partnern',warning:null,maturityWarning:null});
+  expect(describeRollup({...complete,maturityUnavailable:3}).maturityWarning).toBe('Reife für 3 Partner nicht prüfbar (Conversions nicht ladbar) – deren Ausschalt-Kandidaten stehen auf BEOBACHTEN.');
   const partial=buildLeitstand(snapshot({affiliatesProcessed:7,coverageComplete:false}),new Map())!;
   expect(describeRollup(partial).warning).toBe('Rollup unvollständig: 7 von 12 Partnern ausgewertet – Zeitbudget erreicht oder Partner übersprungen.');
  });

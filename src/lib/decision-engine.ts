@@ -7,6 +7,8 @@
  * kleine Stichproben nicht durch Zufallsrauschen sterben.
  */
 
+import { confidenceBand } from "./verdict-vocabulary";
+
 /** Abschaltreife: ab so vielen SOIs gilt eine Einheit als beurteilbar. */
 export const KILL_MATURITY_SOIS = 50;
 /** Toter Traffic: so viele Klicks ohne einen einzigen SOI. */
@@ -26,11 +28,32 @@ export type UnitAction =
   | "BEOBACHTEN"
   | "AUSSCHALTEN";
 export type UnitSeverity = "positive" | "neutral" | "warning" | "critical";
+/** Reife der SOIs einer Einheit gegen die typische Wartezeit des Partners (Etappe 3, Entscheidung D3). */
+export type LeadMaturityInput = {
+  matureSois: number;
+  totalSois: number;
+  p75Hours: number | null;
+  confidence: "hoch" | "mittel" | "niedrig" | "keine Daten";
+};
+/** „Trauen oder nicht, und warum“: Reifefortschritt, Wilson-Band der First-Sale-Rate, Benchmark und Konfidenz je Verdikt. */
+export type VerdictGate = {
+  matureSois: number;
+  totalSois: number;
+  requiredSois: number;
+  maturityReached: boolean;
+  p75Hours: number | null;
+  latencyConfidence: LeadMaturityInput["confidence"] | "nicht geprüft";
+  rateLow: number;
+  rateHigh: number;
+  benchmarkRate: number | null;
+  confidence: "belastbar" | "unsicher";
+};
 export type UnitVerdict = {
   action: UnitAction;
   severity: UnitSeverity;
   reason: string;
   evidence: string[];
+  gate?: VerdictGate;
 };
 export type UnitMetrics = {
   clicks: number;
@@ -47,6 +70,12 @@ export type UnitContext = {
    * Offer-Gesamtrate auf Source-Ebene), als Anteil (0.05 = 5 %).
    */
   benchmarkRate?: number;
+  /**
+   * Reife der SOIs gegen die Partner-Latenz (D3). Ohne Angabe bleiben K1/K2
+   * ungekoppelt und das gate meldet „nicht geprüft“; mit Angabe feuern K1/K2
+   * nur ab KILL_MATURITY_SOIS reifen SOIs, ohne Conversion-Daten fail-closed.
+   */
+  leadMaturity?: LeadMaturityInput;
 };
 
 export function wilsonLower(successes: number, trials: number, z = Z) {
@@ -70,8 +99,65 @@ export function wilsonUpper(successes: number, trials: number, z = Z) {
 }
 
 const pct = (value: number) => `${(100 * value).toFixed(1).replace(".", ",")} %`;
+const hoursText = (hours: number | null) =>
+  hours === null ? "unbekannt" : `≈ ${(hours < 10 ? hours.toFixed(1) : Math.round(hours).toFixed(0)).replace(".", ",")} h`;
+/** K3 · toter Traffic wird nicht an die Reife gekoppelt (D3). */
+const isDeadTraffic = (m: UnitMetrics, api: boolean) => !api && m.clicks >= DEAD_TRAFFIC_CLICKS && m.sois === 0;
+
+/** „Trauen oder nicht, und warum“ für jedes Verdikt: Reifefortschritt, Wilson-Band (confidenceBand aus dem Vokabular), Benchmark. */
+export function buildVerdictGate(m: UnitMetrics, context: UnitContext = {}): VerdictGate {
+  const { benchmarkRate, leadMaturity } = context,
+    band = confidenceBand(m.firstSales, m.sois),
+    matureSois = leadMaturity ? leadMaturity.matureSois : m.sois,
+    totalSois = leadMaturity ? leadMaturity.totalSois : m.sois;
+  return {
+    matureSois,
+    totalSois,
+    requiredSois: KILL_MATURITY_SOIS,
+    maturityReached: matureSois >= KILL_MATURITY_SOIS,
+    p75Hours: leadMaturity ? leadMaturity.p75Hours : null,
+    latencyConfidence: leadMaturity ? leadMaturity.confidence : "nicht geprüft",
+    rateLow: band.low,
+    rateHigh: band.high,
+    benchmarkRate: benchmarkRate !== undefined && benchmarkRate > 0 ? benchmarkRate : null,
+    confidence: band.label,
+  };
+}
+
+/**
+ * Reife-Gate D3 auf ein fertiges Verdikt: füllt gate und hält K1/K2-Abschaltungen
+ * zurück, solange weniger als KILL_MATURITY_SOIS SOIs die typische Wartezeit
+ * erreicht haben (→ WEITER TESTEN) oder keine Conversion-Daten vorliegen
+ * (→ BEOBACHTEN, fail-closed). K3 und alle anderen Verdikte bleiben unverändert.
+ */
+export function applyLeadMaturity(verdict: UnitVerdict, m: UnitMetrics, context: UnitContext = {}): UnitVerdict {
+  const { api = false, leadMaturity } = context,
+    gate = buildVerdictGate(m, context);
+  if (verdict.action !== "AUSSCHALTEN" || !leadMaturity || isDeadTraffic(m, api)) return { ...verdict, gate };
+  if (leadMaturity.confidence === "keine Daten")
+    return {
+      ...verdict,
+      action: "BEOBACHTEN",
+      severity: "warning",
+      reason: "Reife nicht prüfbar – keine Conversion-Daten; Ausschalten erst nach geprüfter Wartezeit.",
+      gate,
+    };
+  if (!gate.maturityReached)
+    return {
+      ...verdict,
+      action: "WEITER TESTEN",
+      severity: "neutral",
+      reason: `${gate.matureSois} von ${gate.totalSois} SOIs reif (Wartezeit p75 ${hoursText(gate.p75Hours)}); Ausschalten erst ab ${KILL_MATURITY_SOIS} reifen SOIs.`,
+      gate,
+    };
+  return { ...verdict, gate };
+}
 
 export function assessUnit(m: UnitMetrics, context: UnitContext = {}): UnitVerdict {
+  return applyLeadMaturity(assessUnitBase(m, context), m, context);
+}
+
+function assessUnitBase(m: UnitMetrics, context: UnitContext): UnitVerdict {
   const { api = false, benchmarkRate } = context,
     evidence = [
       `${m.sois} SOIs`,
@@ -139,7 +225,7 @@ export function assessUnit(m: UnitMetrics, context: UnitContext = {}): UnitVerdi
     return verdict(
       "BEOBACHTEN",
       "warning",
-      "Monetarisiert, aber im Zeitraum negativ; Abschaltung nur bei belegter Unterperformance.",
+      "Monetarisiert, aber im Zeitraum negativ; Ausschalten nur bei belegter Unterperformance.",
     );
 
   // T1 · Jung: erst Evidenz sammeln.
@@ -147,7 +233,7 @@ export function assessUnit(m: UnitMetrics, context: UnitContext = {}): UnitVerdi
     return verdict(
       "WEITER TESTEN",
       "neutral",
-      "Testquote noch nicht reif; vor einer Abschaltung mehr Evidenz sammeln.",
+      "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.",
     );
 
   if (!api && m.clicks === 0)
@@ -167,8 +253,8 @@ export function assessUnit(m: UnitMetrics, context: UnitContext = {}): UnitVerdi
 /** Projektion auf die drei Aktionen der Source-Ebene. */
 export function projectSourceAction(
   action: UnitAction,
-): "SKALIEREN" | "ABSCHALTEN" | "BEOBACHTEN" {
-  if (action === "AUSSCHALTEN") return "ABSCHALTEN";
+): "SKALIEREN" | "AUSSCHALTEN" | "BEOBACHTEN" {
+  if (action === "AUSSCHALTEN") return "AUSSCHALTEN";
   if (action === "SKALIEREN") return "SKALIEREN";
   return "BEOBACHTEN";
 }

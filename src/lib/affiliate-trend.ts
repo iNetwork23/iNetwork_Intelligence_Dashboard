@@ -10,36 +10,46 @@ export function previousWindow(from:string,to:string){
 import type {Metrics} from './portfolio';
 import {MIN_DECISION_CLICKS,MIN_SCALE_SOIS} from './source-breakdown';
 
-export type TrendVerdict=
+/** Vorperiode in den Feldern, die Δ SOIs / Δ CVR / Δ Profit brauchen (Etappe 3) – nur gesetzt, wenn ein Vergleichsfenster existiert. */
+export type TrendPeriodMetrics={clicks:number;sois:number;cvr:number;profit:number};
+export type TrendVerdict=(
  |{status:'ok';profitDelta:number;profitPercent:number|null;direction:'steigend'|'fallend'|'stabil'}
- |{status:'insufficient';reason:string};
+ |{status:'insufficient';reason:string})&{previous?:TrendPeriodMetrics};
+const periodMetrics=(m:Metrics):TrendPeriodMetrics=>({clicks:m.clicks,sois:m.sois,cvr:m.cvr,profit:m.profit});
 
 const mature=(m:Metrics)=>m.clicks>=MIN_DECISION_CLICKS||m.sois>=MIN_SCALE_SOIS;
 const IMMATURE=`unter ${MIN_DECISION_CLICKS} Klicks und ${MIN_SCALE_SOIS} SOIs`;
 
 export function variantTrend(current:Metrics,previous:Metrics|undefined):TrendVerdict{
  if(!previous)return{status:'insufficient',reason:'Kein Vergleichszeitraum verfügbar'};
- if(!mature(current))return{status:'insufficient',reason:`Aktueller Zeitraum ${IMMATURE}`};
- if(!mature(previous))return{status:'insufficient',reason:`Vergleichszeitraum ${IMMATURE}`};
+ const prev=periodMetrics(previous);
+ if(!mature(current))return{status:'insufficient',reason:`Aktueller Zeitraum ${IMMATURE}`,previous:prev};
+ if(!mature(previous))return{status:'insufficient',reason:`Vergleichszeitraum ${IMMATURE}`,previous:prev};
  const profitDelta=current.profit-previous.profit,
   // Prozent nur auf positiver Basis: bei negativem oder Null-Vorwert ist eine
   // Prozentangabe irreführend (−888 %-Effekte bei Vorzeichenwechsel).
   profitPercent=previous.profit>0?100*profitDelta/previous.profit:null,
   direction=profitPercent!==null&&Math.abs(profitPercent)<5?'stabil':profitDelta>0?'steigend':profitDelta<0?'fallend':'stabil';
- return{status:'ok',profitDelta,profitPercent,direction};
+ return{status:'ok',profitDelta,profitPercent,direction,previous:prev};
 }
 
 import type {AffiliateAnalysis,AffiliateVariant} from './affiliate-optimizer';
+import type {VerdictGate} from './decision-engine';
 
 export type VariantWithTrend=AffiliateVariant&{trendVerdict:TrendVerdict};
 export type AffiliateAnalysisWithTrend=Omit<AffiliateAnalysis,'variants'>&{variants:VariantWithTrend[]};
-export type CockpitRow={affiliateId:string;affiliate:string;variantKey:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;profit:number;sois:number;reason:string;trendVerdict:TrendVerdict};
-export type CockpitLists={losses:CockpitRow[];scales:CockpitRow[];changes:CockpitRow[];lossTotal:number;scaleTotal:number};
+/** Eine Cockpit-Zeile = eine Offer-URL-Variante eines Partners mit Verdikt, Volumen, Vorperiode (über trendVerdict.previous) und – sobald die Engine sie liefert – dem Konfidenz-Gate. */
+export type CockpitRow={affiliateId:string;affiliate:string;variantKey:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'api'|'tracked';profit:number;sois:number;clicks:number;cvr:number;firstSales:number;rebills:number;revenue:number;action:AffiliateVariant['recommendation']['action'];severity:AffiliateVariant['recommendation']['severity'];reason:string;gate?:VerdictGate;trendVerdict:TrendVerdict};
+export type CockpitLists={all:CockpitRow[];losses:CockpitRow[];scales:CockpitRow[];changes:CockpitRow[];lossTotal:number;scaleTotal:number};
 
-const row=(a:AffiliateAnalysisWithTrend,v:VariantWithTrend):CockpitRow=>({
+/** Das Gate hängt an der Empfehlung, sobald affiliate-optimizer.ts es aus assessUnit durchreicht; bis dahin bleibt es undefined (Anzeige „Konfidenz: nicht berechnet“). */
+const recommendationGate=(v:VariantWithTrend):VerdictGate|undefined=>(v.recommendation as {gate?:VerdictGate}).gate;
+export const cockpitRow=(a:AffiliateAnalysisWithTrend,v:VariantWithTrend):CockpitRow=>({
  affiliateId:a.affiliateId,affiliate:a.affiliate,variantKey:v.key,offerId:v.offerId,offer:v.offer,
- offerUrlId:v.offerUrlId,offerUrl:v.offerUrl,profit:v.days30.profit,sois:v.days30.sois,
- reason:v.recommendation.reason,trendVerdict:v.trendVerdict});
+ offerUrlId:v.offerUrlId,offerUrl:v.offerUrl,trafficMode:v.trafficMode,profit:v.days30.profit,sois:v.days30.sois,
+ clicks:v.days30.clicks,cvr:v.days30.cvr,firstSales:v.days30.firstSales,rebills:v.days30.rebills,revenue:v.days30.revenue,
+ action:v.recommendation.action,severity:v.recommendation.severity,reason:v.recommendation.reason,gate:recommendationGate(v),trendVerdict:v.trendVerdict});
+const row=cockpitRow;
 const delta=(r:CockpitRow)=>r.trendVerdict.status==='ok'?Math.abs(r.trendVerdict.profitDelta):-1;
 
 export function buildCockpitLists(analyses:AffiliateAnalysisWithTrend[]):CockpitLists{
@@ -48,7 +58,7 @@ export function buildCockpitLists(analyses:AffiliateAnalysisWithTrend[]):Cockpit
   losses=pick('AUSSCHALTEN').sort((x,y)=>x.profit-y.profit),
   scales=pick('SKALIEREN').sort((x,y)=>y.profit-x.profit),
   changes=all.map(x=>row(x.a,x.v)).filter(r=>r.trendVerdict.status==='ok').sort((x,y)=>delta(y)-delta(x));
- return{losses,scales,changes,
+ return{all:all.map(x=>row(x.a,x.v)),losses,scales,changes,
   lossTotal:losses.reduce((s,r)=>s+r.profit,0),
   scaleTotal:scales.reduce((s,r)=>s+r.profit,0)};
 }

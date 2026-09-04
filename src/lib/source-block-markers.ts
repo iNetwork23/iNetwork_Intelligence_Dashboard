@@ -1,4 +1,5 @@
 import{sourceBlockIdentityKey,type SourceBlockRecord}from'./source-blocks';
+import{STATE_WORDS}from'./verdict-vocabulary';
 /** Client-sichere, serialisierbare Sicht auf den Sperr-Index (loadBlockIndex): identityKey → Marker. Reine Funktionen, keine Datenladung. */
 export type SourceBlockMarker={id:string;status:SourceBlockRecord['status'];effectiveAt:string;affiliateId:string;offerId:string};
 export type SourceBlockMarkerIndex=Record<string,SourceBlockMarker>;
@@ -30,11 +31,11 @@ export function findBlockMarker(index:SourceBlockMarkerIndex|undefined,row:Sourc
  return null;
 }
 const berlinDate=(iso:string)=>new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Berlin'}).format(new Date(iso));
-/** Anzeigetext: aktiv → „Gesperrt seit <Datum>“, pending → „Verifizierung läuft“, error → „Sperre unklar“, inaktiv → null (kein Marker). */
+/** Anzeigetext aus der Zustandsklasse (STATE_WORDS): aktiv → „Gesperrt seit <Datum>“, pending → Verifizierung, error → Zustand unklar, inaktiv → null (kein Marker). */
 export function blockMarkerText(marker:SourceBlockMarker):string|null{
- if(marker.status==='active')return`Gesperrt seit ${berlinDate(marker.effectiveAt)}`;
- if(marker.status==='pending')return'Verifizierung läuft';
- if(marker.status==='error')return'Sperre unklar';
+ if(marker.status==='active')return STATE_WORDS.blockedSince(berlinDate(marker.effectiveAt));
+ if(marker.status==='pending')return STATE_WORDS.verifying;
+ if(marker.status==='error')return STATE_WORDS.unclear;
  return null;
 }
 export const isBlockedMarker=(marker:SourceBlockMarker|null)=>marker?.status==='active';

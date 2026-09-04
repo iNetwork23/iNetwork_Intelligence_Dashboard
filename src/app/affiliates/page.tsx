@@ -7,6 +7,8 @@ import {
   getAffiliateLeadLatency,
   getAffiliateSourceBreakdown,
   getAffiliateSourceFreshness,
+  getAffiliateDailyByKey,
+  getPortfolioDailyByVariant,
 } from "@/lib/affiliate-optimizer-service";
 import {
   groupAffiliateOffers,
@@ -14,6 +16,7 @@ import {
 } from "@/lib/affiliate-optimizer";
 import { NO_SUB_SOURCE, leadActivityStatus, type SourceBreakdownRow } from "@/lib/source-breakdown";
 import type { LeadLatencyAnalysis } from "@/lib/lead-latency";
+import type { DailyByKey } from "@/lib/daily-series";
 import {
   getCampaignAffiliateMappings,
   getCampaignDirectory,
@@ -28,7 +31,10 @@ import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
 import { analyzeRebillConcentration, buildRebillCustomerIndex, firstSaleCustomerIdsFromIndex, rebillCustomerIdsFromIndex, type RebillConcentration, type RebillEvent } from "@/lib/rebill-concentration";
 import AffiliateSmartlinks from "./AffiliateSmartlinks";
 import AffiliateSmartlinkOverview from "./AffiliateSmartlinkOverview";
-import AffiliatePeriodControls from "./AffiliatePeriodControls";
+import PeriodControls from "../components/PeriodControls";
+import { todayPartialNote } from "@/lib/period-controls";
+import { signTone } from "@/lib/verdict-vocabulary";
+import { toneClass } from "@/lib/verdict-trust";
 import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
 import DataReloadButton from'./DataReloadButton';
 import InstantLink from "./InstantLink";
@@ -190,6 +196,18 @@ export default async function AffiliateOptimizerPage({
       mayPartners && query.mode === "smartlinks"
         ? getCampaignDirectory(user.access)
         : null,
+    // Etappe 3: Tageswerte für die Sparklines der Tracker-Kandidaten (nur Fenster ≤ 45 Tage; Fehler → keine Sparkline).
+    eagerSourceDaily =
+      mayPartners && query.mode === "direct" && query.affiliate
+        ? getAffiliateDailyByKey(
+            query.affiliate,
+            { from: sourcePeriod.from, to: sourcePeriod.to },
+            user.access,
+          ).catch((cause) => {
+            console.error("Source daily series failed", cause);
+            return undefined;
+          })
+        : null,
     eagerDirectSourceData =
       mayPartners && query.mode==='direct' && query.affiliate
         ? Promise.allSettled([
@@ -211,14 +229,17 @@ export default async function AffiliateOptimizerPage({
         : null;
   let analyses, periodMappings, associationMappings;
   let lastLeadDates: Record<string, string> = {};
+  let cockpitDaily: DailyByKey | undefined;
   try {
-    [analyses, periodMappings, associationMappings, lastLeadDates] = await Promise.all([
+    [analyses, periodMappings, associationMappings, lastLeadDates, cockpitDaily] = await Promise.all([
       mayPartners
         ? getAffiliateOptimizationsWithTrend(
             period.servicePeriod,
             period.custom,
             user.access,
             { from: period.from, to: period.to },
+            // D3: Lead-Reife nur für den gewählten Partner koppeln (Conversions je Partner nicht für alle laden).
+            query.affiliate ? { leadMaturityFor: query.affiliate } : undefined,
           )
         : Promise.resolve([]),
       getCampaignAffiliateMappings(
@@ -230,6 +251,16 @@ export default async function AffiliateOptimizerPage({
         console.error("Last-lead dates failed", cause);
         return {} as Record<string, string>;
       }),
+      // Etappe 3: Tagesprofit je Variante für die Cockpit-Sparklines (nur Übersicht ohne Partnerwahl, Fenster ≤ 45 Tage).
+      mayPartners && !query.affiliate
+        ? getPortfolioDailyByVariant(
+            { from: period.from, to: period.to },
+            user.access,
+          ).catch((cause) => {
+            console.error("Cockpit daily series failed", cause);
+            return undefined;
+          })
+        : Promise.resolve(undefined),
     ]);
   } catch (e) {
     console.error(e);
@@ -329,6 +360,7 @@ export default async function AffiliateOptimizerPage({
       partner: query.partner,
       open: query.open,
     });
+  let sourceDaily: DailyByKey | undefined;
   let sourceRows: SourceBreakdownRow[] = [],
     sourceError = false,
     smartlinkDetailsError = false,
@@ -366,6 +398,15 @@ export default async function AffiliateOptimizerPage({
           user.access,
         ),
       ]));
+    sourceDaily = await (eagerSourceDaily ??
+      getAffiliateDailyByKey(
+        selected.affiliateId,
+        { from: sourcePeriod.from, to: sourcePeriod.to },
+        user.access,
+      ).catch((cause) => {
+        console.error("Source daily series failed", cause);
+        return undefined;
+      }));
     if (sourceResult[0].status === "fulfilled")
       sourceRows = sourceResult[0].value;
     else {
@@ -553,7 +594,7 @@ export default async function AffiliateOptimizerPage({
           </div>
           {period.error && <p role="alert">{period.error}</p>}
         </header>
-        <AffiliatePeriodControls period={period} />
+        <PeriodControls dimension="global" period={period.period} from={period.period === "custom" || period.period === "calendar" ? period.from : undefined} to={period.period === "custom" || period.period === "calendar" ? period.to : undefined} rangeLabel={period.label} maxDate={period.maxDate} error={period.error} todayNote={todayPartialNote(dataStatus)} />
       </section>
       {mode === "smartlinks" && (
         !selectedCampaignId ? (
@@ -617,23 +658,10 @@ export default async function AffiliateOptimizerPage({
             </div>
             <div>
               <small>Smartlink-Profit · {period.label}</small>
-              <strong
-                className={
-                  selectedWorkspace.campaigns.reduce(
-                    (s, c) => s + c.profit30,
-                    0,
-                  ) >= 0
-                    ? "up"
-                    : "down"
-                }
-              >
-                {eur(
-                  selectedWorkspace.campaigns.reduce(
-                    (s, c) => s + c.profit30,
-                    0,
-                  ),
-                )}
-              </strong>
+              {(() => {
+                const sum = selectedWorkspace.campaigns.reduce((s, c) => ({ profit: s.profit + c.profit30, clicks: s.clicks + c.clicks30, sois: s.sois + c.sois30 }), { profit: 0, clicks: 0, sois: 0 });
+                return <strong className={toneClass(signTone(sum.profit, sum))}>{eur(sum.profit)}</strong>;
+              })()}
               <span>
                 {num(
                   selectedWorkspace.campaigns.reduce((s, c) => s + c.sois30, 0),
@@ -689,7 +717,7 @@ export default async function AffiliateOptimizerPage({
                 <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
               </section>
                 <AffiliateSmartlinks
-                periodControls={<AffiliatePeriodControls period={period} compact/>}
+                periodControls={<PeriodControls dimension="global" period={period.period} rangeLabel={period.label} maxDate={period.maxDate} error={period.error} todayNote={todayPartialNote(dataStatus)} compact />}
                 affiliateId={selectedWorkspace.affiliateId}
                 returnTo={smartlinkCurrentHref}
                 mappings={selectedWorkspace.campaigns}
@@ -736,7 +764,7 @@ export default async function AffiliateOptimizerPage({
             </div>
             <div>
               <small>Direktlink-Profit · {period.label}</small>
-              <strong className={selected.totals30.profit >= 0 ? "up" : "down"}>
+              <strong className={toneClass(signTone(selected.totals30.profit, selected.totals30))}>
                 {eur(selected.totals30.profit)}
               </strong>
               <span>
@@ -751,8 +779,22 @@ export default async function AffiliateOptimizerPage({
                     (sum, t) => sum + (t.status === "ok" ? t.profitDelta : 0),
                     0,
                   );
+                  // Reife-Gate über das kleinere Volumen beider Perioden (wie die Trendzellen der Varianten).
+                  const previousVolume = verdicts.reduce(
+                    (acc, t) => {
+                      const previous = t.status === "ok" ? t.previous : undefined;
+                      return previous
+                        ? { clicks: acc.clicks + previous.clicks, sois: acc.sois + previous.sois }
+                        : acc;
+                    },
+                    { clicks: 0, sois: 0 },
+                  );
+                  const gateVolume = {
+                    clicks: Math.min(selected.totals30.clicks, previousVolume.clicks),
+                    sois: Math.min(selected.totals30.sois, previousVolume.sois),
+                  };
                   return (
-                    <em className={`heroTrend ${delta >= 0 ? "up" : "down"}`}>
+                    <em className={`heroTrend ${toneClass(signTone(delta, gateVolume))}`}>
                       {delta >= 0 ? "+" : ""}{eur(delta)} vs. Vorperiode
                     </em>
                   );
@@ -799,7 +841,7 @@ export default async function AffiliateOptimizerPage({
             <article>
               <span>Beste Landingpage</span>
               <strong
-                className={best && best.days30.profit >= 0 ? "up" : "down"}
+                className={best ? toneClass(signTone(best.days30.profit, best.days30)) : ""}
               >
                 {best ? eur(best.days30.profit) : "–"}
               </strong>
@@ -830,7 +872,7 @@ export default async function AffiliateOptimizerPage({
                         {v.days30.sois > 0 ? ` · ${eur(v.days30.profit / v.days30.sois)} je SOI` : ""}
                       </small>
                     </span>
-                    <em className={v.days30.profit >= 0 ? "up" : "down"}>
+                    <em className={toneClass(signTone(v.days30.profit, v.days30))}>
                       {eur(v.days30.profit)}
                     </em>
                   </InstantLink>
@@ -964,7 +1006,7 @@ export default async function AffiliateOptimizerPage({
                       : "DIREKTLINK · TRACKING"}
                   </em>
                   <div>
-                    <b className={o.totals30.profit >= 0 ? "up" : "down"}>
+                    <b className={toneClass(signTone(o.totals30.profit, o.totals30))}>
                       {eur(o.totals30.profit)}
                     </b>
                     <small>
@@ -975,7 +1017,7 @@ export default async function AffiliateOptimizerPage({
                     <small>
                       {o.variants.length} {o.variants.length === 1 ? "Pfad" : "Pfade"} ·{" "}
                       {o.stopCount
-                        ? `${o.stopCount} stoppen`
+                        ? `${o.stopCount} auszuschalten`
                         : o.scaleCount
                           ? `${o.scaleCount} skalieren`
                           : "beobachten"}
@@ -1000,7 +1042,7 @@ export default async function AffiliateOptimizerPage({
               <div>
                 <small>Profit dieser Offer · {period.label}</small>
                 <strong
-                  className={activeOffer.totals30.profit >= 0 ? "up" : "down"}
+                  className={toneClass(signTone(activeOffer.totals30.profit, activeOffer.totals30))}
                 >
                   {eur(activeOffer.totals30.profit)}
                 </strong>
@@ -1044,7 +1086,7 @@ export default async function AffiliateOptimizerPage({
                             : `${num(v.days30.sois)} SOIs aus ${num(v.days30.clicks)} Klicks`}
                         </small>
                       </span>
-                      <span className={v.days30.profit >= 0 ? "up" : "down"}>
+                      <span className={toneClass(signTone(v.days30.profit, v.days30))}>
                         {eur(v.days30.profit)}
                       </span>
                       <span>
@@ -1055,7 +1097,7 @@ export default async function AffiliateOptimizerPage({
                           const verdict = (v as VariantWithTrend).trendVerdict;
                           if (!verdict || verdict.status !== "ok")
                             return <small className="trendMuted">–</small>;
-                          const tone = verdict.profitDelta > 0 ? "up" : verdict.profitDelta < 0 ? "down" : "";
+                          const tone = toneClass(signTone(verdict.profitDelta, { clicks: Math.min(v.days30.clicks, verdict.previous?.clicks ?? v.days30.clicks), sois: Math.min(v.days30.sois, verdict.previous?.sois ?? v.days30.sois) }));
                           return (
                             <small className={`urlTrend ${tone}`}>
                               {verdict.profitDelta >= 0 ? "+" : ""}{eur(verdict.profitDelta)}
@@ -1162,6 +1204,19 @@ export default async function AffiliateOptimizerPage({
                   sourcePeriodLabel={sourcePeriod.label}
                   blocks={blockMarkers}
                   canManage={canManageSources}
+                  rangeParams={rangeParams}
+                  latency={leadLatency ?? undefined}
+                  affiliateName={selected.affiliate}
+                  offerName={activeOffer.offer}
+                  dailyByKey={
+                    // Nur die Tageswerte des aktiven Offers wandern zum Client (Schlüssel beginnen mit offer|affiliate|…).
+                    sourceDaily &&
+                    Object.fromEntries(
+                      Object.entries(sourceDaily).filter(([key]) =>
+                        key.startsWith(`${activeOffer.offerId}|`),
+                      ),
+                    )
+                  }
                 />
               )}
           </section>
@@ -1175,6 +1230,7 @@ export default async function AffiliateOptimizerPage({
               period.period !== "12m" && period.period !== "all"
             }
             blocks={blockMarkers}
+            dailyByKey={cockpitDaily}
           />
           <section className="sectionHead">
             <div>
@@ -1211,11 +1267,7 @@ export default async function AffiliateOptimizerPage({
                 <div className="partnerTrafficTotals">
                   {a.direct && (
                     <span>
-                      <b
-                        className={
-                          a.direct.totals30.profit >= 0 ? "up" : "down"
-                        }
-                      >
+                      <b className={toneClass(signTone(a.direct.totals30.profit, a.direct.totals30))}>
                         {eur(a.direct.totals30.profit)}
                       </b>
                       <small>Direkt · {period.label}</small>
@@ -1223,15 +1275,10 @@ export default async function AffiliateOptimizerPage({
                   )}
                   {a.campaigns.length > 0 && (
                     <span>
-                      <b
-                        className={
-                          a.campaigns.reduce((s, c) => s + c.profit30, 0) >= 0
-                            ? "up"
-                            : "down"
-                        }
-                      >
-                        {eur(a.campaigns.reduce((s, c) => s + c.profit30, 0))}
-                      </b>
+                      {(() => {
+                        const sum = a.campaigns.reduce((s, c) => ({ profit: s.profit + c.profit30, clicks: s.clicks + c.clicks30, sois: s.sois + c.sois30 }), { profit: 0, clicks: 0, sois: 0 });
+                        return <b className={toneClass(signTone(sum.profit, sum))}>{eur(sum.profit)}</b>;
+                      })()}
                       <small>Smartlinks · {period.label}</small>
                     </span>
                   )}
