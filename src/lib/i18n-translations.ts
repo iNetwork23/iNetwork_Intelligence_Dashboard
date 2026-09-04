@@ -889,7 +889,7 @@ export const translations = {
   "Abgleich abweichend": "Reconcile mismatch",
   "Ausgewählte Quellen": "Selected sources",
   "Wartet": "Waiting",
-  "Schließen": "Close"
+  "Schließen": "Close",
   "Sperre unklar": "Block unclear",
   "Sperren ansehen": "View blocks",
   "Weniger anzeigen": "Show less",
