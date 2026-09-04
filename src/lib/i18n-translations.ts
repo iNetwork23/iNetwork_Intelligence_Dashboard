@@ -840,5 +840,10 @@ export const translations = {
   "Beendet": "Completed",
   "Als Entwurf importiert": "Imported as draft",
   "Aktion ausgeführt": "Action completed",
-  "Aktion fehlgeschlagen": "Action failed"
+  "Aktion fehlgeschlagen": "Action failed",
+  "Sperre unklar": "Block unclear",
+  "Sperren ansehen": "View blocks",
+  "Weniger anzeigen": "Show less",
+  "1 gesperrte Quelle ausgeblendet": "1 blocked source hidden",
+  "1 Quelle gesperrt": "1 source blocked"
 } as const;

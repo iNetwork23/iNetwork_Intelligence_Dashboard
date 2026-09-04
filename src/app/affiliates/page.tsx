@@ -44,6 +44,8 @@ import AffiliateCockpit from "./AffiliateCockpit";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
 import { openSourceRowHref } from "../../lib/open-source-row-link";
+import { loadBlockIndex } from "@/lib/block-effects";
+import { sourceBlockMarkerIndex, type SourceBlockMarkerIndex } from "@/lib/source-block-markers";
 import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
@@ -129,6 +131,20 @@ export default async function AffiliateOptimizerPage({
         <AccessDeniedHint />
       </main>
     );
+  // Sperr-Index einmal je Seitenaufruf (D7: Partner sehen nichts Neues); Fehler → leerer Index.
+  const canManageSources =
+      user.access.role !== "partner" &&
+      can(user.access, "landingpages.manage") &&
+      can(user.access, "api.manage"),
+    blockIndexPromise: Promise<SourceBlockMarkerIndex> =
+      user.access.role === "partner"
+        ? Promise.resolve({})
+        : loadBlockIndex()
+            .then(sourceBlockMarkerIndex)
+            .catch((cause) => {
+              console.error("Block index failed", cause);
+              return {};
+            });
   const period = resolveAffiliatePeriod(query),
     sourcePeriod = resolveSourcePeriod(query),
     directRebillRange = {
@@ -229,6 +245,7 @@ export default async function AffiliateOptimizerPage({
   // Canonical two-argument range contracts remain the source-window semantics; AccessMetadata is the added authorization boundary:
   // getAffiliateSourceBreakdown(selected.affiliateId,{from:sourcePeriod.from,to:sourcePeriod.to})
   // getAffiliateSmartlinks(selectedWorkspace.affiliateId,selectedWorkspace.campaigns.map(x=>x.campaignId),{from:period.from,to:period.to})
+  const blockMarkers = await blockIndexPromise;
   const finance = can(user.access, "finance.view"),
     mappingView = overlayPeriodFinancialMappings(periodMappings, associationMappings),
     mergedMappings = mappingView.mappings,
@@ -1118,6 +1135,7 @@ export default async function AffiliateOptimizerPage({
                         }
                         affiliateName={selected.affiliate}
                         offerName={activeOffer.offer}
+                        blocks={blockMarkers}
                       />
                     )}
                   </div>
@@ -1134,6 +1152,8 @@ export default async function AffiliateOptimizerPage({
                     activeOffer.variants.map((v) => [v.offerUrlId, v.offerUrl]),
                   )}
                   sourcePeriodLabel={sourcePeriod.label}
+                  blocks={blockMarkers}
+                  canManage={canManageSources}
                 />
               )}
           </section>
@@ -1146,6 +1166,7 @@ export default async function AffiliateOptimizerPage({
             comparisonAvailable={
               period.period !== "12m" && period.period !== "all"
             }
+            blocks={blockMarkers}
           />
           <section className="sectionHead">
             <div>

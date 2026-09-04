@@ -19,6 +19,13 @@ import {
   type TrafficAction,
 } from "../../lib/source-breakdown";
 import SourceBlockButton from "./SourceBlockButton";
+import {
+  blockMarkerText,
+  findBlockMarker,
+  SOURCE_BLOCKS_HREF,
+  type SourceBlockMarker,
+  type SourceBlockMarkerIndex,
+} from "../../lib/source-block-markers";
 import type { ResolvedSourcePeriod } from "../../lib/source-period";
 import type { SnapshotFreshness } from "../../lib/snapshot-generation";
 import type { RebillConcentration } from "../../lib/rebill-concentration";
@@ -70,6 +77,17 @@ function LeadActivity({ activity }: { activity: LeadActivityModel }) {
     </span>
   );
 }
+/** Sperrstatus einer Zeile: Link auf /source-blocks nur für Sperrberechtigte (Seite ist dort gegated). */
+function BlockMarker({ marker, link }: { marker: SourceBlockMarker; link: boolean }) {
+  const text = blockMarkerText(marker);
+  if (!text) return null;
+  const className = `blockMarker ${marker.status === "active" ? "active" : "unclear"}`;
+  return link ? (
+    <a className={className} href={SOURCE_BLOCKS_HREF}>{text}</a>
+  ) : (
+    <span className={className}>{text}</span>
+  );
+}
 export default function SourceBreakdown({
   rows,
   apiMode = false,
@@ -82,6 +100,7 @@ export default function SourceBreakdown({
   affiliateName = "Affiliate",
   offerName = "Offer",
   rebillAnalyses = {},
+  blocks,
 }: {
   rows: SourceBreakdownRow[];
   apiMode?: boolean;
@@ -94,6 +113,8 @@ export default function SourceBreakdown({
   affiliateName?: string;
   offerName?: string;
   rebillAnalyses?: Record<string,RebillConcentration>;
+  /** Serialisierter Sperr-Index (identityKey → Marker) aus loadBlockIndex; ohne Index keine Marker. */
+  blocks?: SourceBlockMarkerIndex;
 }) {
   const reportWindow: BreakdownWindow = "days30",
     [sort, setSort] = useState<BreakdownSort>(initialSort),
@@ -202,12 +223,36 @@ export default function SourceBreakdown({
           {groups.map((group) => {
             const disclosureId = `source-${disclosureScope}-${encodeURIComponent(group.sourceId)}`,
               identity = rows.find((row) => row.sourceId === group.sourceId),
-              mainValue = identity?.mainValue ?? null;
+              mainValue = identity?.mainValue ?? null,
+              mainMarker = identity
+                ? findBlockMarker(blocks, {
+                    affiliateId: identity.affiliateId,
+                    offerId: identity.offerId,
+                    trafficMode: identity.trafficMode,
+                    mainValue,
+                  })
+                : null,
+              leafMarker = (leaf: { subSource: string | null }) =>
+                identity && leaf.subSource && leaf.subSource !== NO_SUB_SOURCE
+                  ? findBlockMarker(blocks, {
+                      affiliateId: identity.affiliateId,
+                      offerId: identity.offerId,
+                      trafficMode: identity.trafficMode,
+                      mainValue,
+                      subValue:
+                        rows.find(
+                          (row) =>
+                            row.sourceId === group.sourceId &&
+                            row.subSource === leaf.subSource,
+                        )?.subValue || leaf.subSource,
+                    })
+                  : null;
             return (
               <SourceGroupPanel
                 id={disclosureId}
                 key={group.sourceId}
                 verdict={moneyVerdict(group.metric.profit)}
+                blocked={Boolean(mainMarker)}
                 head={
                   <>
                     <span>
@@ -221,6 +266,7 @@ export default function SourceBreakdown({
                           : "Keine Sub-Source · Source-Fallback"}
                       </small>
                       <LeadActivity activity={group.activity} />
+                      {mainMarker && <BlockMarker marker={mainMarker} link={false} />}
                     </span>
                     {!apiMode && (
                       <span
@@ -249,15 +295,19 @@ export default function SourceBreakdown({
                         <b>Gesamte Hauptquelle</b>
                         <small>Nur Affiliate #{identity.affiliateId} · Offer #{identity.offerId}</small>
                       </span>
-                      <SourceBlockButton
-                        affiliateId={identity.affiliateId}
-                        affiliateName={affiliateName}
-                        offerId={identity.offerId}
-                        offerName={offerName}
-                        trafficMode={identity.trafficMode}
-                        level="main_source"
-                        mainValue={mainValue}
-                      />
+                      {mainMarker ? (
+                        <BlockMarker marker={mainMarker} link />
+                      ) : (
+                        <SourceBlockButton
+                          affiliateId={identity.affiliateId}
+                          affiliateName={affiliateName}
+                          offerId={identity.offerId}
+                          offerName={offerName}
+                          trafficMode={identity.trafficMode}
+                          level="main_source"
+                          mainValue={mainValue}
+                        />
+                      )}
                     </div>
                   )}
                   <div className="subSourceHead decision">
@@ -272,7 +322,9 @@ export default function SourceBreakdown({
                     </span>
                     <span>Umsatz – Payout = Profit</span>
                   </div>
-                  {group.leaves.map((leaf) => (
+                  {group.leaves.map((leaf) => {
+                    const marker = leafMarker(leaf);
+                    return (
                     <article
                       className="trafficLeaf"
                       key={`${leaf.sourceId}|${leaf.subSource || "source"}`}
@@ -303,7 +355,8 @@ export default function SourceBreakdown({
                             : `Bewertung direkt auf ${apiMode ? "ADV1" : "Source"}-Ebene`}
                         </small>
                         <LeadActivity activity={leaf.activity} />
-                        {canManage && identity && leaf.subSource && leaf.subSource !== NO_SUB_SOURCE && (
+                        {marker && <BlockMarker marker={marker} link={canManage} />}
+                        {!marker && canManage && identity && leaf.subSource && leaf.subSource !== NO_SUB_SOURCE && (
                           <SourceBlockButton
                             affiliateId={identity.affiliateId}
                             affiliateName={affiliateName}
@@ -356,7 +409,8 @@ export default function SourceBreakdown({
                       </span>
                       {rebillAnalyses[sourceRebillKey(apiMode?'api':'tracked',leaf.sourceId,leaf.subSource)]&&<div className="trafficLeafRebill"><RebillConcentrationPanel analysis={rebillAnalyses[sourceRebillKey(apiMode?'api':'tracked',leaf.sourceId,leaf.subSource)]} scope={`${apiMode?'ADV2':'Sub-Source'} ${leaf.subSource||leaf.sourceId} · ${rangeLabel}`}/></div>}
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               </SourceGroupPanel>
             );
