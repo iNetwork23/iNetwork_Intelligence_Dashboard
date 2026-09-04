@@ -124,4 +124,18 @@ describe("legacy campaign import", () => {
       ),
     ).rejects.toThrow("Campaign-Gewichte sind ungültig.");
   });
+  it("takes the maturity window from the deal register (defaults keep 336 h for the former constant)", async () => {
+    const deps = () => ({
+      readBaseline: vi.fn().mockResolvedValue({ campaign, fingerprint: "sha256:x" }),
+      searchOffers: vi.fn().mockResolvedValue([{ offerId: 57, name: "Singles69", status: "active" }]),
+      loadLandingpages: vi.fn().mockResolvedValue([{ offerId: 57, visible: true, landingpages: [
+        { offerUrlId: 5701, name: "A", status: "active" },
+        { offerUrlId: 5702, name: "B", status: "active" },
+        { offerUrlId: 5703, name: "C", status: "active" },
+      ] }]),
+    });
+    expect((await buildImportedAutomationDraft({ campaignId: 146, affiliateId: 436, apiKey: "key" }, deps())).thresholds.maturityHours).toBe(336);
+    expect((await buildImportedAutomationDraft({ campaignId: 146, affiliateId: 436, apiKey: "key", deals: [] }, deps())).thresholds.maturityHours).toBe(168);
+    expect((await buildImportedAutomationDraft({ campaignId: 146, affiliateId: 436, apiKey: "key", deals: [{ affiliateId: 436, campaignId: 146, maturityHours: 400, note: "", updatedAt: "", updatedBy: "t" }] }, deps())).thresholds.maturityHours).toBe(400);
+  });
 });

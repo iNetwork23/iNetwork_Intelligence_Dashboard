@@ -16,6 +16,8 @@ vi.mock('./cached-smartlinks',()=>({
  loadSmartlinkInsightFromCache:mocks.loadCampaign,
 }));
 vi.mock('./campaign-snapshots',()=>({loadCampaignDirectoryFromCache:mocks.loadDirectory}));
+/** Etappe 4 (D9): das Deal-Register wird nach dem Cache angewendet; hier ohne Store, damit die Cache-Schlüssel unverändert prüfbar bleiben. */
+vi.mock('./deal-register-store',()=>({loadDealRegister:async()=>[]}));
 
 import{getAffiliateSmartlinks,getSmartlinkInsight}from'./smartlink-service';
 
