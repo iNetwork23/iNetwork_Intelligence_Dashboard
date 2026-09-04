@@ -64,6 +64,7 @@ type ScopePreviewData = {
   paths: number;
   hidden: { affiliates: number; offers: number };
   scopesApply: boolean;
+  unsupported?: Array<"account" | "source" | "sub_source">;
 };
 // Security contract markers: action:'delete_role' action:'reset_mfa' Benutzerdefinierte Rolle
 
@@ -282,7 +283,12 @@ function ScopePreview({
       )}
       {preview ? (
         <>
-          <p className="scopePreviewSummary">
+          {preview.unsupported?.length ? (
+          <p className="scopePreviewError" role="alert">
+            Freigabe {preview.unsupported.join(", ")} wird von den Datenseiten nicht ausgewertet – dort endet dieses Konto mit 403 „Scope kann nicht sicher ausgewertet werden“.
+          </p>
+        ) : null}
+        <p className="scopePreviewSummary">
             <b>
               Vorschau: Dieses Konto sieht {preview.affiliates.length} Partner,{" "}
               {preview.offers.length} Offers

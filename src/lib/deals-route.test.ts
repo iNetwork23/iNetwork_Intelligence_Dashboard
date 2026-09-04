@@ -40,7 +40,7 @@ describe('/api/deals',()=>{
  });
  it('mirrors the security shape of the other mutation routes',()=>{
   const route=read('src/app/api/deals/route.ts');
-  for(const marker of["requirePermission('settings.manage')","auth.user.access.role==='partner'",'checkCsrf(request,origin)','parseBoundedJson(request)',"action:'deal_register.update'",'saveDealRegister(input.rules,actorId,securityStore())',"export const dynamic='force-dynamic'"])expect(route).toContain(marker);
+  for(const marker of["requirePermission('settings.manage')","auth.user.access.role==='partner'",'checkCsrf(request,origin)','parseBoundedJson(request,131_072)',"action:'deal_register.update'",'saveDealRegister(input.rules,actorId,securityStore())',"export const dynamic='force-dynamic'"])expect(route).toContain(marker);
   expect(route).not.toContain('everflow');
  });
 });

@@ -15,7 +15,8 @@ const noMoney=(value:unknown)=>expect(JSON.stringify(value)).not.toMatch(/profit
 describe('previewScopeEntities – dieselbe Semantik wie rbac.filterPartnerRows',()=>{
  it('partner with an empty scope sees nothing (fail closed)',()=>{
   const preview=previewScopeEntities(portfolio,{role:'partner',scopes:{}});
-  expect(preview).toEqual({affiliates:[],offers:[],paths:0,hidden:{affiliates:3,offers:3},scopesApply:true});
+  expect(preview).toEqual({affiliates:[],offers:[],paths:0,hidden:{affiliates:3,offers:3},scopesApply:true,unsupported:[]});
+  expect(previewScopeEntities(portfolio,{role:'partner',scopes:{account:['9']}}).unsupported).toEqual(['account']);
  });
  it('partner sees only the affiliates/offers every populated dimension allows, sorted by SOIs',()=>{
   const preview=previewScopeEntities(portfolio,{role:'partner',scopes:{affiliate:['154']}});

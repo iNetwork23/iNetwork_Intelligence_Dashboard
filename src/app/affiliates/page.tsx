@@ -1099,7 +1099,7 @@ export default async function AffiliateOptimizerPage({
                   <div className="urlDetails">
                     <div className="periodCompare">
                       {finance && (
-                        <ProfitPeriod label={period.label} m={v.days30} affiliateId={selected.affiliateId} />
+                        <ProfitPeriod label={period.label} m={v.days30} affiliateId={can(user.access, "statistics.view") ? selected.affiliateId : undefined} />
                       )}
                       {!finance && (
                         <article className="profitPeriod">

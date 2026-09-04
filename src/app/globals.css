@@ -687,3 +687,4 @@ a.blockMarker:hover,a.blockMarker:focus-visible{background:var(--fill-hover);tex
 @media(max-width:759px){.accessPage .scopePreviewLists{grid-template-columns:1fr}}
 /* D14 (Etappe 4): Hinweis auf der Partnerseite für interne Rollen ohne finance.view. */
 .affiliateOptimizer .financeHiddenNote{margin:12px 0 0;padding:10px 12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-secondary);font-size:11px}
+@media(max-width:760px){.cohortFilters select,.cohortFilters input,.dealRegisterFields input,.dealRegisterFields select,.dealRegisterButtons button,.dealRegisterActions button{min-height:44px}}

@@ -52,6 +52,9 @@ describe('Quellen-Identität der Fraud-Zeile → Sperr-Identität des SourceBloc
  it('bildet Smartlink/Direct auf tracked (source_id/sub1) und Clickless API auf api (adv1/adv2) ab',()=>{
   expect(fraudRowBlockIdentity(row())).toEqual({affiliateId:'436',offerId:'12',trafficMode:'tracked',level:'sub_source',mainValue:'fb-camp',subValue:'creative-17'});
   expect(fraudRowBlockIdentity(row({trafficMode:'tracked_direct'}))?.trafficMode).toBe('tracked');
+  // Klick-ID-artige Unterquellen kollabiert der Affiliate-Bereich (canonicalTrackedSub) – hier nicht sperrbar, sonst entstünde eine wirkungslose Einzel-ID-Sperre.
+  expect(fraudRowBlockIdentity(row({subSource:'9f8e7d6c5b4a39281706f5e4d3c2b1a0'}))).toBeNull();
+  expect(fraudRowBlockState(row({subSource:'9f8e7d6c5b4a39281706f5e4d3c2b1a0'}),undefined).kind).toBe('external');
   expect(fraudRowBlockIdentity(row({trafficMode:'clickless_api',sourceDimension:'adv1',subSourceDimension:'adv2'}))).toEqual({affiliateId:'436',offerId:'12',trafficMode:'api',level:'sub_source',mainValue:'fb-camp',subValue:'creative-17'});
  });
  it('liefert null ohne vollständige Identität: unbekannter Pfad, sub2–sub5, Platzhalter-Unterquelle, ungültige IDs, Dimension passt nicht zum Modus',()=>{

@@ -406,7 +406,9 @@ export default function SourceBlockButton(props: Props) {
             <div><dt>First-Sale-Rate</dt><dd>{metrics.sois > 0 ? `${(metrics.firstSales / metrics.sois * 100).toFixed(1).replace(".", ",")} % (${integer(metrics.firstSales)})` : "–"}</dd></div>
             <div><dt>Klicks</dt><dd>{props.trafficMode === "api" ? "n/a – clickless" : integer(metrics.clicks)}</dd></div>
             <div><dt>Reife · Lead-Status</dt><dd>{[metrics.maturity, metrics.leadStatus].filter(Boolean).join(" · ") || "–"}</dd></div>
-            <div className="sourceBlockScopeWide"><dt>Trend</dt><dd>{metrics.trend ?? "nicht im Rollup enthalten"}</dd></div>
+            {metrics.trend !== undefined && (
+              <div className="sourceBlockScopeWide"><dt>Trend</dt><dd>{metrics.trend ?? "nicht berechnet"}</dd></div>
+            )}
             <div className="sourceBlockScopeWide"><dt>Sperrstatus</dt><dd>{blockStatusLabel}</dd></div>
           </dl>
         )}

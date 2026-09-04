@@ -190,6 +190,14 @@ describe('sourceTrendsFromRows',()=>{
   expect(evaluateSourceCandidates(evaluated,collectSourceLabels(raw,'Partner 376'))[0].trend).toBeUndefined();
  });
 });
+describe('rangeCoversTrend',()=>{
+ it('computes trends only when the loaded range holds both seven-day windows',async()=>{
+  const{rangeCoversTrend}=await import('./source-candidates');
+  expect(rangeCoversTrend({from:'2026-08-22',to:'2026-09-04'})).toBe(true);
+  expect(rangeCoversTrend({from:'2026-08-29',to:'2026-09-04'})).toBe(false);
+  expect(read('src/lib/source-candidates.ts')).toContain('rangeCoversTrend(range)?sourceTrendsFromRows(raw,range.to):undefined');
+ });
+});
 describe('memoizedConversionsLoader',()=>{
  it('loads each affiliate once across ranges, forgets failures and can be cleared',async()=>{
   const{memoizedConversionsLoader}=await import('./source-candidates');

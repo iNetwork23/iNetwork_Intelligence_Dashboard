@@ -1,5 +1,6 @@
 import type{FraudSourceEvaluation}from'./fraud-control';
 import{blockMarkerText,findBlockMarker,type SourceBlockMarker,type SourceBlockMarkerIndex}from'./source-block-markers';
+import{isClickIdLike}from'./click-id-sub-source';
 /**
  * Brücke von der Fraud-Zeile (tiefste Quelle: Pfad, source, subSource) zur Sperr-Identität, die SourceBlockButton sendet (D2).
  * Reine Funktionen, client-sicher; die Wörter der Marker kommen aus source-block-markers (STATE_WORDS).
@@ -23,6 +24,8 @@ export function fraudRowBlockIdentity(row:Pick<FraudBlockRow,'affiliateId'|'offe
  if(row.sourceDimension!==(trafficMode==='api'?'adv1':'source_id')||row.subSourceDimension!==(trafficMode==='api'?'adv2':'sub1'))return null;
  const subValue=normalizedValue(row.subSource);
  if(subValue===null)return null;
+ // Klick-ID-artige Unterquellen kollabiert der Affiliate-Bereich (canonicalTrackedSub); eine Einzel-ID zu sperren wäre wirkungslos.
+ if(trafficMode==='tracked'&&isClickIdLike(subValue))return null;
  return{affiliateId:String(row.affiliateId).trim(),offerId:String(row.offerId).trim(),trafficMode,level:'sub_source',mainValue:normalizedValue(row.source),subValue};
 }
 /** Sperrzustand der Zeile: aktiv/pending → gesperrt (kein Button), error → unklar (Marker plus Button für den Zweitversuch), sonst offen. */

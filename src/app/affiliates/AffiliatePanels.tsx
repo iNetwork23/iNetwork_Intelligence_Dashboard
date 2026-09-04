@@ -33,7 +33,7 @@ export function ProfitPeriod({
           ? `${cr(m)} CVR · ${num(m.sois)} SOIs aus ${num(m.clicks)} Klicks`
           : `Keine Klicks · ${num(m.sois)} SOIs`}
       </small>
-      <LtvBreakevenLink affiliateId={affiliateId} />
+      {affiliateId && <LtvBreakevenLink affiliateId={affiliateId} />}
     </article>
   );
 }

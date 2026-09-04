@@ -123,3 +123,13 @@ describe('trendLabel',()=>{
   expect(trendLabel({trend:undefined},true)).toBeNull();
  });
 });
+describe('trend projection without finance',()=>{
+ it('keeps volumes but drops every profit value from the client rows',()=>{
+  const trend={days:7 as const,current:{sois:40,clicks:500,profit:-30},previous:{sois:30,clicks:450,profit:-20},profitDelta:-10,soisDelta:10,clicksDelta:50};
+  const rows=prepareSourceCandidateRows([candidate({trend})],new Map(),{finance:false});
+  expect(JSON.stringify(rows)).not.toMatch(/"profit(?:Delta)?":-?\d/);
+  expect(rows[0].trend).toEqual({days:7,current:{sois:40,clicks:500,profit:null},previous:{sois:30,clicks:450,profit:null},soisDelta:10,clicksDelta:50,profitDelta:null});
+  expect(prepareSourceCandidateRows([candidate({trend})],new Map(),{finance:true})[0].trend).toEqual(trend);
+  expect(trendLabel(rows[0],false)).toContain('SOIs +10');
+ });
+});

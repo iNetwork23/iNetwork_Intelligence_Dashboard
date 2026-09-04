@@ -1032,5 +1032,17 @@ export const translations = {
   "Datenfreigaben schränken interne Rollen nicht ein; alle Partner bleiben sichtbar.": "Data access grants do not restrict internal roles; all partners remain visible.",
   "Quellen je Landingpage mit Umsatz und Profit sind nur mit Finanzrecht sichtbar; die Tracker-Liste unten zeigt Verdikt und Volumen je Quelle.": "Sources per landing page with revenue and profit are visible only with the finance permission; the tracker list below shows verdict and volume per source.",
   "nur mit Finanzrecht": "only with the finance permission",
-  "Verdikt und Volumen je Partner – ohne Umsatz-, Kosten- und Profitdaten.": "Verdict and volume per partner – without revenue, cost or profit data."
+  "Verdikt und Volumen je Partner – ohne Umsatz-, Kosten- und Profitdaten.": "Verdict and volume per partner – without revenue, cost or profit data.",
+  "LTV-Kurve und Break-even": "LTV curve and break-even",
+  "LTV je Partner": "LTV per partner",
+  "Nur ungesperrte": "Unblocked only",
+  "Sperrstatus nicht ladbar": "Block status not loadable",
+  "Sperrliste öffnen": "Open block list",
+  "Im Affiliate-Bereich öffnen": "Open in affiliate area",
+  "nur im Affiliate-Bereich sperrbar": "blockable only in the affiliate area",
+  "nicht berechnet": "not calculated",
+  "für diesen Zeitraum nicht berechnet": "not calculated for this period",
+  "Umsatz, Vergütung und Profit nur mit Finanzrecht.": "Revenue, payout and profit only with finance permission.",
+  "Partner nach Profit": "Partners by profit",
+  "Register leer gespeichert – keine Sonderdeals aktiv.": "Register saved empty – no special deals active."
 } as const;

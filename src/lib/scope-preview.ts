@@ -8,7 +8,7 @@ import type {PathRow} from './portfolio';
  * schränken sie nicht ein, deshalb `scopesApply:false`). Nur Namen und SOI-Volumen, nie Geldwerte.
  */
 export type ScopePreviewEntity={id:string;name:string;sois:number};
-export type ScopePreview={affiliates:ScopePreviewEntity[];offers:ScopePreviewEntity[];paths:number;hidden:{affiliates:number;offers:number};/** false = die Rolle wird durch Datenfreigaben nicht eingeschränkt (interne Rollen). */scopesApply:boolean};
+export type ScopePreview={affiliates:ScopePreviewEntity[];offers:ScopePreviewEntity[];paths:number;hidden:{affiliates:number;offers:number};/** Freigabe-Dimensionen, die die Datenseiten nicht auswerten (dort 403 „Scope kann nicht sicher ausgewertet werden“). */unsupported?:Array<'account'|'source'|'sub_source'>;/** false = die Rolle wird durch Datenfreigaben nicht eingeschränkt (interne Rollen). */scopesApply:boolean};
 export type ScopePreviewInput={role:StandardRole;scopes:Partial<Record<ScopeKey,string[]>>};
 export const SCOPE_PREVIEW_MAX_JSON=4000;
 
@@ -21,7 +21,8 @@ const collect=(rows:{path:PathRow}[],field:'affiliate'|'offer'):ScopePreviewEnti
 export function previewScopeEntities(portfolio:{paths:PathRow[]},input:ScopePreviewInput):ScopePreview{
  const access=parseAccessMetadata({role:input.role,scopes:input.scopes}),all=portfolio.paths.map(rowOf),visible=filterPartnerRows(all,access);
  const affiliates=collect(visible,'affiliate'),offers=collect(visible,'offer');
- return{affiliates,offers,paths:visible.length,hidden:{affiliates:collect(all,'affiliate').length-affiliates.length,offers:collect(all,'offer').length-offers.length},scopesApply:access.role==='partner'};
+ const unsupported=(['account','source','sub_source'] as const).filter(key=>(input.scopes[key]?.length??0)>0);
+ return{affiliates,offers,paths:visible.length,hidden:{affiliates:collect(all,'affiliate').length-affiliates.length,offers:collect(all,'offer').length-offers.length},scopesApply:access.role==='partner',unsupported};
 }
 const own=(v:unknown):v is Record<string,unknown>=>Boolean(v)&&typeof v==='object'&&!Array.isArray(v);
 /** Query-Eingabe der Vorschau: Rolle aus STANDARD_ROLES, Scopes als JSON-Objekt {scopeKey:string[]} mit Längenbegrenzung; alles andere → null. */

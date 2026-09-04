@@ -17,12 +17,12 @@ const MONEY_COLUMNS=new Set<string>(['coin_spend','payout','revenue','profit']);
 /** Stabile Sortierung: Datum absteigend plus Dimensionsschlüssel, damit seitenweises Lesen weder Zeilen doppelt noch auslässt. */
 const ORDER_TIEBREAKERS=['affiliate_id','offer_id','campaign_id','offer_url_id','source_id','sub_source'] as const;
 export const parseExportGranularity=(value:string|null|undefined):ExportGranularity|null=>value===null||value===undefined||value===''||value==='day'?'day':value==='month'?'month':null;
-export const exportTruncationNotice=(rows:number)=>`# gekappt bei ${rows} Zeilen – Zeitraum verkleinern oder granularity=month nutzen`;
+export const exportTruncationNotice=(rows:number,granularity:ExportGranularity='day')=>granularity==='month'?`# gekappt bei ${rows} Tageszeilen (älteste Monate unvollständig) – Zeitraum verkleinern`:`# gekappt bei ${rows} Zeilen – Zeitraum verkleinern oder granularity=month nutzen`;
 function applyExportFilters(query:ExportQuery,filters:ExportFilters,scopes?:Scopes){let next=query;if(filters.from)next=next.gte('metric_date',filters.from);if(filters.to)next=next.lte('metric_date',filters.to);const columns={affiliate:'affiliate_id',offer:'offer_id',campaign:'campaign_id',source:'source_id',sub_source:'sub_source'} as const;for(const key of Object.keys(columns) as Array<keyof typeof columns>){const allowed=scopes?.[key];if(allowed?.length)next=next.in(columns[key],allowed);const requested=filters[key];if(requested)next=next.eq(columns[key],requested)}return next}
-const orderedSelect=(client:Client)=>{let query=client.from('daily_metrics').select(EXPORT_COLUMNS,{count:'exact'}).order('metric_date',{ascending:false});for(const column of ORDER_TIEBREAKERS)query=query.order(column,{ascending:true});return query};
+const orderedSelect=(client:Client,count=true)=>{let query=client.from('daily_metrics').select(EXPORT_COLUMNS,count?{count:'exact'}:undefined).order('metric_date',{ascending:false});for(const column of ORDER_TIEBREAKERS)query=query.order(column,{ascending:true});return query};
 export function buildDailyMetricsExportQuery(client:Client,filters:ExportFilters,scopes?:Scopes){return applyExportFilters(orderedSelect(client).limit(EXPORT_ROW_LIMIT),filters,scopes)}
 /** Eine Seite Tageszeilen (range statt limit) für das Monatsaggregat. */
-export function buildDailyMetricsExportPageQuery(client:Client,filters:ExportFilters,scopes:Scopes|undefined,page:{offset:number;size:number}){return applyExportFilters(orderedSelect(client).range(page.offset,page.offset+page.size-1),filters,scopes)}
+export function buildDailyMetricsExportPageQuery(client:Client,filters:ExportFilters,scopes:Scopes|undefined,page:{offset:number;size:number}){return applyExportFilters(orderedSelect(client,page.offset===0).range(page.offset,page.offset+page.size-1),filters,scopes)}
 /** Gekappt, wenn Supabase mehr Treffer meldet als geliefert (max-rows) oder das eigene Limit erreicht ist. */
 export function exportTruncated(result:{data:unknown[]|null;count?:number|null},limit=EXPORT_ROW_LIMIT){const delivered=(result.data||[]).length;if(typeof result.count==='number'&&Number.isFinite(result.count))return result.count>delivered;return delivered>=limit}
 const numeric=(value:unknown)=>{const n=typeof value==='number'?value:Number(value);return Number.isFinite(n)?n:0};
@@ -44,7 +44,7 @@ export async function loadMonthlyExportRows(client:Client,filters:ExportFilters,
  while(offset<maxRows){
   const size=Math.min(pageSize,maxRows-offset),result=await buildDailyMetricsExportPageQuery(client,filters,scopes,{offset,size});
   if(result.error)return{rows:[],error:result.error,truncated:false,dailyRows:daily.length};
-  const page=(result.data||[]) as ExportRow[];if(typeof result.count==='number'&&Number.isFinite(result.count))total=result.count;daily.push(...page);
+  const page=(result.data||[]) as ExportRow[];if(total===null&&typeof result.count==='number'&&Number.isFinite(result.count))total=result.count;daily.push(...page);
   if(!page.length)break;
   offset+=page.length;
   if(total!==null?daily.length>=total:page.length<size)break;

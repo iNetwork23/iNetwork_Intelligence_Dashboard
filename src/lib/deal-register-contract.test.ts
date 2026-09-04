@@ -34,7 +34,7 @@ describe('deal register contract (Etappe 4, D9)',()=>{
   const store=read('src/lib/deal-register-store.ts');expect(store).toContain("from'./access-store'");expect(store).toContain("tags:[DEAL_REGISTER_CACHE_TAG]");expect(store).toContain('revalidate:60');
  });
  it('gates the settings page and the sidebar entry on settings.manage for internal roles only (D7)',()=>{
-  const page=read('src/app/settings/deals/page.tsx');expect(page).toContain("user.access.role==='partner'||!can(user.access,'settings.manage')");expect(page).toContain('<AccessDeniedHint permission="settings.manage"/>');expect(page).toContain('<DashboardPageHeader');expect(page).toContain('Ohne Eintrag gelten die bisherigen Konstanten');
+  const page=read('src/app/settings/deals/page.tsx');expect(page).toContain("user.access.role==='partner'||!can(user.access,'settings.manage')");expect(page).toContain('<AccessDeniedHint permission="settings.manage"/>');expect(page).toContain('<DashboardPageHeader');expect(page).toContain('Ohne gespeichertes Register gelten die bisherigen Sonderdeal-Konstanten');
   const sidebar=read('src/app/components/AdminSidebar.tsx');expect(sidebar).toContain('{href:"/settings/deals",label:"Sonderdeals",icon:"layers" as const,show:props.maySettings===true}');
   const form=read('src/app/settings/deals/DealRegisterForm.tsx');expect(form).toContain("fetch('/api/deals',{method:'PUT'");for(const column of['Partner','Campaign','Testquote','Reife','CVR-Untergrenze','Notiz','Geändert von','Geändert am'])expect(form).toContain(`<th>${column}</th>`);
  });
