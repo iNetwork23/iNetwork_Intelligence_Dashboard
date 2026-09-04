@@ -1,3 +1,4 @@
+import{formatDelta}from'./verdict-vocabulary';
 import{KILL_MATURITY_SOIS,type VerdictGate}from'./decision-engine';
 import{isBlockableCandidate,sourceCandidateBlockKeys,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
 import type{SourceCandidate}from'./source-candidates';
@@ -69,4 +70,13 @@ export function buildSourceCandidateQuery(range:string,filters:SourceCandidateFi
 }
 export function parseSourceCandidateFilters(params:{action?:string;mode?:string;q?:string;blocked?:string;sort?:string}):{filters:SourceCandidateFilters;sort:SourceCandidateSort}{
  return{filters:{action:isSourceCandidateAction(params.action)?params.action:'all',mode:isSourceCandidateMode(params.mode)?params.mode:'all',q:String(params.q??'').slice(0,100),blocked:isSourceCandidateBlockFilter(params.blocked)?params.blocked:'all'},sort:isSourceCandidateSort(params.sort)?params.sort:'profit'};
+}
+/** Trendtext für den Sperr-Dialog: 7 Tage gegen 7 Tage davor; Vorzeichen nur bei reifem Volumen beider Perioden (Reife-Gate D15), Geld nur mit finance. */
+export function trendLabel(row:Pick<SourceCandidate,'trend'>,finance:boolean):string|null{
+ const trend=row.trend;if(!trend)return null;
+ const maturity={clicks:Math.min(trend.current.clicks,trend.previous.clicks),sois:Math.min(trend.current.sois,trend.previous.sois)};
+ const parts:string[]=[];
+ if(finance){const profit=formatDelta(trend.current.profit,trend.previous.profit,{maturity,unit:' €',digits:2});parts.push(profit.reason?`Profit – (${profit.reason})`:`Profit ${profit.text}`)}
+ const sois=formatDelta(trend.current.sois,trend.previous.sois,{maturity});parts.push(sois.reason?`SOIs – (${sois.reason})`:`SOIs ${sois.text}`);
+ return`${parts.join(' · ')} · 7 Tage vs. 7 Tage davor`;
 }

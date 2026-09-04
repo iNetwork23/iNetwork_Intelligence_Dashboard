@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{BULK_BLOCK_LIMIT,firstSaleRate,isSourceCandidateAction,isSourceCandidateBlockFilter,isSourceCandidateMode,isSourceCandidateSort,maturityLabel,prepareSourceCandidateRows,selectSourceCandidates,SOURCE_CANDIDATE_PAGE_SIZE,toggleBulkSelection,verdictLabel,type SourceCandidateRow}from'./source-candidate-view';
+import{BULK_BLOCK_LIMIT,firstSaleRate,isSourceCandidateAction,isSourceCandidateBlockFilter,isSourceCandidateMode,isSourceCandidateSort,maturityLabel,prepareSourceCandidateRows,selectSourceCandidates,SOURCE_CANDIDATE_PAGE_SIZE,toggleBulkSelection,trendLabel,verdictLabel,type SourceCandidateRow}from'./source-candidate-view';
 import{sourceCandidateBlockKey,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
 import type{SourceCandidate}from'./source-candidates';
 import type{SourceBlockRecord}from'./source-blocks';
@@ -112,5 +112,14 @@ describe('list URL state',()=>{
   expect(buildSourceCandidateQuery('30d',{action:'all',mode:'all',q:'',blocked:'all'},'profit',null)).toBe('range=30d');
   expect(parseSourceCandidateFilters(Object.fromEntries(new URLSearchParams(query)))).toEqual({filters:{action:'AUSSCHALTEN',mode:'api',q:'fb',blocked:'open'},sort:'sois'});
   expect(parseSourceCandidateFilters({action:'AB'+'SCHALTEN',sort:'x'})).toEqual({filters:{action:'all',mode:'all',q:'',blocked:'all'},sort:'profit'});
+ });
+});
+describe('trendLabel',()=>{
+ it('renders profit and soi deltas for mature volumes, money only with finance, dash with reason below the gate',()=>{
+  const trend={days:7 as const,current:{sois:40,clicks:500,profit:-30},previous:{sois:30,clicks:450,profit:-20},profitDelta:-10,soisDelta:10,clicksDelta:50};
+  expect(trendLabel({trend},true)).toBe('Profit -10,00 € (-50 %) · SOIs +10 (+33 %) · 7 Tage vs. 7 Tage davor');
+  expect(trendLabel({trend},false)).toBe('SOIs +10 (+33 %) · 7 Tage vs. 7 Tage davor');
+  expect(trendLabel({trend:{...trend,previous:{sois:5,clicks:40,profit:-2}}},false)).toContain('SOIs – (unter Reifeschwelle');
+  expect(trendLabel({trend:undefined},true)).toBeNull();
  });
 });
