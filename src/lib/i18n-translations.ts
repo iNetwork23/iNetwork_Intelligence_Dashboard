@@ -978,5 +978,15 @@ export const translations = {
   "First-Sales und positivem Profit.": "first sales and positive profit.",
   "Reife nicht prüfbar – keine Conversion-Daten; Ausschalten erst nach geprüfter Wartezeit.": "Maturity not verifiable – no conversion data; switch off only after the waiting time has been checked.",
   "Monetarisiert, aber im Zeitraum negativ; Ausschalten nur bei belegter Unterperformance.": "Monetised, but negative in the period; switch off only with proven underperformance.",
-  "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.": "Test quota not yet mature; gather more evidence before switching off."
+  "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.": "Test quota not yet mature; gather more evidence before switching off.",
+  "VORSCHAU": "PREVIEW",
+  "Vorschau nicht verfügbar": "Preview not available",
+  "Vorschau wird berechnet …": "Preview is being calculated …",
+  "Datenbasis: letzte 30 Tage": "Data basis: last 30 days",
+  "Keine sichtbar": "None visible",
+  "Leerer Partner-Scope oder keine passende ID: Dieses Konto sieht keine Partnerdaten.": "Empty partner scope or no matching ID: this account sees no partner data.",
+  "Datenfreigaben schränken interne Rollen nicht ein; alle Partner bleiben sichtbar.": "Data access grants do not restrict internal roles; all partners remain visible.",
+  "Quellen je Landingpage mit Umsatz und Profit sind nur mit Finanzrecht sichtbar; die Tracker-Liste unten zeigt Verdikt und Volumen je Quelle.": "Sources per landing page with revenue and profit are visible only with the finance permission; the tracker list below shows verdict and volume per source.",
+  "nur mit Finanzrecht": "only with the finance permission",
+  "Verdikt und Volumen je Partner – ohne Umsatz-, Kosten- und Profitdaten.": "Verdict and volume per partner – without revenue, cost or profit data."
 } as const;
