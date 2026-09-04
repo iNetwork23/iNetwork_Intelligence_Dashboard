@@ -5,7 +5,8 @@ import {fraudConversionFromCacheRecord,fraudMetricFromReportRow} from './fraud-a
 import {conversionsForFraudRange,deriveCoinBaselines,evaluateFraudSources,evaluateStopCompliance,type FraudConversionInput,type FraudStopRequest} from './fraud-control';
 import {applyFraudSourceCompleteness,fraudCutoverCoverage} from './fraud-readiness';
 import {loadFraudBackfillState} from './fraud-backfill-service';
-import {can,scopeFingerprint,type AccessMetadata} from './rbac';
+import {scopeFingerprint,type AccessMetadata} from './rbac';
+import {canAccessFraud,FRAUD_ACCESS_HINT} from './fraud-access';
 import {getSupabaseAdmin} from './supabase';
 import {berlinRangeUtcBounds} from './reporting-day';
 
@@ -14,7 +15,8 @@ const validDay=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(
 const calendarDays=(from:string,to:string)=>Math.floor((Date.parse(`${to}T12:00:00Z`)-Date.parse(`${from}T12:00:00Z`))/86_400_000)+1;
 
 export function assertFraudRange(range:{from:string;to:string}){if(!validDay(range.from)||!validDay(range.to)||range.from>range.to)throw new Error('Ungültiger Fraud-Zeitraum');if(calendarDays(range.from,range.to)>93)throw new Error('Fraud-Zeitraum darf höchstens 93 Tage umfassen')}
-export function assertFraudAccess(access:AccessMetadata){if(access.role==='partner'||access.role!=='super_admin'||Object.values(access.scopes).some(values=>values.length>0)||!can(access,'statistics.view')||!can(access,'finance.view'))throw new Error('403 · Keine Berechtigung für accountweite Fraud Detection')}
+/** D2: eine Regel für Service, Seite und Sidebar (fraud-access.ts): interne, ungescopte Rolle mit landingpages.manage, api.manage und statistics.view; finance.view steuert nur Geldspalten. */
+export function assertFraudAccess(access:AccessMetadata){if(!canAccessFraud(access))throw new Error(`403 · Keine Berechtigung für accountweite Fraud Detection (${FRAUD_ACCESS_HINT})`)}
 
 async function loadAccountSourceRows(range:{from:string;to:string}){
   const client=getSupabaseAdmin(),markerPrefix='source_day_generation:',markerResult=await client.from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');

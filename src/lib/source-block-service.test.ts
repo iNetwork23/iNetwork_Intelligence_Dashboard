@@ -142,3 +142,21 @@ describe('source block reason category',()=>{
   expect((await activateSourceBlock(store2,input,writer)).reasonCategory).toBeUndefined();
  });
 });
+
+describe('source block reference metrics persistence (Etappe 4)',()=>{
+ const metricsAtBlock={windowDays:30,clicks:120,sois:12,payout:36,revenue:9,capturedAt:'2026-09-04T10:00:00.000Z'};
+ it('persists a valid metricsAtBlock from the input and drops an invalid structure',async()=>{
+  const store=new MemorySecurityStore(),writer={actorId:'admin',activate:vi.fn(async()=>({settingId:777,created:true})),deactivate:vi.fn(async()=>({deleted:true}))};
+  const active=await activateSourceBlock(store,{...input,metricsAtBlock},writer);
+  expect(active.metricsAtBlock).toEqual(metricsAtBlock);
+  const other=await activateSourceBlock(store,{...input,offerId:'26',metricsAtBlock:{...metricsAtBlock,sois:'12'} as never},writer);
+  expect(other.metricsAtBlock).toBeUndefined();
+ });
+ it('does not inherit the reference from a previous inactive record when reactivating',async()=>{
+  const store=new MemorySecurityStore(),writer={actorId:'admin',activate:vi.fn(async()=>({settingId:777,created:true})),deactivate:vi.fn(async()=>({deleted:true}))};
+  const active=await activateSourceBlock(store,{...input,metricsAtBlock},writer);
+  await store.set(sourceBlockStoreKey(active),{...active,status:'inactive',everflowSettingId:null});
+  const reactivated=await activateSourceBlock(store,input,writer);
+  expect(reactivated.status).toBe('active');expect(reactivated.metricsAtBlock).toBeUndefined();
+ });
+});

@@ -34,6 +34,7 @@ import AffiliateSmartlinkOverview from "./AffiliateSmartlinkOverview";
 import PeriodControls from "../components/PeriodControls";
 import { todayPartialNote } from "@/lib/period-controls";
 import { signTone } from "@/lib/verdict-vocabulary";
+import { projectWithoutFinance } from "@/lib/finance-projection";
 import { toneClass } from "@/lib/verdict-trust";
 import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
 import DataReloadButton from'./DataReloadButton';
@@ -60,6 +61,9 @@ import type { VariantWithTrend } from "@/lib/affiliate-trend";
 import { ProfitPeriod, SourceCacheNotice, UrlLeadMaturityPanel } from "./AffiliatePanels";
 
 const recClass = (v: AffiliateVariant) => v.recommendation.severity;
+// D14: Geldwerte nur mit finance.view – Anzeige „–“ und kein Vorzeichen (NaN → signTone liefert neutral).
+const moneyText = (finance: boolean, n: number) => (finance ? eur(n) : "–");
+const signValue = (finance: boolean, n: number) => (finance ? n : Number.NaN);
 const periodDays = (from: string, to: string) =>
   Math.max(1, Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000) + 1);
 const partnerLeadBadge = (
@@ -108,6 +112,7 @@ export default async function AffiliateOptimizerPage({
   if (!user) redirect("/login");
   const query = {...await searchParams};
   const mayPartners = can(user.access, "partners.view");
+  const finance = can(user.access, "finance.view");
   const maySmartlinks = can(user.access, "smartlinks.view") && can(user.access, "finance.view");
   if (!mayPartners && maySmartlinks && !query.mode) query.mode = "smartlinks";
   if (!mayPartners && !(query.mode === "smartlinks" && maySmartlinks))
@@ -198,7 +203,7 @@ export default async function AffiliateOptimizerPage({
         : null,
     // Etappe 3: Tageswerte für die Sparklines der Tracker-Kandidaten (nur Fenster ≤ 45 Tage; Fehler → keine Sparkline).
     eagerSourceDaily =
-      mayPartners && query.mode === "direct" && query.affiliate
+      mayPartners && finance && query.mode === "direct" && query.affiliate
         ? getAffiliateDailyByKey(
             query.affiliate,
             { from: sourcePeriod.from, to: sourcePeriod.to },
@@ -252,7 +257,7 @@ export default async function AffiliateOptimizerPage({
         return {} as Record<string, string>;
       }),
       // Etappe 3: Tagesprofit je Variante für die Cockpit-Sparklines (nur Übersicht ohne Partnerwahl, Fenster ≤ 45 Tage).
-      mayPartners && !query.affiliate
+      mayPartners && finance && !query.affiliate
         ? getPortfolioDailyByVariant(
             { from: period.from, to: period.to },
             user.access,
@@ -285,55 +290,14 @@ export default async function AffiliateOptimizerPage({
   // getAffiliateSourceBreakdown(selected.affiliateId,{from:sourcePeriod.from,to:sourcePeriod.to})
   // getAffiliateSmartlinks(selectedWorkspace.affiliateId,selectedWorkspace.campaigns.map(x=>x.campaignId),{from:period.from,to:period.to})
   const blockMarkers = await blockIndexPromise;
-  const finance = can(user.access, "finance.view"),
-    mappingView = overlayPeriodFinancialMappings(periodMappings, associationMappings),
+  const mappingView = overlayPeriodFinancialMappings(periodMappings, associationMappings),
     mergedMappings = mappingView.mappings,
     historicalPeriodMappings = mappingView.historical,
-    workspaces = mergeAffiliateWorkspaces(analyses, mergedMappings);
-  if (!finance)
-    return (
-      <main className="dashboard affiliateOptimizer">
-        <DashboardPageHeader
-          kicker="ME Media · Partnerbereich"
-          title="Freigegebene Partner"
-          status="Nur Lesen"
-          tone="neutral"
-          icon="affiliate"
-          description="Operative Übersicht ohne interne Umsatz-, Kosten- oder Profitdaten."
-        />
-        <section className="affiliateList">
-          {workspaces.map((item) => (
-            <article key={item.affiliateId}>
-              <div>
-                <span>AFFILIATE #{item.affiliateId}</span>
-                <h3>{item.affiliate}</h3>
-                <p>
-                  {item.direct?.variants.length || 0} direkte Landingpages ·{" "}
-                  {item.campaigns.length} freigegebene Smartlinks
-                </p>
-                {(() => {
-                  const badge = partnerLeadBadge(lastLeadDates, item.affiliateId, period);
-                  return (
-                    <em className={`provisionalLead ${badge.tone}`} title={badge.detail}>
-                      {badge.text}
-                    </em>
-                  );
-                })()}
-              </div>
-            </article>
-          ))}
-        </section>
-        {!workspaces.length && (
-          <section className="smartEmpty">
-            <h2>Keine Partnerdaten freigegeben</h2>
-            <p>
-              Ein Administrator muss diesem Zugang mindestens einen Datenscope
-              zuordnen.
-            </p>
-          </section>
-        )}
-      </main>
-    );
+    workspaces = mergeAffiliateWorkspaces(analyses, mergedMappings),
+    // D14: Client-Komponenten bekommen ohne finance.view nur Verdikt und Volumen (Projektion vor dem RSC-Payload).
+    money = (n: number) => moneyText(finance, n),
+    mv = (n: number) => signValue(finance, n),
+    clientAnalyses = projectWithoutFinance(analyses, finance);
   const selectedCampaignId = /^[0-9]+$/.test(query.campaign || "") ? Number(query.campaign) : undefined,
     q = (query.q || "").trim().toLowerCase(),
     matches = q
@@ -341,9 +305,10 @@ export default async function AffiliateOptimizerPage({
           (x) => x.affiliateId === q || x.affiliate.toLowerCase().includes(q),
         )
       : workspaces,
+    // D14: ohne Smartlink-Recht (smartlinks.view und finance.view) wird ein Partner ohne Direkttraffic nicht in den Smartlink-Modus aufgelöst.
     selectedWorkspace =
       (query.affiliate
-        ? workspaces.find((x) => x.affiliateId === query.affiliate)
+        ? workspaces.find((x) => x.affiliateId === query.affiliate && (maySmartlinks || x.direct))
         : null) || null,
     selected = selectedWorkspace?.direct || null,
     mode:'direct'|'smartlinks' =
@@ -398,15 +363,17 @@ export default async function AffiliateOptimizerPage({
           user.access,
         ),
       ]));
-    sourceDaily = await (eagerSourceDaily ??
-      getAffiliateDailyByKey(
-        selected.affiliateId,
-        { from: sourcePeriod.from, to: sourcePeriod.to },
-        user.access,
-      ).catch((cause) => {
-        console.error("Source daily series failed", cause);
-        return undefined;
-      }));
+    sourceDaily = finance
+      ? await (eagerSourceDaily ??
+          getAffiliateDailyByKey(
+            selected.affiliateId,
+            { from: sourcePeriod.from, to: sourcePeriod.to },
+            user.access,
+          ).catch((cause) => {
+            console.error("Source daily series failed", cause);
+            return undefined;
+          }))
+      : undefined;
     if (sourceResult[0].status === "fulfilled")
       sourceRows = sourceResult[0].value;
     else {
@@ -471,6 +438,7 @@ export default async function AffiliateOptimizerPage({
       rebillEvents = smartlinkResult[2].value;
     else console.error("Rebill distribution failed", smartlinkResult[2].reason);
   }
+  const clientSourceRows = projectWithoutFinance(sourceRows, finance);
   const sourceRowsByUrl = new Map<string, SourceBreakdownRow[]>();
   for (const row of sourceRows) {
     const key = `${row.trafficMode}|${row.offerId}|${row.offerUrlId}`,
@@ -546,34 +514,47 @@ export default async function AffiliateOptimizerPage({
     header = headerStatus(dataStatus);
   return (
     <main className="dashboard affiliateOptimizer affiliateDecisionDesk">
-      <DashboardPageHeader
-        kicker="ME Media · Traffic Intelligence"
-        title="Affiliate Optimizer"
-        status={header.label}
-        tone={header.tone}
-        icon="affiliate"
-        description="Direktlinks und Smartlinks pro Partner – getrennte KPIs und vollständige Landingpage-Sicht."
-      />
+      {finance || canManageSources ? (
+        <DashboardPageHeader
+          kicker="ME Media · Traffic Intelligence"
+          title="Affiliate Optimizer"
+          status={header.label}
+          tone={header.tone}
+          icon="affiliate"
+          description={finance ? "Direktlinks und Smartlinks pro Partner – getrennte KPIs und vollständige Landingpage-Sicht." : "Verdikt und Volumen je Partner – ohne Umsatz-, Kosten- und Profitdaten."}
+        />
+      ) : (
+        <DashboardPageHeader
+          kicker="ME Media · Partnerbereich"
+          title="Affiliate Optimizer"
+          status="Nur Lesen"
+          tone="neutral"
+          icon="affiliate"
+          description="Verdikt und Volumen je Partner – ohne Umsatz-, Kosten- und Profitdaten."
+        />
+      )}
       <DataStatusBar status={dataStatus} />
       <OptimizationFlow active={mode === "smartlinks" ? "smartlink" : "affiliate"} />
       <section className="smartSearch affiliateSearch affiliatePickerBar">
-        <AffiliatePartnerPicker
-          partners={workspaces.map((item) => ({
-            id: item.affiliateId,
-            name: item.affiliate,
-            hasDirect: Boolean(item.direct),
-            directCount: item.direct?.variants.length || 0,
-            campaignCount: item.campaigns.length,
-            profit:
-              (item.direct?.totals30.profit || 0) +
-              item.campaigns.reduce(
-                (sum, campaign) => sum + campaign.profit30,
-                0,
-              ),
-          }))}
-          currentId={query.affiliate}
-          rangeParams={rangeParams}
-        />
+        {finance && (
+          <AffiliatePartnerPicker
+            partners={workspaces.map((item) => ({
+              id: item.affiliateId,
+              name: item.affiliate,
+              hasDirect: Boolean(item.direct),
+              directCount: item.direct?.variants.length || 0,
+              campaignCount: item.campaigns.length,
+              profit:
+                (item.direct?.totals30.profit || 0) +
+                item.campaigns.reduce(
+                  (sum, campaign) => sum + campaign.profit30,
+                  0,
+                ),
+            }))}
+            currentId={query.affiliate}
+            rangeParams={rangeParams}
+          />
+        )}
         <div className="directScope">
           <b>{workspaces.length}</b>
           <span>
@@ -763,14 +744,14 @@ export default async function AffiliateOptimizerPage({
               </p>
             </div>
             <div>
-              <small>Direktlink-Profit · {period.label}</small>
-              <strong className={toneClass(signTone(selected.totals30.profit, selected.totals30))}>
-                {eur(selected.totals30.profit)}
+              <small>{finance ? "Direktlink-Profit" : "Direktlink-Volumen"} · {period.label}</small>
+              <strong className={toneClass(signTone(mv(selected.totals30.profit), selected.totals30))}>
+                {finance ? eur(selected.totals30.profit) : `${num(selected.totals30.sois)} SOIs`}
               </strong>
               <span>
-                {num(selected.totals30.sois)} SOIs ·{" "}
+                {finance ? `${num(selected.totals30.sois)} SOIs` : `${num(selected.totals30.clicks)} Klicks`} ·{" "}
                 {selected.totals30.firstSales} First-Sales
-                {(() => {
+                {finance && (() => {
                   const verdicts = selected.variants
                     .map((v) => (v as VariantWithTrend).trendVerdict)
                     .filter((t) => t && t.status === "ok");
@@ -794,8 +775,8 @@ export default async function AffiliateOptimizerPage({
                     sois: Math.min(selected.totals30.sois, previousVolume.sois),
                   };
                   return (
-                    <em className={`heroTrend ${toneClass(signTone(delta, gateVolume))}`}>
-                      {delta >= 0 ? "+" : ""}{eur(delta)} vs. Vorperiode
+                    <em className={`heroTrend ${toneClass(signTone(mv(delta), gateVolume))}`}>
+                      {delta >= 0 ? "+" : ""}{money(delta)} vs. Vorperiode
                     </em>
                   );
                 })()}
@@ -809,7 +790,7 @@ export default async function AffiliateOptimizerPage({
             >
               Direktlinks <small>{selected.variants.length} LPs</small>
             </InstantLink>
-            {selectedWorkspace?.campaigns.length ? (
+            {selectedWorkspace?.campaigns.length && maySmartlinks ? (
               <InstantLink
                 href={`/affiliates?affiliate=${selected.affiliateId}&mode=smartlinks&${rangeParams}`}
               >
@@ -830,8 +811,8 @@ export default async function AffiliateOptimizerPage({
             </a>
             <article>
               <span>Erkennbares Sparpotenzial</span>
-              <strong className="up">{eur(saving)}</strong>
-              <small>negativer Profit im gewählten Zeitraum</small>
+              <strong className={finance ? "up" : ""}>{money(saving)}</strong>
+              <small>{finance ? "negativer Profit im gewählten Zeitraum" : "nur mit Finanzrecht"}</small>
             </article>
             <a href="#next-actions">
               <span>Skalierungskandidaten</span>
@@ -841,9 +822,9 @@ export default async function AffiliateOptimizerPage({
             <article>
               <span>Beste Landingpage</span>
               <strong
-                className={best ? toneClass(signTone(best.days30.profit, best.days30)) : ""}
+                className={best ? toneClass(signTone(mv(best.days30.profit), best.days30)) : ""}
               >
-                {best ? eur(best.days30.profit) : "–"}
+                {best ? money(best.days30.profit) : "–"}
               </strong>
               <small>{best?.offerUrl || "Keine Daten"}</small>
             </article>
@@ -869,11 +850,11 @@ export default async function AffiliateOptimizerPage({
                       <strong>{v.offerUrl !== "Default" ? v.offerUrl : v.offer}</strong>
                       <small>
                         {variantIdentityLine(v)} · {num(v.days30.sois)} SOIs
-                        {v.days30.sois > 0 ? ` · ${eur(v.days30.profit / v.days30.sois)} je SOI` : ""}
+                        {finance && v.days30.sois > 0 ? ` · ${money(v.days30.profit / v.days30.sois)} je SOI` : ""}
                       </small>
                     </span>
-                    <em className={toneClass(signTone(v.days30.profit, v.days30))}>
-                      {eur(v.days30.profit)}
+                    <em className={toneClass(signTone(mv(v.days30.profit), v.days30))}>
+                      {money(v.days30.profit)}
                     </em>
                   </InstantLink>
                 ))}
@@ -1006,8 +987,8 @@ export default async function AffiliateOptimizerPage({
                       : "DIREKTLINK · TRACKING"}
                   </em>
                   <div>
-                    <b className={toneClass(signTone(o.totals30.profit, o.totals30))}>
-                      {eur(o.totals30.profit)}
+                    <b className={toneClass(signTone(mv(o.totals30.profit), o.totals30))}>
+                      {money(o.totals30.profit)}
                     </b>
                     <small>
                       {period.label} · {o.totals30.sois} SOIs ·{" "}
@@ -1040,16 +1021,20 @@ export default async function AffiliateOptimizerPage({
                 </p>
               </div>
               <div>
-                <small>Profit dieser Offer · {period.label}</small>
+                <small>{finance ? "Profit dieser Offer" : "Volumen dieser Offer"} · {period.label}</small>
                 <strong
-                  className={toneClass(signTone(activeOffer.totals30.profit, activeOffer.totals30))}
+                  className={toneClass(signTone(mv(activeOffer.totals30.profit), activeOffer.totals30))}
                 >
-                  {eur(activeOffer.totals30.profit)}
+                  {finance ? eur(activeOffer.totals30.profit) : `${num(activeOffer.totals30.sois)} SOIs`}
                 </strong>
-                <span>
-                  {eur(activeOffer.totals30.revenue)} Umsatz –{" "}
-                  {eur(activeOffer.totals30.payout)} SOI-Vergütung = Profit
-                </span>
+                {finance ? (
+                  <span>
+                    {money(activeOffer.totals30.revenue)} Umsatz –{" "}
+                    {money(activeOffer.totals30.payout)} SOI-Vergütung = Profit
+                  </span>
+                ) : (
+                  <span>{num(activeOffer.totals30.clicks)} Klicks · Umsatz, Vergütung und Profit nur mit Finanzrecht</span>
+                )}
                 <span>
                   {activeOffer.totals30.sois} SOIs ·{" "}
                   {activeOffer.totals30.firstSales} First-Sales ·{" "}
@@ -1086,8 +1071,8 @@ export default async function AffiliateOptimizerPage({
                             : `${num(v.days30.sois)} SOIs aus ${num(v.days30.clicks)} Klicks`}
                         </small>
                       </span>
-                      <span className={toneClass(signTone(v.days30.profit, v.days30))}>
-                        {eur(v.days30.profit)}
+                      <span className={toneClass(signTone(mv(v.days30.profit), v.days30))}>
+                        {money(v.days30.profit)}
                       </span>
                       <span>
                         {v.days30.firstSales} <small>First-Sales</small>
@@ -1095,12 +1080,12 @@ export default async function AffiliateOptimizerPage({
                       <span className="urlTrendCell">
                         {(() => {
                           const verdict = (v as VariantWithTrend).trendVerdict;
-                          if (!verdict || verdict.status !== "ok")
-                            return <small className="trendMuted">–</small>;
-                          const tone = toneClass(signTone(verdict.profitDelta, { clicks: Math.min(v.days30.clicks, verdict.previous?.clicks ?? v.days30.clicks), sois: Math.min(v.days30.sois, verdict.previous?.sois ?? v.days30.sois) }));
+                          if (!finance || !verdict || verdict.status !== "ok")
+                            return <small className="trendMuted" title={finance ? undefined : "Profit-Trend nur mit Finanzrecht"}>–</small>;
+                          const tone = toneClass(signTone(mv(verdict.profitDelta), { clicks: Math.min(v.days30.clicks, verdict.previous?.clicks ?? v.days30.clicks), sois: Math.min(v.days30.sois, verdict.previous?.sois ?? v.days30.sois) }));
                           return (
                             <small className={`urlTrend ${tone}`}>
-                              {verdict.profitDelta >= 0 ? "+" : ""}{eur(verdict.profitDelta)}
+                              {verdict.profitDelta >= 0 ? "+" : ""}{money(verdict.profitDelta)}
                               {verdict.profitPercent !== null && Math.abs(verdict.profitPercent) <= 999
                                 ? ` · ${verdict.profitPercent.toFixed(0)} %`
                                 : ""}
@@ -1113,7 +1098,20 @@ export default async function AffiliateOptimizerPage({
                 >
                   <div className="urlDetails">
                     <div className="periodCompare">
-                      <ProfitPeriod label={period.label} m={v.days30} />
+                      {finance && (
+                        <ProfitPeriod label={period.label} m={v.days30} affiliateId={can(user.access, "statistics.view") ? selected.affiliateId : undefined} />
+                      )}
+                      {!finance && (
+                        <article className="profitPeriod">
+                          <span>VOLUMEN · {period.label}</span>
+                          <b>{num(v.days30.sois)} SOIs</b>
+                          <small>
+                            {num(v.days30.clicks)} Klicks · {v.days30.firstSales} First-Sales · {v.days30.rebills} Rebills
+                          </small>
+                          <small>Umsatz, Vergütung und Profit nur mit Finanzrecht.</small>
+                        </article>
+                      )}
+                      {finance && (
                       <article className="profitPeriod efficiency">
                         <span>
                           {v.efficiency.label === "Profit je Klick"
@@ -1122,7 +1120,7 @@ export default async function AffiliateOptimizerPage({
                         </span>
                         <b>
                           {v.days30.clicks || v.days30.sois
-                            ? eur(v.efficiency.days30)
+                            ? money(v.efficiency.days30)
                             : "nicht berechenbar"}
                         </b>
                         <small>
@@ -1135,12 +1133,13 @@ export default async function AffiliateOptimizerPage({
                           die Effizienz.
                         </small>
                       </article>
+                      )}
                     </div>
                     <div className="decisionReason">
                       <b>
                         {v.recommendation.action}: {v.recommendation.reason}
                       </b>
-                      <p>{v.recommendation.evidence.join(" · ")}</p>
+                      <p>{v.recommendation.evidence.filter((line) => finance || !line.includes("€")).join(" · ")}</p>
                     </div>
                     <RebillConcentrationPanel
                       analysis={rebillAnalysis(
@@ -1161,7 +1160,12 @@ export default async function AffiliateOptimizerPage({
                         benchmark={leadLatency}
                       />
                     )}
-                    {sourceError ? null : (
+                    {!finance && (
+                      <p className="financeHiddenNote">
+                        Quellen je Landingpage mit Umsatz und Profit sind nur mit Finanzrecht sichtbar; die Tracker-Liste unten zeigt Verdikt und Volumen je Quelle.
+                      </p>
+                    )}
+                    {finance && !sourceError && (
                       <SourceBreakdown
                         rows={
                           sourceRowsByUrl.get(`${v.trafficMode}|${v.offerId}|${v.offerUrlId}`) ||
@@ -1195,9 +1199,10 @@ export default async function AffiliateOptimizerPage({
             {!sourceError &&
               !activeOffer.variants.some((v) => v.trafficMode === "api") && (
                 <TrafficActionLists
-                  rows={sourceRows.filter(
+                  rows={clientSourceRows.filter(
                     (row) => row.offerId === activeOffer.offerId,
                   )}
+                  finance={finance}
                   urls={Object.fromEntries(
                     activeOffer.variants.map((v) => [v.offerUrlId, v.offerUrl]),
                   )}
@@ -1224,13 +1229,14 @@ export default async function AffiliateOptimizerPage({
       ) : (
         <>
           <AffiliateCockpit
-            analyses={analyses}
+            analyses={clientAnalyses}
             rangeParams={rangeParams}
             comparisonAvailable={
               period.period !== "12m" && period.period !== "all"
             }
             blocks={blockMarkers}
-            dailyByKey={cockpitDaily}
+            finance={finance}
+            dailyByKey={finance ? cockpitDaily : undefined}
           />
           <section className="sectionHead">
             <div>
@@ -1267,8 +1273,8 @@ export default async function AffiliateOptimizerPage({
                 <div className="partnerTrafficTotals">
                   {a.direct && (
                     <span>
-                      <b className={toneClass(signTone(a.direct.totals30.profit, a.direct.totals30))}>
-                        {eur(a.direct.totals30.profit)}
+                      <b className={toneClass(signTone(mv(a.direct.totals30.profit), a.direct.totals30))}>
+                        {finance ? eur(a.direct.totals30.profit) : `${num(a.direct.totals30.sois)} SOIs`}
                       </b>
                       <small>Direkt · {period.label}</small>
                     </span>
@@ -1277,7 +1283,7 @@ export default async function AffiliateOptimizerPage({
                     <span>
                       {(() => {
                         const sum = a.campaigns.reduce((s, c) => ({ profit: s.profit + c.profit30, clicks: s.clicks + c.clicks30, sois: s.sois + c.sois30 }), { profit: 0, clicks: 0, sois: 0 });
-                        return <b className={toneClass(signTone(sum.profit, sum))}>{eur(sum.profit)}</b>;
+                        return <b className={toneClass(signTone(mv(sum.profit), sum))}>{finance ? eur(sum.profit) : `${num(sum.sois)} SOIs`}</b>;
                       })()}
                       <small>Smartlinks · {period.label}</small>
                     </span>

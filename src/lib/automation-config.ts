@@ -1,3 +1,4 @@
+import{DEFAULT_DEAL_RULES,resolveDealRule,type DealRule}from'./deal-register';
 export type AutomationStatus='draft'|'dry_run'|'awaiting_live'|'active'|'paused'|'hold'|'completed';
 export type AutomationTestMode='single_offer'|'multi_offer';
 export type AutomationStrategy='equal_slots'|'champion_challenger'|'matched_rounds';
@@ -63,10 +64,12 @@ export function validateAutomationDraft(config:AutomationConfiguration){const er
  return [...new Set(errors)];
 }
 
-export function recommendAutomationThresholds(input:{variantCount:number;baselineCvr:number;clicksPerDay:number;soisPerDay:number;affiliateId:number}):AutomationThresholdRecommendation{
+/** Reifefenster: Standard 168 h; partnerspezifische Werte kommen ausschließlich aus dem Deal-Register (D9). */
+export const DEFAULT_MATURITY_HOURS=168;
+export function recommendAutomationThresholds(input:{variantCount:number;baselineCvr:number;clicksPerDay:number;soisPerDay:number;affiliateId:number},deals:readonly DealRule[]=DEFAULT_DEAL_RULES):AutomationThresholdRecommendation{
  const p=Number(input.baselineCvr),clicksPerDay=Number(input.clicksPerDay),soisPerDay=Number(input.soisPerDay),variantCount=positiveInt(input.variantCount,1),blockers:string[]=[];
  if(!Number.isFinite(p)||p<=0||p>=1||!Number.isFinite(clicksPerDay)||clicksPerDay<=0||!Number.isFinite(soisPerDay)||soisPerDay<=0)blockers.push('Keine belastbare Traffic-Baseline verfügbar.');
  const safeP=Number.isFinite(p)&&p>0&&p<1?p:0.01,targetSois=Math.max(40,Math.min(100,Math.ceil(3.8416*(1-safeP)/0.09))),ruleOfThreeClicks=Math.ceil(3/safeP),minClicks=Math.max(ruleOfThreeClicks,Math.ceil(targetSois/safeP));
  const estimatedDays=blockers.length?null:Math.max(minClicks/(clicksPerDay/variantCount),targetSois/(soisPerDay/variantCount));
- return{targetSois,minClicks,minAgeHours:24,maxAgeHours:336,maturityHours:input.affiliateId===436?336:168,estimatedDays:estimatedDays===null?null:round2(estimatedDays),confidence:blockers.length?'insufficient_data':'recommended',rationale:[`Ziel-SOIs aus einem 95-%-Konfidenzintervall mit höchstens 30 % relativer Unsicherheit.`,`Mindestens ${ruleOfThreeClicks} Klicks berücksichtigen die Rule of Three bei null Conversions.`,`Traffic wird auf ${variantCount} Varianten verteilt.`],blockers};
+ return{targetSois,minClicks,minAgeHours:24,maxAgeHours:336,maturityHours:resolveDealRule(deals,input.affiliateId)?.maturityHours??DEFAULT_MATURITY_HOURS,estimatedDays:estimatedDays===null?null:round2(estimatedDays),confidence:blockers.length?'insufficient_data':'recommended',rationale:[`Ziel-SOIs aus einem 95-%-Konfidenzintervall mit höchstens 30 % relativer Unsicherheit.`,`Mindestens ${ruleOfThreeClicks} Klicks berücksichtigen die Rule of Three bei null Conversions.`,`Traffic wird auf ${variantCount} Varianten verteilt.`],blockers};
 }

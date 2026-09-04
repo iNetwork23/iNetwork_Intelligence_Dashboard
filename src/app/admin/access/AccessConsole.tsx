@@ -54,6 +54,18 @@ const fallbackStandardRoles = [
   "partner",
   "read_only",
 ];
+/** Scope-Vorschau (Etappe 4, Abnahme G): erste Namen je Liste und Entprellung der Eingaben. */
+const SCOPE_PREVIEW_NAMES = 10;
+const SCOPE_PREVIEW_DEBOUNCE_MS = 400;
+type ScopePreviewEntity = { id: string; name: string; sois: number };
+type ScopePreviewData = {
+  affiliates: ScopePreviewEntity[];
+  offers: ScopePreviewEntity[];
+  paths: number;
+  hidden: { affiliates: number; offers: number };
+  scopesApply: boolean;
+  unsupported?: Array<"account" | "source" | "sub_source">;
+};
 // Security contract markers: action:'delete_role' action:'reset_mfa' Benutzerdefinierte Rolle
 
 function PermissionMatrix({
@@ -138,6 +150,173 @@ function ScopeSummary({ user }: { user: User }) {
     </div>
   ) : (
     <p className="emptyHint">Keine individuellen Datenfreigaben</p>
+  );
+}
+const scopePreviewList = (
+  label: string,
+  items: ScopePreviewEntity[],
+  hidden: number,
+) => {
+  const shown = items.slice(0, SCOPE_PREVIEW_NAMES),
+    rest = items.length - shown.length;
+  return (
+    <div>
+      <span>
+        {label} · {items.length}
+        {hidden > 0 ? ` (${hidden} ausgeblendet)` : ""}
+      </span>
+      {shown.length ? (
+        <ul>
+          {shown.map((item) => (
+            <li key={item.id}>
+              <b>{item.name}</b>
+              <small>
+                #{item.id} · {new Intl.NumberFormat("de-DE").format(item.sois)} SOIs
+              </small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="emptyHint">Keine sichtbar</p>
+      )}
+      {rest > 0 && <small>+ {rest} weitere</small>}
+    </div>
+  );
+};
+/**
+ * Vorschau unter den Scope-Eingaben: liest Rolle und Freigaben aus dem umgebenden Formular (entprellt), fragt die Konsole-Route
+ * mit ?preview=1 und zeigt, welche Partner und Offers dieser Zugang sehen würde (Namen und SOIs der letzten 30 Tage, keine Geldwerte).
+ */
+function ScopePreview({
+  user,
+  roleOptions,
+}: {
+  user: User;
+  roleOptions: RoleOption[];
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  const fallbackRole = user.access.role;
+  const [state, setState] = useState<{
+    status: "loading" | "ready" | "error";
+    preview?: ScopePreviewData;
+    message?: string;
+  }>({ status: "loading" });
+  useEffect(() => {
+    const form = host.current?.closest("form");
+    if (!form) return;
+    let timer: ReturnType<typeof setTimeout> | undefined,
+      controller: AbortController | undefined;
+    const run = async () => {
+      controller?.abort();
+      controller = new AbortController();
+      const fd = new FormData(form),
+        scopes = Object.fromEntries(
+          scopeKeys.map(([key]) => [
+            key,
+            String(fd.get(`s:${key}`) || "")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean),
+          ]),
+        ),
+        selection = String(fd.get("role") || fallbackRole),
+        role = selection.startsWith("custom:")
+          ? roleOptions.find((item) => item.id === selection.slice(7))?.baseRole || fallbackRole
+          : selection,
+        params = new URLSearchParams({
+          preview: "1",
+          role,
+          scopes: JSON.stringify(scopes),
+        });
+      setState((current) => ({ ...current, status: "loading" }));
+      try {
+        const response = await fetch(`/api/admin/access?${params}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = await response.json();
+        if (!response.ok || !body.preview) throw new Error(String(body.error || ""));
+        setState({ status: "ready", preview: body.preview as ScopePreviewData });
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        setState({
+          status: "error",
+          message: cause instanceof Error && cause.message ? cause.message : "",
+        });
+      }
+    };
+    // Nur für die aufgeklappte Benutzerkarte rechnen: kein Vorschau-Aufruf je Konto beim Laden der Liste.
+    const card = host.current?.closest("details"),
+      visible = () => !card || card.open;
+    let started = false;
+    const start = () => {
+      if (started || !visible()) return;
+      started = true;
+      void run();
+    };
+    const schedule = () => {
+      if (!visible()) return;
+      started = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => void run(), SCOPE_PREVIEW_DEBOUNCE_MS);
+    };
+    form.addEventListener("input", schedule);
+    form.addEventListener("change", schedule);
+    card?.addEventListener("toggle", start);
+    start();
+    return () => {
+      clearTimeout(timer);
+      controller?.abort();
+      form.removeEventListener("input", schedule);
+      form.removeEventListener("change", schedule);
+      card?.removeEventListener("toggle", start);
+    };
+  }, [roleOptions, fallbackRole, user.id]);
+  const preview = state.preview;
+  return (
+    <div className="scopePreview" ref={host} aria-live="polite" aria-busy={state.status === "loading"}>
+      <span className="sectionKicker">VORSCHAU</span>
+      {state.status === "error" && (
+        <p className="scopePreviewError" role="alert">
+          Vorschau nicht verfügbar{state.message ? ` · ${state.message}` : ""}.
+        </p>
+      )}
+      {preview ? (
+        <>
+          {preview.unsupported?.length ? (
+          <p className="scopePreviewError" role="alert">
+            Freigabe {preview.unsupported.join(", ")} wird von den Datenseiten nicht ausgewertet – dort endet dieses Konto mit 403 „Scope kann nicht sicher ausgewertet werden“.
+          </p>
+        ) : null}
+        <p className="scopePreviewSummary">
+            <b>
+              Vorschau: Dieses Konto sieht {preview.affiliates.length} Partner,{" "}
+              {preview.offers.length} Offers
+            </b>
+            <small>
+              {preview.paths} Pfade · Datenbasis: letzte 30 Tage
+              {state.status === "loading" ? " · wird aktualisiert …" : ""}
+            </small>
+          </p>
+          {preview.scopesApply && preview.paths === 0 && preview.hidden.affiliates > 0 && (
+            <p className="scopePreviewNote">
+              Leerer Partner-Scope oder keine passende ID: Dieses Konto sieht keine Partnerdaten.
+            </p>
+          )}
+          {!preview.scopesApply && (
+            <p className="scopePreviewNote">
+              Datenfreigaben schränken interne Rollen nicht ein; alle Partner bleiben sichtbar.
+            </p>
+          )}
+          <div className="scopePreviewLists">
+            {scopePreviewList("Partner", preview.affiliates, preview.hidden.affiliates)}
+            {scopePreviewList("Offers", preview.offers, preview.hidden.offers)}
+          </div>
+        </>
+      ) : (
+        state.status === "loading" && <p className="emptyHint">Vorschau wird berechnet …</p>
+      )}
+    </div>
   );
 }
 
@@ -592,6 +771,7 @@ export default function AccessConsole() {
                           </label>
                         ))}
                       </div>
+                      <ScopePreview user={user} roleOptions={roleOptions} />
                     </section>
                     <div className="formFooter">
                       <p>

@@ -33,7 +33,7 @@ export function latencyBadge(gate:VerdictGate|undefined|null,latency?:LatencyInp
 }
 /** Rebill-Evidenz (D4: nur Text neben dem Verdikt, nie im Verdikt): Rebills, Anteil an den Sale-Ereignissen und Umsatz je SOI. */
 export function rebillEvidence(m:{rebills:number;firstSales:number;revenue:number;sois:number}):string{
- const sales=m.firstSales+m.rebills,share=sales>0?` · ${(100*m.rebills/sales).toFixed(0)} % der Sale-Ereignisse`:'',perSoi=m.sois>0?` · ${(m.revenue/m.sois).toFixed(2).replace('.',',')} € Umsatz je SOI`:'';
+ const sales=m.firstSales+m.rebills,share=sales>0?` · ${(100*m.rebills/sales).toFixed(0)} % der Sale-Ereignisse`:'',perSoi=m.sois>0&&Number.isFinite(m.revenue)?` · ${(m.revenue/m.sois).toFixed(2).replace('.',',')} € Umsatz je SOI`:'';
  return`${m.rebills} Rebills${share}${perSoi}`;
 }
 export type TrendCells={sois:Delta;cvr:Delta;profit:Delta;mature:boolean};

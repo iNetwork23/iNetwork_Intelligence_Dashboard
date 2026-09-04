@@ -15,6 +15,8 @@ vi.mock('./supabase-reporting',()=>({loadPortfolioFromCache:(...a:unknown[])=>lo
 const loadRows=vi.fn(),loadIndex=vi.fn(),loadFreshness=vi.fn(),loadConversions=vi.fn();
 vi.mock('./cached-evaluations',()=>({loadAffiliateSourceRowsRangeFromCache:(...a:unknown[])=>loadRows(...a),loadAffiliateActivityIndex:(...a:unknown[])=>loadIndex(...a),loadSourceSnapshotFreshness:(...a:unknown[])=>loadFreshness(...a),loadAffiliateConversionsFromCache:(...a:unknown[])=>loadConversions(...a)}));
 import type{ConversionRow}from'./everflow';
+import{resolveActivityCoverage}from'./snapshot-generation';
+import{attachSourceActivityFromIndex,mergeSourceWindows}from'./source-breakdown';
 
 const range={from:'2026-08-06',to:'2026-09-04'};
 const metric=(x:Partial<ConversionMetric>):ConversionMetric=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,payout:0,revenue:0,profit:0,profitPerSoi:0,...x});
@@ -173,6 +175,27 @@ describe('cron options: conversions memo, persisted maturity summary, budget gra
   loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockImplementation(()=>new Promise(()=>{}));
   const snapshot=await buildSourceCandidatesSnapshot(range,{timeBudgetMs:20,loadGraceMs:1});
   expect(snapshot).toMatchObject({affiliates:1,affiliatesProcessed:0,coverageComplete:false,rows:[]});
+ });
+});
+describe('sourceTrendsFromRows',()=>{
+ it('compares the last seven calendar days with the seven before per leaf and attaches the trend to candidates',async()=>{
+  const{sourceTrendsFromRows,evaluateSourceCandidates,collectSourceLabels}=await import('./source-candidates');
+  const day=(date:string,row:ReportRow):ReportRow=>({...row,columns:row.columns.map(c=>c.column_type==='date'?{...c,id:date,label:date}:c)});
+  const raw=[day('2026-09-04',rRow('376','11000','news',{total_click:100,cv:10,profit:-5})),day('2026-08-30',rRow('376','11000','news',{total_click:100,cv:20,profit:-15})),day('2026-08-27',rRow('376','11000','news',{total_click:200,cv:25,profit:-40})),day('2026-08-20',rRow('376','11000','news',{total_click:999,cv:99,profit:-99}))];
+  const trends=sourceTrendsFromRows(raw,'2026-09-04'),trend=trends.get('8|376|0|2766|tracked|11000|news');
+  expect(trend).toEqual({days:7,current:{sois:30,clicks:200,profit:-20},previous:{sois:25,clicks:200,profit:-40},profitDelta:20,soisDelta:5,clicksDelta:0});
+  const evaluated=attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),[],resolveActivityCoverage('2025-09-05',{complete:true,availableDays:365,expectedDays:365,minDate:'2025-09-05',maxDate:'2026-09-04',generatedAt:'2026-09-04T10:00:00Z'}));
+  const rows=evaluateSourceCandidates(evaluated,collectSourceLabels(raw,'Partner 376'),trends);
+  expect(rows[0]).toMatchObject({mainValue:'11000',subValue:'news',trend:{days:7,soisDelta:5}});
+  expect(evaluateSourceCandidates(evaluated,collectSourceLabels(raw,'Partner 376'))[0].trend).toBeUndefined();
+ });
+});
+describe('rangeCoversTrend',()=>{
+ it('computes trends only when the loaded range holds both seven-day windows',async()=>{
+  const{rangeCoversTrend}=await import('./source-candidates');
+  expect(rangeCoversTrend({from:'2026-08-22',to:'2026-09-04'})).toBe(true);
+  expect(rangeCoversTrend({from:'2026-08-29',to:'2026-09-04'})).toBe(false);
+  expect(read('src/lib/source-candidates.ts')).toContain('rangeCoversTrend(range)?sourceTrendsFromRows(raw,range.to):undefined');
  });
 });
 describe('memoizedConversionsLoader',()=>{
