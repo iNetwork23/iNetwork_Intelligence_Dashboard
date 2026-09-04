@@ -4,27 +4,58 @@ import type{ReportingPeriod}from'./supabase-reporting';
 import{analyzeAffiliateTraffic}from'./affiliate-optimizer';
 import{loadAffiliateActivityIndex,loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
 import{analyzeLeadLatency}from'./lead-latency';
+import{buildLeadMaturityIndex,noLeadMaturityIndex,urlLeadMaturityFor,type LeadMaturityIndex}from'./lead-maturity';
+import{applyLeadMaturity,type VerdictGate}from'./decision-engine';
+import type{AffiliateAnalysis,AffiliateVariant,RecommendationAction}from'./affiliate-optimizer';
 import{resolveSourcePeriod}from'./source-period';
-import{attachSourceActivityFromIndex,mergeSourceWindows}from'./source-breakdown';
+import{attachSourceActivityFromIndex,attachSourceMaturity,mergeSourceWindows}from'./source-breakdown';
 import{resolveActivityCoverage,sourceScopeCoverageComplete}from'./snapshot-generation';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess,sourceRowsForAccess}from'./service-scopes';
 import{lastLeadByAffiliate,previousWindow,variantTrend,type AffiliateAnalysisWithTrend,type TrendVerdict}from'./affiliate-trend';
 import{getSupabaseAdmin}from'./supabase';
 
-export async function getAffiliateOptimizations(period:ReportingPeriod='30d',custom:{from:string;to:string}|undefined,access:AccessMetadata){
+/** options.leadMaturityFor: Partner, dessen URL-Verdikte an die Lead-Reife gekoppelt werden (D3) – nur der ausgewählte Partner, damit die Liste keine Conversions je Partner lädt. */
+export type LeadMaturityOptions={leadMaturityFor?:string};
+export async function getAffiliateOptimizations(period:ReportingPeriod='30d',custom:{from:string;to:string}|undefined,access:AccessMetadata,options?:LeadMaturityOptions){
  assertAffiliateOptimizerAggregateAccess(access);
  const selected=await getDashboard(period,custom,access);
- return analyzeAffiliateTraffic(selected);
+ return gateSelectedAffiliate(analyzeAffiliateTraffic(selected),{from:selected.range.from,to:selected.range.to},access,options);
+}
+
+/** Reife-Index je Partner und Zeitraum (300 s); Ladefehler → „keine Daten“ (fail-closed in der Engine), wirft nie. */
+const maturityWindow=(affiliateId:string,range:{from:string;to:string}):Promise<LeadMaturityIndex>=>unstable_cache(async()=>{const now=new Date(),rows=await loadAffiliateConversionsFromCache(affiliateId,90,now);return buildLeadMaturityIndex(rows,analyzeLeadLatency(rows,now),range,now)},['affiliate-lead-maturity-v1',affiliateId,range.from,range.to],{revalidate:300,tags:[`affiliate-latency-${affiliateId}`,`affiliate-source-${affiliateId}`]})().catch((error:unknown)=>{console.error(`Lead maturity unavailable for affiliate ${affiliateId}`,error);return noLeadMaturityIndex(range)});
+export async function getAffiliateLeadMaturity(affiliateId:string,range:{from:string;to:string},access:AccessMetadata):Promise<LeadMaturityIndex>{
+ if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
+ assertScopesSupported(access,['affiliate']);
+ if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
+ return maturityWindow(affiliateId,range);
+}
+export type GatedRecommendation=AffiliateVariant['recommendation']&{gate?:VerdictGate};
+const ACTION_ORDER:Record<RecommendationAction,number>={SKALIEREN:0,WEITERLAUFEN:1,'WEITER TESTEN':2,BEOBACHTEN:3,AUSSCHALTEN:4};
+/** Spiegelt den Median aus affiliate-optimizer.recommendation (Varianten mit ≥ 10 SOIs und First-Sale-Rate > 0). */
+const urlBenchmarkRate=(variants:AffiliateVariant[])=>{const rates=variants.map(v=>v.days30).filter(x=>x.sois>=10&&x.firstSaleRate>0).map(x=>x.firstSaleRate).sort((a,b)=>a-b),median=rates.length?rates[Math.floor(rates.length/2)]:0;return median>0?median/100:undefined};
+/** URL-Verdikte eines Partners durch das Reife-Gate D3 (applyLeadMaturity) – gate an jeder Empfehlung, Reihenfolge und Zusammenfassung wie analyzeAffiliateTraffic. */
+export function gateAffiliateAnalysis<T extends AffiliateAnalysis>(analysis:T,maturity:LeadMaturityIndex):T{
+ const benchmarkRate=urlBenchmarkRate(analysis.variants);
+ const variants=analysis.variants.map(v=>{const m=v.days30,verdict=applyLeadMaturity(v.recommendation,{clicks:m.clicks,sois:m.sois,firstSales:m.firstSales,rebills:m.rebills,profit:m.profit},{api:v.trafficMode==='api',benchmarkRate,leadMaturity:urlLeadMaturityFor(maturity,v.offerId,v.offerUrlId)}),recommendation:GatedRecommendation={...v.recommendation,action:verdict.action,severity:verdict.severity,reason:verdict.reason,gate:verdict.gate};return{...v,recommendation}}).sort((a,b)=>ACTION_ORDER[a.recommendation.action]-ACTION_ORDER[b.recommendation.action]||b.days30.profit-a.days30.profit);
+ const stop=variants.filter(x=>x.recommendation.action==='AUSSCHALTEN').length,scale=variants.filter(x=>x.recommendation.action==='SKALIEREN').length;
+ return{...analysis,variants,bestVariantKey:variants[0]?.key??analysis.bestVariantKey,summary:`${variants.length} direkte Offer-/URL-Varianten · ${stop} Ausschaltkandidaten · ${scale} Skalierungskandidaten`};
+}
+async function gateSelectedAffiliate<T extends AffiliateAnalysis>(analyses:T[],range:{from:string;to:string},access:AccessMetadata,options?:LeadMaturityOptions):Promise<T[]>{
+ const affiliateId=options?.leadMaturityFor;
+ if(!affiliateId||!analyses.some(a=>a.affiliateId===affiliateId)||foreignScopeRequested(access,{affiliate:affiliateId}))return analyses;
+ const maturity=await maturityWindow(affiliateId,range);
+ return analyses.map(a=>a.affiliateId===affiliateId?gateAffiliateAnalysis(a,maturity):a);
 }
 
 const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();
 const sourceWindow=(affiliateId:string,range:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access),['affiliate-source-supabase-v5',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
 const sourceEvaluation=(affiliateId:string,range:{from:string;to:string},activityRange:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>{
- // Aktivität kommt aus dem persistierten Index (eine kleine Abfrage) statt aus 365 Tages-Snapshots.
- const [selected,index,freshness]=await Promise.all([sourceWindow(affiliateId,range,access),loadAffiliateActivityIndex(affiliateId,activityRange),freshnessWindow(activityRange)]);
- return attachSourceActivityFromIndex(mergeSourceWindows(selected,selected,selected),index,resolveActivityCoverage(activityRange.from,freshness));
-},['affiliate-source-evaluation-v7',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source']})();
+ // Aktivität kommt aus dem persistierten Index (eine kleine Abfrage) statt aus 365 Tages-Snapshots; die Reife (D3) aus den Conversions des Partners.
+ const [selected,index,freshness,maturity]=await Promise.all([sourceWindow(affiliateId,range,access),loadAffiliateActivityIndex(affiliateId,activityRange),freshnessWindow(activityRange),maturityWindow(affiliateId,range)]);
+ return attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows(selected,selected,selected),index,resolveActivityCoverage(activityRange.from,freshness)),maturity);
+},['affiliate-source-evaluation-v8',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source']})();
 
 export async function getAffiliateSourceBreakdown(affiliateId:string,range:{from:string;to:string},access:AccessMetadata,now=new Date()){
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
@@ -56,8 +87,11 @@ export const getAffiliateLeadLatency=(affiliateId:string,access:AccessMetadata)=
 
 const NO_COMPARISON:TrendVerdict={status:'insufficient',reason:'Kein Vergleichszeitraum in der 365-Tage-Historie'};
 
-export async function getAffiliateOptimizationsWithTrend(period:ReportingPeriod,custom:{from:string;to:string}|undefined,access:AccessMetadata,range:{from:string;to:string}):Promise<AffiliateAnalysisWithTrend[]>{
+export async function getAffiliateOptimizationsWithTrend(period:ReportingPeriod,custom:{from:string;to:string}|undefined,access:AccessMetadata,range:{from:string;to:string},options?:LeadMaturityOptions):Promise<AffiliateAnalysisWithTrend[]>{
  assertAffiliateOptimizerAggregateAccess(access);
+ return gateSelectedAffiliate(await optimizationsWithTrend(period,custom,access,range),range,access,options);
+}
+async function optimizationsWithTrend(period:ReportingPeriod,custom:{from:string;to:string}|undefined,access:AccessMetadata,range:{from:string;to:string}):Promise<AffiliateAnalysisWithTrend[]>{
  const comparable=period!=='12m'&&period!=='all',prev=comparable?previousWindow(range.from,range.to):null;
  // Vorfenster ist historisch: eigener Langzeit-Cache statt der 60s des Live-Portfolios,
  // und parallel zum Hauptfenster geladen statt danach.
