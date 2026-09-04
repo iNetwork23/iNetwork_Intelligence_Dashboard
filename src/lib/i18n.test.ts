@@ -12,7 +12,7 @@ describe('dashboard internationalization',()=>{
   for(const [de,en] of Object.entries(translations)){expect(de.trim()).not.toBe('');expect(en.trim()).not.toBe('');expect(en).not.toBe(de)}
  });
  it('covers navigation, authentication, actions, statuses and language accessibility labels',()=>{
-  for(const key of ['Sprache auswählen','Anmelden','Abmelden','Navigation öffnen','Benutzer & Rechte','Ausgeschaltete Quellen','Quelle ausschalten','Unterquelle ausschalten','Daten werden geladen …','Keine Berechtigung','Umsatz','SOI-Vergütung','Zahler','Landingpage','BERICHTSZEITRAUM','Monat wählen','Monate','Vorheriges Jahr','Nächstes Jahr','Noch nicht verfügbar'])expect(translations).toHaveProperty(key);
+  for(const key of ['Sprache auswählen','Anmelden','Abmelden','Navigation öffnen','Benutzer & Rechte','Ausgeschaltete Quellen','Gesperrte Quellen','GESPERRT','Quelle ausschalten','Unterquelle ausschalten','Daten werden geladen …','Keine Berechtigung','Umsatz','SOI-Vergütung','Zahler','Landingpage','BERICHTSZEITRAUM','Monat wählen','Monate','Vorheriges Jahr','Nächstes Jahr','Noch nicht verfügbar'])expect(translations).toHaveProperty(key);
  });
  it('keeps one German source string per English read-only status so the reverse lookup stays deterministic',()=>{
   expect(translations['Nur Lesen']).toBe('Read only');expect(translations['Campaign gesamt · Nur Lesen']).toBe('Campaign as a whole · Read only');expect(translations['BI-Modus: Nur Lesen']).toBe('BI mode: Read only');

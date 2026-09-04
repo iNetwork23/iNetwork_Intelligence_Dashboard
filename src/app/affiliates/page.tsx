@@ -33,6 +33,8 @@ import AffiliateSmartlinks from "./AffiliateSmartlinks";
 import AffiliateSmartlinkOverview from "./AffiliateSmartlinkOverview";
 import PeriodControls from "../components/PeriodControls";
 import { todayPartialNote } from "@/lib/period-controls";
+import { signTone } from "@/lib/verdict-vocabulary";
+import { toneClass } from "@/lib/verdict-trust";
 import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
 import DataReloadButton from'./DataReloadButton';
 import InstantLink from "./InstantLink";
@@ -656,23 +658,10 @@ export default async function AffiliateOptimizerPage({
             </div>
             <div>
               <small>Smartlink-Profit · {period.label}</small>
-              <strong
-                className={
-                  selectedWorkspace.campaigns.reduce(
-                    (s, c) => s + c.profit30,
-                    0,
-                  ) >= 0
-                    ? "up"
-                    : "down"
-                }
-              >
-                {eur(
-                  selectedWorkspace.campaigns.reduce(
-                    (s, c) => s + c.profit30,
-                    0,
-                  ),
-                )}
-              </strong>
+              {(() => {
+                const sum = selectedWorkspace.campaigns.reduce((s, c) => ({ profit: s.profit + c.profit30, clicks: s.clicks + c.clicks30, sois: s.sois + c.sois30 }), { profit: 0, clicks: 0, sois: 0 });
+                return <strong className={toneClass(signTone(sum.profit, sum))}>{eur(sum.profit)}</strong>;
+              })()}
               <span>
                 {num(
                   selectedWorkspace.campaigns.reduce((s, c) => s + c.sois30, 0),
@@ -728,7 +717,7 @@ export default async function AffiliateOptimizerPage({
                 <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
               </section>
                 <AffiliateSmartlinks
-                periodControls={<PeriodControls dimension="global" period={period.period} rangeLabel={period.label} maxDate={period.maxDate} todayNote={todayPartialNote(dataStatus)} compact />}
+                periodControls={<PeriodControls dimension="global" period={period.period} rangeLabel={period.label} maxDate={period.maxDate} error={period.error} todayNote={todayPartialNote(dataStatus)} compact />}
                 affiliateId={selectedWorkspace.affiliateId}
                 returnTo={smartlinkCurrentHref}
                 mappings={selectedWorkspace.campaigns}
@@ -775,7 +764,7 @@ export default async function AffiliateOptimizerPage({
             </div>
             <div>
               <small>Direktlink-Profit · {period.label}</small>
-              <strong className={selected.totals30.profit >= 0 ? "up" : "down"}>
+              <strong className={toneClass(signTone(selected.totals30.profit, selected.totals30))}>
                 {eur(selected.totals30.profit)}
               </strong>
               <span>
@@ -791,7 +780,7 @@ export default async function AffiliateOptimizerPage({
                     0,
                   );
                   return (
-                    <em className={`heroTrend ${delta >= 0 ? "up" : "down"}`}>
+                    <em className={`heroTrend ${toneClass(signTone(delta, selected.totals30))}`}>
                       {delta >= 0 ? "+" : ""}{eur(delta)} vs. Vorperiode
                     </em>
                   );
@@ -838,7 +827,7 @@ export default async function AffiliateOptimizerPage({
             <article>
               <span>Beste Landingpage</span>
               <strong
-                className={best && best.days30.profit >= 0 ? "up" : "down"}
+                className={best ? toneClass(signTone(best.days30.profit, best.days30)) : ""}
               >
                 {best ? eur(best.days30.profit) : "–"}
               </strong>
@@ -869,7 +858,7 @@ export default async function AffiliateOptimizerPage({
                         {v.days30.sois > 0 ? ` · ${eur(v.days30.profit / v.days30.sois)} je SOI` : ""}
                       </small>
                     </span>
-                    <em className={v.days30.profit >= 0 ? "up" : "down"}>
+                    <em className={toneClass(signTone(v.days30.profit, v.days30))}>
                       {eur(v.days30.profit)}
                     </em>
                   </InstantLink>
@@ -1003,7 +992,7 @@ export default async function AffiliateOptimizerPage({
                       : "DIREKTLINK · TRACKING"}
                   </em>
                   <div>
-                    <b className={o.totals30.profit >= 0 ? "up" : "down"}>
+                    <b className={toneClass(signTone(o.totals30.profit, o.totals30))}>
                       {eur(o.totals30.profit)}
                     </b>
                     <small>
@@ -1039,7 +1028,7 @@ export default async function AffiliateOptimizerPage({
               <div>
                 <small>Profit dieser Offer · {period.label}</small>
                 <strong
-                  className={activeOffer.totals30.profit >= 0 ? "up" : "down"}
+                  className={toneClass(signTone(activeOffer.totals30.profit, activeOffer.totals30))}
                 >
                   {eur(activeOffer.totals30.profit)}
                 </strong>
@@ -1083,7 +1072,7 @@ export default async function AffiliateOptimizerPage({
                             : `${num(v.days30.sois)} SOIs aus ${num(v.days30.clicks)} Klicks`}
                         </small>
                       </span>
-                      <span className={v.days30.profit >= 0 ? "up" : "down"}>
+                      <span className={toneClass(signTone(v.days30.profit, v.days30))}>
                         {eur(v.days30.profit)}
                       </span>
                       <span>
@@ -1094,7 +1083,7 @@ export default async function AffiliateOptimizerPage({
                           const verdict = (v as VariantWithTrend).trendVerdict;
                           if (!verdict || verdict.status !== "ok")
                             return <small className="trendMuted">–</small>;
-                          const tone = verdict.profitDelta > 0 ? "up" : verdict.profitDelta < 0 ? "down" : "";
+                          const tone = toneClass(signTone(verdict.profitDelta, { clicks: Math.min(v.days30.clicks, verdict.previous?.clicks ?? v.days30.clicks), sois: Math.min(v.days30.sois, verdict.previous?.sois ?? v.days30.sois) }));
                           return (
                             <small className={`urlTrend ${tone}`}>
                               {verdict.profitDelta >= 0 ? "+" : ""}{eur(verdict.profitDelta)}
@@ -1256,11 +1245,7 @@ export default async function AffiliateOptimizerPage({
                 <div className="partnerTrafficTotals">
                   {a.direct && (
                     <span>
-                      <b
-                        className={
-                          a.direct.totals30.profit >= 0 ? "up" : "down"
-                        }
-                      >
+                      <b className={toneClass(signTone(a.direct.totals30.profit, a.direct.totals30))}>
                         {eur(a.direct.totals30.profit)}
                       </b>
                       <small>Direkt · {period.label}</small>
@@ -1268,15 +1253,10 @@ export default async function AffiliateOptimizerPage({
                   )}
                   {a.campaigns.length > 0 && (
                     <span>
-                      <b
-                        className={
-                          a.campaigns.reduce((s, c) => s + c.profit30, 0) >= 0
-                            ? "up"
-                            : "down"
-                        }
-                      >
-                        {eur(a.campaigns.reduce((s, c) => s + c.profit30, 0))}
-                      </b>
+                      {(() => {
+                        const sum = a.campaigns.reduce((s, c) => ({ profit: s.profit + c.profit30, clicks: s.clicks + c.clicks30, sois: s.sois + c.sois30 }), { profit: 0, clicks: 0, sois: 0 });
+                        return <b className={toneClass(signTone(sum.profit, sum))}>{eur(sum.profit)}</b>;
+                      })()}
                       <small>Smartlinks · {period.label}</small>
                     </span>
                   )}

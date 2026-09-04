@@ -1,4 +1,4 @@
-import{KILL_MATURITY_SOIS}from'./decision-engine';
+import{KILL_MATURITY_SOIS,type VerdictGate}from'./decision-engine';
 import{isBlockableCandidate,sourceCandidateBlockKeys,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
 import type{SourceCandidate}from'./source-candidates';
 import type{SourceBlockRecord}from'./source-blocks';
@@ -20,7 +20,8 @@ export const isSourceCandidateBlockFilter=(value:unknown):value is SourceCandida
 export const isSourceCandidateSort=(value:unknown):value is SourceCandidateSort=>value==='profit'||value==='payout'||value==='sois'||value==='clicks';
 /** D13: ein Urteilswort auf allen Ebenen – die Projektion liefert bereits AUSSCHALTEN. */
 export const verdictLabel=(action:SourceCandidateAction)=>action;
-export const maturityLabel=(m:{sois:number;clicks:number})=>m.sois>=KILL_MATURITY_SOIS?`reif · ${m.sois} SOIs`:`unreif · ${m.sois} von ${KILL_MATURITY_SOIS} SOIs`;
+/** Eine Reifeaussage je Zeile: mit Gate (D3) nur „n von m SOIs reif“, sonst die Volumenschwelle. */
+export const maturityLabel=(m:{sois:number;clicks:number;gate?:VerdictGate|null},gate:VerdictGate|null|undefined=m.gate)=>gate?`${gate.matureSois} von ${gate.totalSois} SOIs reif${gate.maturityReached?'':` · Schwelle ${gate.requiredSois}`}`:m.sois>=KILL_MATURITY_SOIS?`reif · ${m.sois} SOIs`:`unreif · ${m.sois} von ${KILL_MATURITY_SOIS} SOIs`;
 export const firstSaleRate=(m:{sois:number;firstSales:number})=>m.sois>0?`${(m.firstSales/m.sois*100).toFixed(1).replace('.',',')} %`:'–';
 const blockState=(record:SourceBlockRecord|undefined):SourceCandidateBlockState|null=>record&&record.status!=='inactive'?{id:record.id,status:record.status,effectiveAt:record.effectiveAt,error:record.error??null}:null;
 /** Sperrzustand der Zeile: eigene Ebene zuerst, dann die Hauptquelle (eine Hauptquellen-Sperre deckt Unterquellen ab). */

@@ -12,6 +12,16 @@ const moneyVerdictText = (profit: number, volume: Volume) => {
   const verdict = moneyVerdict(profit, volume);
   return verdict === "verdient" ? "Verdient Geld" : verdict === "verbrennt" ? "Verbrennt Geld" : profit === 0 ? "Ausgeglichen" : "unter Reifeschwelle";
 };
+/** Schwellentext aus den Engine-Konstanten inklusive Reife-Gate D3; Zahlen als eigene Textknoten, damit die i18n-Schlüssel ohne Zahlen auskommen. */
+const thresholdText = (api: boolean): (string | number)[] => [
+  "Ausschalten ab ",
+  ...(api ? [] : [DEAD_TRAFFIC_CLICKS, " Klicks ohne SOI, oder ab "]),
+  KILL_MATURITY_SOIS, " SOIs ohne First-Sale bei negativem Profit, oder ab ",
+  KILL_MATURITY_SOIS, " SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ",
+  UNDERPERFORMANCE_FACTOR * 100, " % des Vergleichswerts) – beide SOI-Regeln erst mit mindestens ",
+  KILL_MATURITY_SOIS, " reifen SOIs (typische Wartezeit des Partners erreicht). Skalieren ab ",
+  SCALE_MIN_SOIS, " SOIs mit mindestens ", SCALE_MIN_FIRST_SALES, " First-Sales und positivem Profit.",
+];
 import CopyValue from "./CopyValue";
 import SourcePairCopy from "./SourcePairCopy";
 import PeriodControls from "../components/PeriodControls";
@@ -450,17 +460,13 @@ export default function SourceBreakdown({
         </p>
       )}
       <footer className="decisionThresholds">
-        {apiMode ? (
+        {apiMode && (
           <>
             API · clickless: keine klickbasierten Stop-/Scale-Regeln. Primär
             zählen SOIs, First-Sales, Rebills, Profit und Profit je SOI.{" "}
-            {`Ausschalten ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
-          </>
-        ) : (
-          <>
-            {`Ausschalten ab ${DEAD_TRAFFIC_CLICKS} Klicks ohne SOI, oder ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         )}
+        {thresholdText(apiMode)}
       </footer>
     </section>
   );

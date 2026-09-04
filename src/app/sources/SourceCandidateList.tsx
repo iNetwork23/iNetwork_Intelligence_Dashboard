@@ -3,6 +3,9 @@ import{useCallback,useDeferredValue,useEffect,useMemo,useRef,useState}from'react
 import{NOT_BLOCKABLE_HINT,type SourceCandidateRange}from'@/lib/source-candidate-link';
 import{sourceBlockIdentityKey,type SourceBlockRecord}from'@/lib/source-blocks';
 import{berlinDay}from'@/lib/format-berlin';
+import{withGlobalPeriod}from'@/lib/period-controls';
+import{signTone}from'@/lib/verdict-vocabulary';
+import{toneClass}from'@/lib/verdict-trust';
 import{BULK_BLOCK_LIMIT,buildSourceCandidateQuery,firstSaleRate,maturityLabel,resolveCandidateBlock,selectSourceCandidates,SOURCE_CANDIDATE_PAGE_SIZE,toggleBulkSelection,verdictLabel,type SourceCandidateBlockState,type SourceCandidateFilters,type SourceCandidateRow,type SourceCandidateSort}from'@/lib/source-candidate-view';
 import SourceBlockButton from'../affiliates/SourceBlockButton';
 import InstantLink from'../affiliates/InstantLink';
@@ -14,7 +17,7 @@ const blockLabel=(block:SourceCandidateBlockState)=>block.status==='active'?`Ges
 export default function SourceCandidateList({rows:initialRows,range,openKey,initialFilters,initialSort,mayBlock,finance,blockStatusUnknown=false}:Props){
  const[rows,setRows]=useState(initialRows),[filters,setFilters]=useState(initialFilters),[sort,setSort]=useState(initialSort),[limit,setLimit]=useState(SOURCE_CANDIDATE_PAGE_SIZE),[selected,setSelected]=useState<string[]>([]),[limitHint,setLimitHint]=useState(false),[bulkOpen,setBulkOpen]=useState(false),mounted=useRef(false);
  useEffect(()=>{setRows(initialRows);setSelected([])},[initialRows]);
- useEffect(()=>{if(!mounted.current){mounted.current=true;return}const query=buildSourceCandidateQuery(range,filters,sort,openKey);window.history.replaceState(window.history.state,'',`${window.location.pathname}?${query}`)},[range,filters,sort,openKey]);
+ useEffect(()=>{if(!mounted.current){mounted.current=true;return}const query=buildSourceCandidateQuery(range,filters,sort,openKey);window.history.replaceState(window.history.state,'',withGlobalPeriod(`${window.location.pathname}?${query}`,window.location.search))},[range,filters,sort,openKey]);
  const deferredFilters=useDeferredValue(filters);
  const selection=useMemo(()=>selectSourceCandidates(rows,deferredFilters,sort,limit,openKey),[rows,deferredFilters,sort,limit,openKey]);
  const openRow=useMemo(()=>openKey?rows.find(row=>row.key===openKey)??null:null,[rows,openKey]);
@@ -51,7 +54,7 @@ export default function SourceCandidateList({rows:initialRows,range,openKey,init
     <td data-label="SOIs">{integer(row.sois)}</td>
     <td data-label="First-Sales">{integer(row.firstSales)}<small>{firstSaleRate(row)}</small></td>
     <td data-label="Rebills">{integer(row.rebills)}</td>
-    {finance&&<><td data-label="Payout">{row.payout===null?'–':euro(row.payout)}</td><td data-label="Umsatz">{row.revenue===null?'–':euro(row.revenue)}</td><td data-label="Profit" className={row.profit!==null&&row.profit<0?'negative':'positive'}><b>{row.profit===null?'–':euro(row.profit)}</b></td></>}
+    {finance&&<><td data-label="Payout">{row.payout===null?'–':euro(row.payout)}</td><td data-label="Umsatz">{row.revenue===null?'–':euro(row.revenue)}</td><td data-label="Profit" className={toneClass(signTone(row.profit??0,row))}><b>{row.profit===null?'–':euro(row.profit)}</b></td></>}
     <td data-label="Verdikt"><span className={`sourcesVerdict ${row.severity}`}>{verdictLabel(row.action)}</span><small>{row.reason}</small></td>
     <td data-label="Lead-Status">{row.leadStatus??'–'}<small>{maturityLabel(row)}</small></td>
     <td data-label="Sperrstatus">{blockStatusUnknown?'–':row.block?<><b className={`sourcesBlocked ${row.block.status}`}>{blockLabel(row.block)}</b>{mayBlock&&<InstantLink href="/source-blocks" className="sourcesBlockLink">Sperre ansehen</InstantLink>}{row.block.status==='error'&&mayBlock&&row.blockable&&<div className="sourcesRowAction"><SourceBlockButton affiliateId={row.affiliateId} affiliateName={row.affiliate} offerId={row.offerId} offerName={row.offer} trafficMode={row.trafficMode} level={row.level} mainValue={row.mainValue} subValue={row.subValue} showMoney={finance} onBlocked={onRecords(row.key)}/></div>}</>:!row.blockable?<span className="sourcesNotBlockable">{NOT_BLOCKABLE_HINT}</span>:mayBlock?<div className="sourcesRowAction"><SourceBlockButton autoOpen={isOpen} affiliateId={row.affiliateId} affiliateName={row.affiliate} offerId={row.offerId} offerName={row.offer} trafficMode={row.trafficMode} level={row.level} mainValue={row.mainValue} subValue={row.subValue} showMoney={finance} metrics={{payout:row.payout,sois:row.sois,profit:row.profit,clicks:row.clicks,firstSales:row.firstSales,maturity:maturityLabel(row),leadStatus:row.leadStatus}} onBlocked={records=>{const record=records.find(item=>item.offerId===Number(row.offerId))??records[0];if(record)setBlock(row.key,record.status==='inactive'?null:blockStateFromRecord(record))}}/></div>:'Nicht gesperrt'}</td>

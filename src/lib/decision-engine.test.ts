@@ -30,7 +30,7 @@ describe('unified decision engine',()=>{
     expect(assessUnit(m({sois:55,profit:-80}))).toMatchObject({action:'AUSSCHALTEN'});
   });
   it('does not kill mature negative traffic that has first sales and no benchmark',()=>{
-    expect(assessUnit(m({sois:80,firstSales:4,profit:-30}))).toMatchObject({action:'BEOBACHTEN',severity:'warning'});
+    expect(assessUnit(m({sois:80,firstSales:4,profit:-30}))).toMatchObject({action:'BEOBACHTEN',severity:'warning',reason:'Monetarisiert, aber im Zeitraum negativ; Ausschalten nur bei belegter Unterperformance.'});
   });
   it('kills underperformance only when even the optimistic rate is below half the benchmark',()=>{
     // 1/100 = 1% Punktrate, Obergrenze ~5.4% — Benchmark 8%: Halbwert 4% < 5.4% → überlebt
@@ -98,7 +98,7 @@ describe('lead maturity gate (Etappe 3, D3)',()=>{
   it('holds K1 back as WEITER TESTEN while fewer than KILL_MATURITY_SOIS sois are mature',()=>{
     const v=assessUnit(m({sois:55,profit:-80}),{leadMaturity:mature(20,55,'hoch',36.5)});
     expect(v).toMatchObject({action:'WEITER TESTEN',severity:'neutral'});
-    expect(v.reason).toContain('20 von 55 SOIs reif (Wartezeit p75 ≈ 37 h)');
+    expect(v.reason).toContain('20 von 55 SOIs reif (Wartezeit p75 ≈ 37 h); Ausschalten erst ab 50 reifen SOIs.');
     expect(v.gate).toMatchObject({matureSois:20,totalSois:55,maturityReached:false,p75Hours:36.5,latencyConfidence:'hoch'});
     expect(assessUnit(m({sois:55,profit:-80}),{leadMaturity:mature(50,55)})).toMatchObject({action:'AUSSCHALTEN',gate:{maturityReached:true}});
     expect(assessUnit(m({sois:55,profit:-80}),{api:true,leadMaturity:mature(49,55)})).toMatchObject({action:'WEITER TESTEN'});
@@ -113,10 +113,10 @@ describe('lead maturity gate (Etappe 3, D3)',()=>{
     const none=mature(0,0,'keine Daten',72);
     const v=assessUnit(m({sois:55,profit:-80}),{leadMaturity:none});
     expect(v).toMatchObject({action:'BEOBACHTEN',severity:'warning',gate:{latencyConfidence:'keine Daten',maturityReached:false}});
-    expect(v.reason).toContain('Reife nicht prüfbar – keine Conversion-Daten');
+    expect(v.reason).toBe('Reife nicht prüfbar – keine Conversion-Daten; Ausschalten erst nach geprüfter Wartezeit.');
     expect(assessUnit(m({sois:400,firstSales:1,profit:-10}),{benchmarkRate:0.08,leadMaturity:none})).toMatchObject({action:'BEOBACHTEN'});
     // Einheiten, die ohnehin nicht AUSSCHALTEN wären, bleiben unverändert.
-    expect(assessUnit(m({clicks:40,sois:5}),{leadMaturity:none})).toMatchObject({action:'WEITER TESTEN',reason:'Testquote noch nicht reif; vor einer Abschaltung mehr Evidenz sammeln.'});
+    expect(assessUnit(m({clicks:40,sois:5}),{leadMaturity:none})).toMatchObject({action:'WEITER TESTEN',reason:'Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.'});
     expect(assessUnit(m({sois:25,firstSales:3,profit:40}),{leadMaturity:none})).toMatchObject({action:'SKALIEREN'});
   });
   it('leaves K3 (dead traffic) uncoupled from maturity',()=>{

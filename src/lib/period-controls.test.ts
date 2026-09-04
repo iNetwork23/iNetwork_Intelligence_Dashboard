@@ -1,7 +1,7 @@
 import{existsSync,readFileSync,readdirSync,statSync}from'node:fs';
 import{join}from'node:path';
 import{describe,expect,it}from'vitest';
-import{buildPeriodQuery,DEFAULT_PERIOD,detectPeriodEditor,globalPeriodParams,periodCalendarRange,resolveGlobalPeriod,sourcesRangeFromPeriod,todayPartialNote,withGlobalPeriod}from'./period-controls';
+import{buildPeriodQuery,DEFAULT_PERIOD,detectPeriodEditor,globalPeriodParams,periodCalendarRange,resolveGlobalPeriod,sourcesRangeFromPeriod,sparklinePartialNote,todayPartialNote,withGlobalPeriod}from'./period-controls';
 const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
 const walk=(dir:string):string[]=>readdirSync(dir).flatMap(name=>{const path=join(dir,name);return statSync(path).isDirectory()?walk(path):[path]});
 
@@ -64,6 +64,7 @@ describe('one period component with two URL dimensions (D5)',()=>{
   expect(todayPartialNote({todayPartial:true,syncAt:'2026-09-04T09:15:00Z'})).toBe('Teiltag bis 11:15 Uhr');
   expect(todayPartialNote({todayPartial:false,syncAt:null})).toBe('Teiltag bis Sync-Zeit');
   expect(todayPartialNote(null)).toBe('Teiltag bis Sync-Zeit');
+  expect(sparklinePartialNote({todayPartial:true,syncAt:'2026-09-04T09:15:00Z'})).toBe('letzter Punkt: Teiltag bis 11:15 Uhr');expect(sparklinePartialNote(null)).toBe('letzter Punkt: Teiltag bis Sync-Zeit');
  });
 });
 

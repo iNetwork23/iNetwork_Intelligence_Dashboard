@@ -72,7 +72,7 @@ export default function AdminSidebar(props:Props){
  ];
  const secondary:NavItem[]=[
   {href:"/admin/access",label:"Benutzer & Rechte",icon:"shield" as const,show:props.mayAdmin},
-  {href:"/source-blocks",label:"Ausgeschaltete Quellen",icon:"rotation" as const,show:props.maySourceBlocks,badge:props.sourceBlocksBadge,badgeLabel:"aktive Sperren"},
+  {href:"/source-blocks",label:"Gesperrte Quellen",icon:"rotation" as const,show:props.maySourceBlocks,badge:props.sourceBlocksBadge,badgeLabel:"aktive Sperren"},
   {href:"/settings/app",label:"App & Hinweise",icon:"monitor" as const,show:!props.impersonating},
   {href:"/settings/security",label:"Sicherheit",icon:"lock" as const,show:props.maySecurity},
  ];

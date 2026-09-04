@@ -93,6 +93,8 @@ describe('labels and parsers',()=>{
  it('uses AUSSCHALTEN as the single verdict word on this level (D13)',()=>{expect(verdictLabel('AUSSCHALTEN')).toBe('AUSSCHALTEN');expect(verdictLabel('SKALIEREN')).toBe('SKALIEREN');expect(verdictLabel('BEOBACHTEN')).toBe('BEOBACHTEN')});
  it('describes maturity from the engine constant and the first-sale rate from SOIs',()=>{
   expect(maturityLabel({sois:60,clicks:900})).toBe('reif · 60 SOIs');expect(maturityLabel({sois:12,clicks:900})).toBe('unreif · 12 von 50 SOIs');
+  const gate={matureSois:42,totalSois:60,requiredSois:50,maturityReached:false,p75Hours:36,latencyConfidence:'hoch' as const,rateLow:0.02,rateHigh:0.1,benchmarkRate:null,confidence:'unsicher' as const};
+  expect(maturityLabel({sois:60,clicks:900,gate})).toBe('42 von 60 SOIs reif · Schwelle 50');expect(maturityLabel({sois:60,clicks:900},{...gate,matureSois:60,maturityReached:true})).toBe('60 von 60 SOIs reif');expect(maturityLabel({sois:60,clicks:900,gate},null)).toBe('reif · 60 SOIs');
   expect(firstSaleRate({sois:60,firstSales:3})).toBe('5,0 %');expect(firstSaleRate({sois:0,firstSales:0})).toBe('–');
  });
  it('validates URL filter values fail-closed',()=>{

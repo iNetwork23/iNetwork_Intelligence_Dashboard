@@ -4,7 +4,7 @@ import{can}from'@/lib/rbac';
 import{loadSourceCandidates}from'@/lib/source-candidates';
 import{loadBlockIndex}from'@/lib/block-effects';
 import{reportingRange}from'@/lib/supabase-reporting';
-import{sourcesRangeFromPeriod}from'@/lib/period-controls';
+import{isReportingPeriod,sourcesRangeFromPeriod,withGlobalPeriod}from'@/lib/period-controls';
 import{getDataStatus,headerStatus}from'@/lib/data-status';
 import{isSourceCandidateRange,parseSourceCandidateKey,SOURCE_CANDIDATE_RANGES,sourceCandidateKey}from'@/lib/source-candidate-link';
 import{parseSourceCandidateFilters,prepareSourceCandidateRows}from'@/lib/source-candidate-view';
@@ -18,7 +18,7 @@ export const dynamic='force-dynamic';
 import{berlinDateTime}from'@/lib/format-berlin';
 import{rollupStaleWarning}from'@/lib/leitstand';
 const RANGE_LABEL={'7d':'7 Tage','30d':'30 Tage'} as const;
-type Params={range?:string;period?:string;open?:string;action?:string;mode?:string;q?:string;blocked?:string;sort?:string};
+type Params={range?:string;period?:string;from?:string;to?:string;open?:string;action?:string;mode?:string;q?:string;blocked?:string;sort?:string};
 /** Partnerübergreifende Quellenliste aus dem Rollup-Snapshot (Cron :47); Gate wie die anderen internen Datenseiten, Partner sehen nichts (D7). */
 export default async function SourcesPage({searchParams}:{searchParams:Promise<Params>}){
  const user=await currentUser();if(!user)redirect('/login');
@@ -26,12 +26,15 @@ export default async function SourcesPage({searchParams}:{searchParams:Promise<P
  const params=await searchParams,range=isSourceCandidateRange(params.range)?params.range:sourcesRangeFromPeriod(params.period),period=reportingRange(range),finance=can(user.access,'finance.view'),{filters,sort}=parseSourceCandidateFilters(params);
  let mayBlock=can(user.access,'landingpages.manage')&&can(user.access,'api.manage');
  const openIdentity=params.open?parseSourceCandidateKey(params.open):null,openKey=openIdentity?sourceCandidateKey(openIdentity):null;
+ /** Globaler Zeitraum (period/from/to) bleibt an den Bereichs-Links erhalten; 7d/30d sind die einzigen Rollup-Fenster, alles andere zeigt 30 Tage. */
+ const current=new URLSearchParams();for(const key of['period','from','to'] as const)if(params[key])current.set(key,params[key]!);
+ const mappedPeriod=isReportingPeriod(params.period)&&params.period!=='7d'&&params.period!=='30d'&&range==='30d';
  const dataStatus=await getDataStatus(),header=headerStatus(dataStatus);
  let snapshot;try{snapshot=await loadSourceCandidates({from:period.from!,to:period.to},user.access)}catch(error){console.error('Source candidates page failed',error);return <main className="fatal"><h1>Quellenliste konnte nicht geladen werden</h1><p>Supabase-Verbindung und Rollups-Cron prüfen.</p></main>}
  let index=new Map<string,SourceBlockRecord>(),blockIndexError=false;
  if(snapshot?.rows.length){try{index=await loadBlockIndex()}catch(error){console.error('Source block index unavailable',error);blockIndexError=true;mayBlock=false}}
  const rows=snapshot?prepareSourceCandidateRows(snapshot.rows,index,{finance}):[];
- const rangeSwitch=<nav className="sourcesRange" aria-label="Zeitraum der Quellenliste">{SOURCE_CANDIDATE_RANGES.map(item=><InstantLink key={item} href={`/sources?range=${item}`} aria-current={item===range?'page':undefined} className={item===range?'current':''}>{RANGE_LABEL[item]}</InstantLink>)}<span>{period.label}</span></nav>;
+ const rangeSwitch=<nav className="sourcesRange" aria-label="Zeitraum der Quellenliste">{SOURCE_CANDIDATE_RANGES.map(item=><InstantLink key={item} href={withGlobalPeriod(`/sources?range=${item}`,current)} aria-current={item===range?'page':undefined} className={item===range?'current':''}>{RANGE_LABEL[item]}</InstantLink>)}<span>{period.label}</span>{mappedPeriod&&<small className="sourcesRangeNote" role="note">Quellenliste: 30 Tage (Rollup-Zeitraum)</small>}</nav>;
  return <main className="dashboard sourcesPage"><DashboardPageHeader kicker="Traffic-Kontrolle" title="Quellen" status={header.label} tone={header.tone} icon="affiliate" description="Partnerübergreifende Quellen mit Handlungsbedarf – Verdikt, Volumen und Sperrstatus in einer Liste, Sperre direkt aus der Zeile."/>
   <DataStatusBar status={dataStatus}/>
   {rangeSwitch}

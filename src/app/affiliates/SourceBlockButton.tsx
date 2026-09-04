@@ -346,7 +346,7 @@ export default function SourceBlockButton(props: Props) {
           <span>
             <small>{isSubSource ? "Unterquelle" : "Hauptquelle"}</small>
             <b id="source-block-title">
-              {recovering ? `${controlScope}: ${ACTION_WORDS.verifyThenUnblock}` : active&&!productWide ? `${controlScope}: ${ACTION_WORDS.unblock}` : productWide ? `${controlScope} überall sperren` : `${controlScope}: ${ACTION_WORDS.block}`}
+              {recovering ? `${controlScope}: ${ACTION_WORDS.verifyThenUnblock}` : active&&!productWide ? `${controlScope}: ${ACTION_WORDS.unblock}` : productWide ? ACTION_WORDS.blockAcrossOffersScoped(controlScope) : `${controlScope}: ${ACTION_WORDS.block}`}
             </b>
           </span>
           <button
@@ -508,7 +508,7 @@ export default function SourceBlockButton(props: Props) {
                 ? "Nach Everflow-Prüfung deaktivieren"
                 : active&&!productWide
                 ? `${ACTION_WORDS.unblock} · ${controlScope}`
-                : productWide ? `${controlScope} in allen gefundenen Produkten sperren` : `${ACTION_WORDS.block} · ${controlScope}`}
+                : productWide ? ACTION_WORDS.blockAcrossOffersConfirm(controlScope) : `${ACTION_WORDS.block} · ${controlScope}`}
           </button>
         </footer>
       </div>
@@ -558,7 +558,7 @@ export default function SourceBlockButton(props: Props) {
         <small id={lockedHintId} className="sourceBlockLockedHint">{lockedHint}</small>
       )}
       {!locked && !recoverable && (
-        <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
+        <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{ACTION_WORDS.blockAcrossOffersScoped(controlScope)}</button>
       )}
       {error && (
         <small className="sourceBlockError" role="alert">

@@ -56,9 +56,10 @@ describe('TrendList = die eine priorisierte Liste',()=>{
 });
 
 describe('Trauen oder nicht, und warum (Abnahme D)',()=>{
-  it('renders the trust line from the gate: n von m SOIs reif · Wilson-Band · Benchmark · Konfidenz · Latenz',()=>{
+  it('renders the trust line from the gate: n von m SOIs reif · Wilson-Band · Benchmark · Konfidenz – latency only once, as the badge',()=>{
     const html=render(items([row('a',-500,{gate})]));
-    expect(html).toContain('42 von 60 SOIs reif (Schwelle 50) · Rate 2,1 %–10,4 % (Wilson) · Benchmark 5,0 % · unsicher · Latenz p75 36 h');
+    expect(html).toContain('42 von 60 SOIs reif (Schwelle 50) · Rate 2,1 %–10,4 % (Wilson) · Benchmark 5,0 % · unsicher</p>');
+    expect(html).not.toContain('Latenz p75 36 h');
     expect(html).toContain('class="priorityTrust unsicher"');
     expect(html).toContain('latencyBadge hoch');
     expect(html).toContain('Latenz hoch · p75 36 h');
@@ -90,6 +91,15 @@ describe('Trendzellen mit Richtung – „–“ nur mit Grund',()=>{
     const immature=render(items([row('b',-500,{trendVerdict:{status:'insufficient',reason:'x',previous:{clicks:20,sois:2,cvr:10,profit:0}}})]));
     expect(immature).toContain('unter Reifeschwelle (≥ 100 Klicks oder ≥ 20 SOIs)');
     expect((immature.match(/>–</g)||[]).length).toBe((immature.match(/priorityTrendCell none/g)||[]).length);
+  });
+  it('gives tracker candidates one dash with the accurate reason: no previous period on source level',()=>{
+    const source:PriorityItem={...items([row('a',-500)])[0],kind:'source',sourceId:'src',subSource:'sub',previous:null};
+    const html=renderToStaticMarkup(<PriorityRow item={source} rangeParams="period=30d"/>);
+    expect(html).toContain('keine Vorperiode auf Quellen-Ebene');
+    expect(html).toContain('Δ Vorperiode');
+    expect(html).not.toContain('Δ SOIs');
+    expect((html.match(/>–</g)||[]).length).toBe(1);
+    expect(html).not.toContain('sparkline');
   });
   it('renders the shared sparkline only with daily data and never a placeholder chart',()=>{
     const withDaily=renderToStaticMarkup(<PriorityRow item={{...items([row('a',-500)])[0],daily:[1,-2,3,-4]}} rangeParams="period=30d"/>);

@@ -9,13 +9,14 @@ import {ACTION_WORDS,STATE_WORDS,VERDICT_WORDS} from './verdict-vocabulary';
  */
 const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
 /** Dateien der Partnerseite und Verdikt-Anzeige (Agent P) – dort gelten alle Regeln. */
-const OWN_FILES=['src/app/components/LeitstandSection.tsx','src/app/affiliates/AffiliateCockpit.tsx','src/app/affiliates/TrendList.tsx','src/app/affiliates/TrafficActionLists.tsx','src/app/affiliates/CandidateTopN.tsx','src/app/affiliates/AffiliatePanels.tsx','src/app/affiliates/SourceBreakdown.tsx','src/app/affiliates/SourceTable.tsx','src/app/components/SmartlinkPresentation.tsx','src/app/affiliates/SourceBlockButton.tsx','src/lib/affiliate-trend.ts','src/lib/affiliate-priority.ts','src/lib/verdict-trust.ts','src/lib/source-block-markers.ts'];
+const OWN_FILES=['src/app/components/LeitstandSection.tsx','src/app/affiliates/AffiliateCockpit.tsx','src/app/affiliates/TrendList.tsx','src/app/affiliates/TrafficActionLists.tsx','src/app/affiliates/CandidateTopN.tsx','src/app/affiliates/AffiliatePanels.tsx','src/app/affiliates/SourceBreakdown.tsx','src/app/affiliates/SourceTable.tsx','src/app/components/SmartlinkPresentation.tsx','src/app/affiliates/SourceBlockButton.tsx','src/app/affiliates/page.tsx','src/app/sources/SourceCandidateList.tsx','src/lib/home-kpis.ts','src/lib/affiliate-trend.ts','src/lib/affiliate-priority.ts','src/lib/verdict-trust.ts','src/lib/source-block-markers.ts'];
 /** Leitstand und Quellenliste (nur lesen): Wortregeln gelten dort ebenso. */
-const SHARED_FILES=['src/app/components/LeitstandSection.tsx','src/app/sources/SourceCandidateList.tsx'];
+const SHARED_FILES=['src/app/components/LeitstandSection.tsx','src/app/source-blocks/page.tsx'];
 const ALL=[...OWN_FILES,...SHARED_FILES];
 /** „ausschalten“/„ausgeschaltet“ als Beschriftung: das Wort schließt ein String-Literal ab (Schaltfläche, Label, Titel). Erklärtexte („Ausschalten sperrt …“) sind Wirkungs-Copy und bleiben. */
 const ACTION_LITERAL=/(ausschalten|ausgeschaltet)\s*[`'"]/;
 const OWN_TRAFFIC_LIGHT=/>=\s*0\s*\?\s*['"](up|positive)['"]/;
+const OWN_NEGATIVE_LIGHT=/<\s*0\s*\?\s*['"](down|negative)['"]/;
 
 describe('Wortfamilien: drei Klassen, je eine Liste',()=>{
   it('the vocabulary itself is the single source: one verdict word for stopping, one action word, one state family',()=>{
@@ -45,10 +46,11 @@ describe('Wortfamilien: drei Klassen, je eine Liste',()=>{
 describe('Vorzeichenfarbe nur über signTone/cvrTone (D15)',()=>{
   it.each(OWN_FILES)('%s defines no own traffic light on the sign',(file)=>{
     expect(read(file)).not.toMatch(OWN_TRAFFIC_LIGHT);
+    expect(read(file)).not.toMatch(OWN_NEGATIVE_LIGHT);
     expect(read(file)).not.toMatch(/cvr\s*>=\s*1\s*\?/);
   });
   it('every UI file that colours a sign imports the shared helpers',()=>{
-    for(const file of ['src/app/affiliates/TrendList.tsx','src/app/affiliates/AffiliatePanels.tsx','src/app/affiliates/SourceBreakdown.tsx','src/app/components/SmartlinkPresentation.tsx'])
+    for(const file of ['src/app/affiliates/TrendList.tsx','src/app/affiliates/AffiliatePanels.tsx','src/app/affiliates/SourceBreakdown.tsx','src/app/components/SmartlinkPresentation.tsx','src/app/affiliates/page.tsx','src/app/sources/SourceCandidateList.tsx'])
       expect(read(file)).toMatch(/from\s*["'](\.\.\/\.\.\/lib|@\/lib)\/verdict-vocabulary["']/);
   });
 });
