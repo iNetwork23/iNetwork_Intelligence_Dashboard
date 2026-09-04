@@ -1,9 +1,10 @@
+import type {SourceBlockReasonCategory} from './source-block-reasons';
 export type SourceTrafficMode='tracked'|'api';
 export type SourceBlockLevel='main_source'|'sub_source';
 export type EverflowBlockVariable={variable:string;variable_value:string;variable_secondary_value:string;comparison_method:'exact_match'|'not_present'};
-export type SourceBlockInput={affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId?:string;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainValue?:string|null;subValue?:string|null;reason?:string};
+export type SourceBlockInput={affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId?:string;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainValue?:string|null;subValue?:string|null;reason?:string;reasonCategory?:SourceBlockReasonCategory};
 export type NormalizedSourceBlock={affiliateId:number;affiliateName:string;offerId:number;offerName:string;originCampaignId:number|null;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainField:'source_id'|'adv1';mainValue:string|null;subField:'sub1'|'adv2';subValue:string|null;variables:EverflowBlockVariable[];reason:string};
-export type SourceBlockRecord=NormalizedSourceBlock&{id:string;status:'pending'|'active'|'inactive'|'error';effectiveAt:string;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string;everflowSettingId:number|null;lastVerifiedAt:string|null;error:string|null};
+export type SourceBlockRecord=NormalizedSourceBlock&{id:string;status:'pending'|'active'|'inactive'|'error';effectiveAt:string;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string;everflowSettingId:number|null;lastVerifiedAt:string|null;error:string|null;reasonCategory?:SourceBlockReasonCategory};
 export class SourceBlockActivationCompensatedError extends Error{override name='SourceBlockActivationCompensatedError';constructor(message:string,options?:ErrorOptions){super(message,options)}}
 
 const normalizedValue=(value:unknown)=>{if(value===undefined||value===null)return null;const text=String(value).trim();if(!text||['N/A','Ohne Source-ID','Ohne Sub-Source','Nicht übermittelt'].includes(text))return null;if(text.length>200)throw new Error('Quellenwert ist zu lang');return text};
@@ -31,7 +32,7 @@ export const sourceBlockStoreKey=(block:Pick<NormalizedSourceBlock,'affiliateId'
 export const sourceBlockLabel=(block:Pick<NormalizedSourceBlock,'mainValue'|'subValue'|'level'>)=>block.level==='sub_source'?`${block.mainValue||'nicht übermittelt'} → ${block.subValue}`:(block.mainValue||'nicht übermittelt');
 export const sourceBlockRequiredConfirmation=(block:Pick<NormalizedSourceBlock,'mainValue'|'subValue'|'level'>)=>(block.level==='sub_source'?block.subValue:block.mainValue)||'NICHT ÜBERMITTELT';
 
-type SourceBlockSnapshotRow={columns:Array<{column_type:string;id:string;label:string}>};
+type SourceBlockSnapshotRow={columns:Array<{column_type:string;id:string;label:string}>;reporting?:Record<string,number>};
 const snapshotDimension=(row:SourceBlockSnapshotRow,type:string)=>row.columns.find(column=>column.column_type===type);
 const snapshotSourceValue=(row:SourceBlockSnapshotRow,type:'source_id'|'sub1')=>normalizedValue(snapshotDimension(row,type)?.id);
 const snapshotRowMatchesBlock=(row:SourceBlockSnapshotRow,block:NormalizedSourceBlock)=>{
@@ -43,6 +44,13 @@ export function sourceBlockOffersFromSnapshotRows(rows:SourceBlockSnapshotRow[],
  const offers=new Map<string,string>();
  for(const row of rows){if(!snapshotRowMatchesBlock(row,block))continue;const offer=snapshotDimension(row,'offer');if(offer?.id)offers.set(offer.id,offer.id===String(block.offerId)?block.offerName:(offer.label||`Offer #${offer.id}`))}
  return[...offers].sort(([a],[b])=>Number(a)-Number(b)||a.localeCompare(b)).map(([offerId,offerName])=>({offerId,offerName}));
+}
+export type SourceBlockOfferSummary={offerId:string;offerName:string;sois:number;payout:number;profit:number};
+/** Wie sourceBlockOffersFromSnapshotRows, zusätzlich je Offer die Reporting-Summen (cv/payout/profit) der passenden Snapshot-Zeilen. */
+export function sourceBlockOfferSummariesFromSnapshotRows(rows:SourceBlockSnapshotRow[],block:NormalizedSourceBlock):SourceBlockOfferSummary[]{
+ const totals=new Map<string,SourceBlockOfferSummary>();
+ for(const row of rows){if(!snapshotRowMatchesBlock(row,block))continue;const offer=snapshotDimension(row,'offer');if(!offer?.id)continue;const entry=totals.get(offer.id)??{offerId:offer.id,offerName:offer.id===String(block.offerId)?block.offerName:(offer.label||`Offer #${offer.id}`),sois:0,payout:0,profit:0};entry.sois+=Number(row.reporting?.cv||0);entry.payout+=Number(row.reporting?.payout||0);entry.profit+=Number(row.reporting?.profit||0);totals.set(offer.id,entry)}
+ return[...totals.values()].map(entry=>({...entry,payout:Math.round(entry.payout*100)/100,profit:Math.round(entry.profit*100)/100})).sort((a,b)=>Number(a.offerId)-Number(b.offerId)||a.offerId.localeCompare(b.offerId));
 }
 export function sourceBlockVisibleInSnapshotRows(rows:SourceBlockSnapshotRow[],block:NormalizedSourceBlock){
  return rows.some(row=>snapshotRowMatchesBlock(row,block)&&snapshotDimension(row,'offer')?.id===String(block.offerId)&&(block.originCampaignId===null||snapshotDimension(row,'campaign')?.id===String(block.originCampaignId)));
