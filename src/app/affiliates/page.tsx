@@ -28,7 +28,8 @@ import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
 import { analyzeRebillConcentration, buildRebillCustomerIndex, firstSaleCustomerIdsFromIndex, rebillCustomerIdsFromIndex, type RebillConcentration, type RebillEvent } from "@/lib/rebill-concentration";
 import AffiliateSmartlinks from "./AffiliateSmartlinks";
 import AffiliateSmartlinkOverview from "./AffiliateSmartlinkOverview";
-import AffiliatePeriodControls from "./AffiliatePeriodControls";
+import PeriodControls from "../components/PeriodControls";
+import { todayPartialNote } from "@/lib/period-controls";
 import AffiliatePartnerPicker from "./AffiliatePartnerPicker";
 import DataReloadButton from'./DataReloadButton';
 import InstantLink from "./InstantLink";
@@ -553,7 +554,7 @@ export default async function AffiliateOptimizerPage({
           </div>
           {period.error && <p role="alert">{period.error}</p>}
         </header>
-        <AffiliatePeriodControls period={period} />
+        <PeriodControls dimension="global" period={period.period} from={period.period === "custom" || period.period === "calendar" ? period.from : undefined} to={period.period === "custom" || period.period === "calendar" ? period.to : undefined} rangeLabel={period.label} maxDate={period.maxDate} error={period.error} todayNote={todayPartialNote(dataStatus)} />
       </section>
       {mode === "smartlinks" && (
         !selectedCampaignId ? (
@@ -689,7 +690,7 @@ export default async function AffiliateOptimizerPage({
                 <div className="scope">Tiefenanalyse und Routing bleiben Campaign-zentriert</div>
               </section>
                 <AffiliateSmartlinks
-                periodControls={<AffiliatePeriodControls period={period} compact/>}
+                periodControls={<PeriodControls dimension="global" period={period.period} rangeLabel={period.label} maxDate={period.maxDate} todayNote={todayPartialNote(dataStatus)} compact />}
                 affiliateId={selectedWorkspace.affiliateId}
                 returnTo={smartlinkCurrentHref}
                 mappings={selectedWorkspace.campaigns}

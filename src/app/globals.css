@@ -544,3 +544,24 @@ a.blockMarker:hover,a.blockMarker:focus-visible{background:var(--fill-hover);tex
 .cockpitList li a{min-height:44px}
 .cockpitList li a .cockpitBlocked{grid-column:2/span 2;grid-row:4;margin-top:2px;color:var(--negative);font-size:10px;font-weight:700;line-height:1.4}
 .sourceBlockHistoryToggle{min-height:44px}.sourcesNotBlockable{color:var(--text-muted);font-size:11px}.sourceBlockReconcileRun{margin:6px 0 0;color:var(--text-secondary);font-size:11px}@media(max-width:760px){.leitstandRowTitle,.leitstandPending,.leitstandIncident,.sourcesBlockLink{min-height:44px;display:inline-flex;align-items:center}}
+
+/* Etappe 3 · eine Zeitraum-Komponente, Teiltag-Marker, KPI-Kacheln mit Sparkline und Vorperiode */
+.periodPartialDay{display:inline-flex;align-items:center;gap:5px;color:var(--warning);font-size:10px;font-weight:650}
+.periodPartialDay::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.periodError{margin:8px 0 0;color:var(--negative);font-size:11px}
+.compactPeriodControls .periodPartialDay{font-size:9px}
+.sourcePeriodControls .dashboardMonthPicker{grid-template-columns:1fr;margin:0;padding:8px;border:0;border-top:1px solid var(--line-faint);border-radius:0}
+.sourcePeriodControls .dashboardMonthGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.sourcePeriodControls .dashboardCustomPeriod{grid-template-columns:1fr 1fr auto;margin:0;padding:7px;border:0;border-top:1px solid var(--line-faint);border-radius:0}
+.sourcePeriodControls .dashboardCustomPeriod>div{display:none}
+.sourcePeriodControls .periodPartialDay{padding:0 7px}
+.kpis a.kpi{display:block;color:inherit;text-decoration:none}
+.kpis a.kpi:hover,.kpis a.kpi:focus-visible{border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
+.kpiTrend{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-top:10px;padding-top:8px;border-top:1px solid var(--line-faint)}
+.kpiTrend .sparkline{flex:none;color:var(--text-muted)}
+.kpiTrend .sparkline-positive{color:var(--positive)}
+.kpiTrend .sparkline-negative{color:var(--negative)}
+.kpiTrend .sparklineEmpty{display:inline-flex;align-items:center;min-width:96px;height:24px;color:var(--text-muted);font-size:11px}
+.kpiDelta{color:var(--text-secondary);font-size:11px;font-style:normal;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpiDeltaReason{flex-basis:100%;color:var(--text-muted);font-size:10px}
+@media(max-width:560px){.kpiTrend{flex-direction:column;align-items:flex-start}}

@@ -919,5 +919,12 @@ export const translations = {
   "ohne Kategorie": "without category",
   "Rollup veraltet": "Rollup outdated",
   "Liste gekappt": "List capped",
-  "Aktive Sperren": "Active blocks"
+  "Aktive Sperren": "Active blocks",
+  "Δ Umsatz": "Δ Revenue",
+  "Δ Klicks": "Δ Clicks",
+  "keine Vorperiode": "no previous period",
+  "Teiltag bis Sync-Zeit": "Partial day up to sync time",
+  "Tagesreihe nicht verfügbar": "Daily series not available",
+  "Tagesreihe nur bei Fenstern bis 45 Tage": "Daily series only for windows up to 45 days",
+  "Vorperiode nur bei Fenstern bis 45 Tage": "Previous period only for windows up to 45 days"
 } as const;

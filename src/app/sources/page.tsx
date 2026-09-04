@@ -4,6 +4,7 @@ import{can}from'@/lib/rbac';
 import{loadSourceCandidates}from'@/lib/source-candidates';
 import{loadBlockIndex}from'@/lib/block-effects';
 import{reportingRange}from'@/lib/supabase-reporting';
+import{sourcesRangeFromPeriod}from'@/lib/period-controls';
 import{getDataStatus,headerStatus}from'@/lib/data-status';
 import{isSourceCandidateRange,parseSourceCandidateKey,SOURCE_CANDIDATE_RANGES,sourceCandidateKey}from'@/lib/source-candidate-link';
 import{parseSourceCandidateFilters,prepareSourceCandidateRows}from'@/lib/source-candidate-view';
@@ -17,12 +18,12 @@ export const dynamic='force-dynamic';
 import{berlinDateTime}from'@/lib/format-berlin';
 import{rollupStaleWarning}from'@/lib/leitstand';
 const RANGE_LABEL={'7d':'7 Tage','30d':'30 Tage'} as const;
-type Params={range?:string;open?:string;action?:string;mode?:string;q?:string;blocked?:string;sort?:string};
+type Params={range?:string;period?:string;open?:string;action?:string;mode?:string;q?:string;blocked?:string;sort?:string};
 /** Partnerübergreifende Quellenliste aus dem Rollup-Snapshot (Cron :47); Gate wie die anderen internen Datenseiten, Partner sehen nichts (D7). */
 export default async function SourcesPage({searchParams}:{searchParams:Promise<Params>}){
  const user=await currentUser();if(!user)redirect('/login');
  if(user.access.role==='partner'||!can(user.access,'dashboard.view'))return <main className="fatal"><h1>403 · Keine Berechtigung</h1><AccessDeniedHint permission="dashboard.view (interne Rolle)"/></main>;
- const params=await searchParams,range=isSourceCandidateRange(params.range)?params.range:'30d',period=reportingRange(range),finance=can(user.access,'finance.view'),{filters,sort}=parseSourceCandidateFilters(params);
+ const params=await searchParams,range=isSourceCandidateRange(params.range)?params.range:sourcesRangeFromPeriod(params.period),period=reportingRange(range),finance=can(user.access,'finance.view'),{filters,sort}=parseSourceCandidateFilters(params);
  let mayBlock=can(user.access,'landingpages.manage')&&can(user.access,'api.manage');
  const openIdentity=params.open?parseSourceCandidateKey(params.open):null,openKey=openIdentity?sourceCandidateKey(openIdentity):null;
  const dataStatus=await getDataStatus(),header=headerStatus(dataStatus);
