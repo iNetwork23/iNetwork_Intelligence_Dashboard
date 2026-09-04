@@ -37,6 +37,8 @@ export function headerStatus(status:DataStatus):HeaderStatus{
   return{label:`Sync ${formatBerlinTime(status.syncAt)}`,tone:'live'};
 }
 
+export function partnerHeaderStatus(status:DataStatus):HeaderStatus{return{label:status.syncAt?`Stand ${formatBerlinTime(status.syncAt)}`:'Stand unbekannt',tone:'neutral'}}
+
 export function ltvHeaderStatus(status:DataStatus):HeaderStatus{
   if(status.ltv.failed)return{label:'LTV-Refresh fehlgeschlagen',tone:'warning'};
   return status.ltv.refreshedAt?{label:`LTV ${formatBerlinTime(status.ltv.refreshedAt)}`,tone:'live'}:{label:'LTV unbekannt',tone:'warning'};

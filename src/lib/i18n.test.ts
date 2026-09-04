@@ -14,6 +14,11 @@ describe('dashboard internationalization',()=>{
  it('covers navigation, authentication, actions, statuses and language accessibility labels',()=>{
   for(const key of ['Sprache auswählen','Anmelden','Abmelden','Navigation öffnen','Benutzer & Rechte','Ausgeschaltete Quellen','Quelle ausschalten','Unterquelle ausschalten','Daten werden geladen …','Keine Berechtigung','Umsatz','SOI-Vergütung','Zahler','Landingpage','BERICHTSZEITRAUM','Monat wählen','Monate','Vorheriges Jahr','Nächstes Jahr','Noch nicht verfügbar'])expect(translations).toHaveProperty(key);
  });
+ it('keeps one German source string per English read-only status so the reverse lookup stays deterministic',()=>{
+  expect(translations['Nur Lesen']).toBe('Read only');expect(translations['Campaign gesamt · Nur Lesen']).toBe('Campaign as a whole · Read only');expect(translations['BI-Modus: Nur Lesen']).toBe('BI mode: Read only');
+  for(const stale of['Read-only','Campaign gesamt · Read only','BI-Modus: Read only'])expect((translations as Record<string,string>)[stale]).toBeUndefined();
+  expect(translateText('Read only','de')).toBe('Nur Lesen');expect(translateText('Campaign as a whole · Read only','de')).toBe('Campaign gesamt · Nur Lesen');expect(translateText('BI mode: Read only','de')).toBe('BI-Modus: Nur Lesen');
+ });
  it('translates the truthful bounded dashboard period',()=>{expect(translations['365 Tage']).toBe('365 days')});
  it('translates exact text while preserving surrounding whitespace and unknown business data',()=>{
   expect(translateText('  Anmelden  ','en')).toBe('  Sign in  ');

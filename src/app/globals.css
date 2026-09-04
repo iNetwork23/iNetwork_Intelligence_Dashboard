@@ -501,6 +501,7 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .sidebarStatus i.write{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
 
 .trafficActionReport>header .actionPeriod{white-space:nowrap;font-size:11px;color:var(--text-secondary)}
+.sourceBlockUnclear{color:var(--warning)}.sourceBlockLockedHint{display:block;font-size:11px;line-height:1.3;color:var(--muted)}.sourceBlockIconButton.unclear{border-color:var(--warning);color:var(--warning)}
 .sourceBlockAuditCard.error{border-color:var(--warning)}.sourceBlockAuditCard.error>header span{color:var(--warning)}.sourceBlockAuditCard.pending>header span{color:var(--muted)}.sourceBlockAuditCard>p.sourceBlockIncident{padding:11px 12px;border:1px solid var(--warning);border-radius:var(--radius-md);color:var(--text);line-height:1.5}.sourceBlockIconButton.locked,.sourceBlockIconButton.locked:hover{border-color:var(--warning);background:transparent;color:var(--warning);opacity:.85;cursor:not-allowed;box-shadow:none}
 .cohortTable{min-width:1240px}@media(max-width:900px){.cohortTable td:nth-child(2){display:flex}.cohortTable td:nth-child(2):before{display:inline;margin-bottom:0}.cohortTable td:nth-child(5){display:block}.cohortTable td:nth-child(5):before{display:block;margin-bottom:5px}}
 

@@ -240,7 +240,7 @@ export default async function AffiliateOptimizerPage({
         <DashboardPageHeader
           kicker="ME Media · Partnerbereich"
           title="Freigegebene Partner"
-          status="Read-only"
+          status="Nur Lesen"
           tone="neutral"
           icon="affiliate"
           description="Operative Übersicht ohne interne Umsatz-, Kosten- oder Profitdaten."

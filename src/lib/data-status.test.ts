@@ -116,6 +116,13 @@ describe('getDataStatus',()=>{
 });
 
 describe('data status wiring',()=>{
+ it('reduces the partner header to a neutral data stand without operational detail',async()=>{
+  const {deriveDataStatus,partnerHeaderStatus}=await import('./data-status');
+  expect(partnerHeaderStatus(deriveDataStatus(rolling,now))).toEqual({label:'Stand 14:17',tone:'neutral'});
+  expect(partnerHeaderStatus(deriveDataStatus({...rolling,last_success_at:'2026-09-03T09:17:00Z'},now,{ltv:{status:'failed'}}))).toEqual({label:'Stand 11:17',tone:'neutral'});
+  expect(partnerHeaderStatus(deriveDataStatus({...rolling,phase:'backfill',next_end:'2026-04-03'},now))).toEqual({label:'Stand 14:17',tone:'neutral'});
+  expect(partnerHeaderStatus(deriveDataStatus(null,now))).toEqual({label:'Stand unbekannt',tone:'neutral'});
+ });
  it('caches the sync_state read for 60 seconds under the data-status tag',()=>{
   const source=read('lib/data-status.ts');
   for(const marker of['unstable_cache','revalidate:60',"tags:['data-status']","from('sync_state')","select('key,value')"])expect(source).toContain(marker);
@@ -125,6 +132,10 @@ describe('data status wiring',()=>{
  it('renders a compact status bar with a machine-readable level',()=>{
   const bar=read('app/components/DataStatusBar.tsx');
   for(const marker of['getDataStatus','describeDataStatus','role="status"','data-level={','dataStatusBar'])expect(bar).toContain(marker);
+  const partner=bar.indexOf("if(audience==='partner')return"),internal=bar.indexOf('describeDataStatus(data)');
+  for(const marker of["audience?:'internal'|'partner'","audience='internal'",'partnerHeaderStatus(data).label','data-audience="partner"'])expect(bar).toContain(marker);
+  expect(partner).toBeGreaterThan(-1);expect(internal).toBeGreaterThan(partner);
+  const partnerBranch=bar.slice(partner,internal);for(const leak of['text.ltv','warning','data-level'])expect(partnerBranch).not.toContain(leak);
   const header=read('app/components/DashboardPageHeader.tsx');
   expect(header).toContain("'warning'");
   const css=read('app/globals.css');

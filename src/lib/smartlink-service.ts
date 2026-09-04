@@ -19,7 +19,7 @@ export function getSmartlinkInsight(campaignId:number,access:AccessMetadata,bypa
   return insight;
  };
  if(bypass)return load();
- return unstable_cache(load,['smartlink-intelligence-cache-v4',String(campaignId),affiliateId||'unscoped',fingerprint,day()],{revalidate:300,tags:[`smartlink-${campaignId}`]})();
+ return unstable_cache(load,['smartlink-intelligence-cache-v5',String(campaignId),affiliateId||'unscoped',fingerprint,day()],{revalidate:300,tags:[`smartlink-${campaignId}`]})();
 }
 
 export async function getCampaignDirectory(access:AccessMetadata){
@@ -45,7 +45,7 @@ export async function getAffiliateSmartlinks(affiliateId:string,campaignIds:numb
  if(ids.some(id=>foreignScopeRequested(access,{campaign:String(id)})))throw new Error('403 · Fremde Campaign-ID');
  const selected=range||{from:'',to:''},fingerprint=scopeFingerprint(access),load=()=>includeSources?loadAffiliateSmartlinkInsightsFromCache(affiliateId,ids,new Date(),range):loadAffiliateSmartlinkInsightsFromCache(affiliateId,ids,new Date(),range,false);
  if(bypass)return load();
- return unstable_cache(load,['affiliate-smartlinks-cache-v6',includeSources?'full':'compact',affiliateId,ids.join(','),selected.from,selected.to,fingerprint,day()],{revalidate:300,tags:[`affiliate-smartlinks-${affiliateId}`]})();
+ return unstable_cache(load,['affiliate-smartlinks-cache-v7',includeSources?'full':'compact',affiliateId,ids.join(','),selected.from,selected.to,fingerprint,day()],{revalidate:300,tags:[`affiliate-smartlinks-${affiliateId}`]})();
 }
 
 export async function findCampaigns(term:string,access:AccessMetadata){

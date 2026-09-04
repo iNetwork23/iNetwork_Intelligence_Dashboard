@@ -27,7 +27,14 @@ describe('shared professional dashboard header system',()=>{
   const cohorts=read('cohorts/page.tsx');expect(cohorts).not.toContain('status="Aktuell"');for(const marker of['ltvHeaderStatus(','status={header.label}','tone={header.tone}','<DataStatusBar status={dataStatus}'])expect(cohorts).toContain(marker);expect(cohorts.match(/getDataStatus\(/g)).toHaveLength(1);
   expect(read('fraud/page.tsx')).toContain('status="Shadow Mode"');
   expect(read('source-blocks/page.tsx')).toContain('aktiv`}');
-  expect(read('affiliates/page.tsx')).toContain('status="Read-only"');
+  expect(read('affiliates/page.tsx')).toContain('status="Nur Lesen"');expect(read('affiliates/page.tsx')).not.toContain('status="Read-only"');
+ });
+ it('hides internal sync, backfill and LTV detail from partners on the account monitor',()=>{
+  const page=read('page.tsx');
+  expect(page).toContain("audience={user.access.role==='partner'?'partner':'internal'}");
+  expect(page).toContain("user.access.role==='partner'?partnerHeaderStatus(dataStatus):headerStatus(dataStatus)");
+  expect(read('components/DataStatusBar.tsx')).toContain("audience?:'internal'|'partner'");
+  expect(read('../lib/data-status.ts')).toContain("'Stand unbekannt',tone:'neutral'");
  });
  it('gives every 403 dead end a way back to the account monitor',()=>{
   const hint=read('components/AccessDeniedHint.tsx');for(const marker of['href="/"','← Zurück zum Account Monitor','Fehlende Berechtigung: {permission}'])expect(hint).toContain(marker);

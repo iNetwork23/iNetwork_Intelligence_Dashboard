@@ -375,11 +375,11 @@ export default function SourceBreakdown({
           <>
             API · clickless: keine klickbasierten Stop-/Scale-Regeln. Primär
             zählen SOIs, First-Sales, Rebills, Profit und Profit je SOI.{" "}
-            {`Abschalten ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
+            {`Abschalten ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         ) : (
           <>
-            {`Abschalten ab ${DEAD_TRAFFIC_CLICKS} Klicks ohne SOI, oder ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder bei belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
+            {`Abschalten ab ${DEAD_TRAFFIC_CLICKS} Klicks ohne SOI, oder ab ${KILL_MATURITY_SOIS} SOIs ohne First-Sale bei negativem Profit, oder ab ${KILL_MATURITY_SOIS} SOIs bei negativem Profit und belegter Unterperformance (First-Sale-Rate auch optimistisch unter ${UNDERPERFORMANCE_FACTOR * 100} % des Vergleichswerts). Skalieren ab ${SCALE_MIN_SOIS} SOIs mit mindestens ${SCALE_MIN_FIRST_SALES} First-Sales und positivem Profit.`}
           </>
         )}
       </footer>
