@@ -36,10 +36,14 @@ import LazyDetails from "./LazyDetails";
 import SourceBreakdown from "./SourceBreakdown";
 import { sourceRebillKey } from "@/lib/source-rebill-key";
 import DashboardPageHeader from "../components/DashboardPageHeader";
+import DataStatusBar from "../components/DataStatusBar";
+import AccessDeniedHint from "../components/AccessDeniedHint";
+import { getDataStatus, headerStatus } from "@/lib/data-status";
 import OptimizationFlow from "../components/OptimizationFlow";
 import AffiliateCockpit from "./AffiliateCockpit";
 import RebillConcentrationPanel from "../components/RebillConcentrationPanel";
 import TrafficActionLists from "./TrafficActionLists";
+import { openSourceRowHref } from "../../lib/open-source-row-link";
 import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
@@ -102,12 +106,14 @@ export default async function AffiliateOptimizerPage({
     return (
       <main className="fatal">
         <h1>403 · Keine Berechtigung</h1>
+        <AccessDeniedHint permission="partners.view" />
       </main>
     );
   if (query.mode === "smartlinks" && !maySmartlinks)
     return (
       <main className="fatal">
         <h1>403 · Smartlink Intelligence nicht freigegeben</h1>
+        <AccessDeniedHint permission="smartlinks.view und finance.view" />
       </main>
     );
   if (
@@ -120,6 +126,7 @@ export default async function AffiliateOptimizerPage({
     return (
       <main className="fatal">
         <h1>403 · Fremde ID</h1>
+        <AccessDeniedHint />
       </main>
     );
   const period = resolveAffiliatePeriod(query),
@@ -206,6 +213,7 @@ export default async function AffiliateOptimizerPage({
       return (
         <main className="fatal">
           <h1>403 · Scope nicht sicher auswertbar</h1>
+          <AccessDeniedHint />
         </main>
       );
     return (
@@ -232,7 +240,7 @@ export default async function AffiliateOptimizerPage({
         <DashboardPageHeader
           kicker="ME Media · Partnerbereich"
           title="Freigegebene Partner"
-          status="Read-only"
+          status="Nur Lesen"
           tone="neutral"
           icon="affiliate"
           description="Operative Übersicht ohne interne Umsatz-, Kosten- oder Profitdaten."
@@ -468,16 +476,19 @@ export default async function AffiliateOptimizerPage({
           ];
         }),
       );
+  const dataStatus = await getDataStatus(),
+    header = headerStatus(dataStatus);
   return (
     <main className="dashboard affiliateOptimizer affiliateDecisionDesk">
       <DashboardPageHeader
         kicker="ME Media · Traffic Intelligence"
         title="Affiliate Optimizer"
-        status="Live"
-        tone="live"
+        status={header.label}
+        tone={header.tone}
         icon="affiliate"
         description="Direktlinks und Smartlinks pro Partner – getrennte KPIs und vollständige Landingpage-Sicht."
       />
+      <DataStatusBar status={dataStatus} />
       <OptimizationFlow active={mode === "smartlinks" ? "smartlink" : "affiliate"} />
       <section className="smartSearch affiliateSearch affiliatePickerBar">
         <AffiliatePartnerPicker
@@ -783,7 +794,7 @@ export default async function AffiliateOptimizerPage({
                 {[...stopVariants, ...scaleVariants].map((v) => (
                   <InstantLink
                     key={v.key}
-                    href={`/affiliates?affiliate=${selected.affiliateId}&offer=${v.offerId}&${rangeParams}#url-${v.offerUrlId}`}
+                    href={openSourceRowHref(selected.affiliateId, v.offerId, v.offerUrlId, rangeParams)}
                     className={recClass(v)}
                   >
                     <b>{v.recommendation.action}</b>
@@ -1122,6 +1133,7 @@ export default async function AffiliateOptimizerPage({
                   urls={Object.fromEntries(
                     activeOffer.variants.map((v) => [v.offerUrlId, v.offerUrl]),
                   )}
+                  sourcePeriodLabel={sourcePeriod.label}
                 />
               )}
           </section>

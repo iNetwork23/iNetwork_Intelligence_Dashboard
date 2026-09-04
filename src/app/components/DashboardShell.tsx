@@ -9,13 +9,15 @@ export default async function DashboardShell({children}:{children:React.ReactNod
  const user=await currentUser();
  if(!user)return <><OneSignalIdentity enabled={false} appId={oneSignalAppId} safariWebId={oneSignalSafariWebId} externalId=""/>{children}</>;
  const mayAdmin=can(user.access,'users.manage')||can(user.access,'roles.manage')||can(user.access,'audit.view');
+ const mayStatistics=can(user.access,'statistics.view')&&can(user.access,'finance.view');
+ const capabilities=[can(user.access,'landingpages.manage')&&can(user.access,'api.manage')&&'Sperren',can(user.access,'campaigns.edit')&&can(user.access,'api.manage')&&'Campaigns',can(user.access,'automations.live')&&'Live-Freigabe',can(user.access,'exports.download')&&'Export'].filter((value):value is string=>Boolean(value)),capabilityLabel=capabilities.length?capabilities.join(' · '):'Nur Lesen';
  const mayFraud=user.access.role==='super_admin'&&Object.values(user.access.scopes).every(values=>values.length===0)&&can(user.access,'statistics.view')&&can(user.access,'finance.view');
  return <><OneSignalIdentity enabled={oneSignalEnabled} appId={oneSignalAppId} safariWebId={oneSignalSafariWebId} externalId={user.impersonating?'':user.id}/><DashboardShellFrame sidebar={<AdminSidebar
    email={user.email}
    role={user.access.role}
    impersonating={user.impersonating}
    actorId={user.actorId}
-   mayStatistics={can(user.access,'statistics.view')}
+   mayStatistics={mayStatistics}
    mayFraud={mayFraud}
    mayPartners={can(user.access,'partners.view')}
    mayAutomation={user.access.role!=='partner'&&can(user.access,'campaigns.edit')&&can(user.access,'finance.view')}
@@ -24,6 +26,8 @@ export default async function DashboardShell({children}:{children:React.ReactNod
    mayAdmin={mayAdmin}
    maySecurity={!user.impersonating&&user.id!=='legacy-admin'}
    oneSignalConfigured={oneSignalConfigured}
+   capabilityLabel={capabilityLabel}
+   writeAccess={capabilities.length>0}
   />}>
   {children}
  </DashboardShellFrame></>;

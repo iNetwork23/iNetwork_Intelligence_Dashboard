@@ -47,9 +47,9 @@ describe('Smartlink source affiliate context',()=>{
   await getSmartlinkInsight(172,access,false,'30');
   await getSmartlinkInsight(172,access,false);
   expect(mocks.cacheKeys.map(key=>key.slice(0,3))).toEqual([
-   ['smartlink-intelligence-cache-v4','172','29'],
-   ['smartlink-intelligence-cache-v4','172','30'],
-   ['smartlink-intelligence-cache-v4','172','unscoped'],
+   ['smartlink-intelligence-cache-v5','172','29'],
+   ['smartlink-intelligence-cache-v5','172','30'],
+   ['smartlink-intelligence-cache-v5','172','unscoped'],
   ]);
  });
 
@@ -66,12 +66,13 @@ describe('Smartlink source affiliate context',()=>{
   await getAffiliateSmartlinks('29',[172,173],{from:'2026-07-01',to:'2026-07-31'},access,false,false);
   expect(mocks.loadAffiliate).toHaveBeenCalledWith('29',[172,173],expect.any(Date),{from:'2026-07-01',to:'2026-07-31'},false);
   expect(mocks.cacheKeys.some(key=>key.includes('compact'))).toBe(true);
+  expect(mocks.cacheKeys.some(key=>key[0]==='affiliate-smartlinks-cache-v7')).toBe(true);
  });
 
  it('bypasses the affiliate Smartlink cache only for an explicit manual refresh',async()=>{
   const access=parseAccessMetadata({role:'admin'});
   await getAffiliateSmartlinks('29',[172],{from:'2026-07-01',to:'2026-07-31'},access,true);
   expect(mocks.loadAffiliate).toHaveBeenCalledWith('29',[172],expect.any(Date),{from:'2026-07-01',to:'2026-07-31'});
-  expect(mocks.cacheKeys.some(key=>key[0]==='affiliate-smartlinks-cache-v5')).toBe(false);
+  expect(mocks.cacheKeys.some(key=>key[0]==='affiliate-smartlinks-cache-v7')).toBe(false);
  });
 });

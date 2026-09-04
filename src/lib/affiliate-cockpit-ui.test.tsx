@@ -60,3 +60,32 @@ describe('informative cockpit rows',()=>{
     expect(html).not.toContain('URL #0');
   });
 });
+
+import {openSourceRowHref,withSourceOpen} from '@/lib/open-source-row-link';
+
+describe('Deep-Links öffnen die Zielzeile',()=>{
+  it('Cockpit-Zeilen setzen sourceOpen auf die Ziel-URL und behalten den Anker',()=>{
+    const html=renderToStaticMarkup(<TrendList title="Verluste" kicker="PROFIT" rows={[row('2673',-5)]} emptyReason="x" rangeParams="period=30d&sourcePeriod=30d" mode="profit"/>);
+    expect(html).toContain('sourceOpen=url-2673');
+    expect(html).toContain('#url-2673');
+    expect(html).toContain('period=30d');
+  });
+  it('führt ein vorhandenes sourceOpen als Komma-Liste zusammen, ohne Duplikate und mit Obergrenze 20',()=>{
+    const merged=new URLSearchParams(withSourceOpen('period=30d&sourceOpen=url-1%2Csource-25-0-P-1','url-2'));
+    expect(merged.get('sourceOpen')).toBe('url-1,source-25-0-P-1,url-2');
+    expect(new URLSearchParams(withSourceOpen('sourceOpen=url-2','url-2')).get('sourceOpen')).toBe('url-2');
+    const many=Array.from({length:25},(_,i)=>`url-${i}`).join(',');
+    const capped=new URLSearchParams(withSourceOpen(`sourceOpen=${encodeURIComponent(many)}`,'url-new')).get('sourceOpen')!.split(',');
+    expect(capped).toHaveLength(20);
+    expect(capped.at(-1)).toBe('url-new');
+  });
+  it('baut denselben Link für Cockpit und "Was jetzt zuerst zu tun ist"',async()=>{
+    const {readFileSync}=await import('node:fs');
+    const href=openSourceRowHref('154','20','2673','period=30d');
+    expect(href).toBe('/affiliates?affiliate=154&offer=20&period=30d&sourceOpen=url-2673#url-2673');
+    expect(readFileSync('src/app/affiliates/TrendList.tsx','utf8')).toContain('openSourceRowHref(');
+    const page=readFileSync('src/app/affiliates/page.tsx','utf8');
+    expect(page).toContain('openSourceRowHref(selected.affiliateId, v.offerId, v.offerUrlId, rangeParams)');
+    expect(page).not.toContain('&${rangeParams}#url-${v.offerUrlId}');
+  });
+});

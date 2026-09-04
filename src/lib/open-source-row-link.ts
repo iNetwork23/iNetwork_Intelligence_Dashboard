@@ -1,0 +1,3 @@
+/** Deep-Link auf eine Offer-URL-Zeile: sourceOpen wird gesetzt, damit LazyDetails die Zeile geöffnet rendert und der Anker greift (Komma-Liste, max. 20 wie buildDisclosureUrl). */
+export function withSourceOpen(rangeParams:string,id:string):string{const params=new URLSearchParams(rangeParams),ids=new Set((params.get('sourceOpen')||'').split(',').filter(Boolean));ids.add(id);params.set('sourceOpen',[...ids].slice(-20).join(','));return params.toString()}
+export const openSourceRowHref=(affiliateId:string,offerId:string,offerUrlId:string,rangeParams:string)=>`/affiliates?affiliate=${affiliateId}&offer=${offerId}&${withSourceOpen(rangeParams,`url-${offerUrlId}`)}#url-${offerUrlId}`;

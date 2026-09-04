@@ -25,8 +25,11 @@ describe('responsive admin shell',()=>{
  });
 
  it('provides permission-aware navigation, account controls and persistent collapse',()=>{
-  const sidebar=read('components/AdminSidebar.tsx'),logout=read('components/OneSignalLogoutForm.tsx'),navigation=`${sidebar}\n${logout}`;
-  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Benutzer & Rechte','Sicherheit','Abmelden','Read only'])expect(navigation).toContain(marker);
+  const sidebar=read('components/AdminSidebar.tsx'),logout=read('components/OneSignalLogoutForm.tsx'),shell=read('components/DashboardShell.tsx'),navigation=`${sidebar}\n${logout}\n${shell}`;
+  for(const marker of['Account Monitor','LTV-Kohorten','Affiliate Optimizer','Auto-Rotation','Benutzer & Rechte','Sicherheit','Abmelden','Nur Lesen'])expect(navigation).toContain(marker);
+  expect(sidebar).not.toContain('Read only');
+  expect(sidebar).toContain('{props.capabilityLabel}');
+  expect(sidebar).toContain('className={props.writeAccess?"write":"read"}');
   expect(sidebar).not.toContain('label:"Smartlink Intelligence"');
   expect(sidebar).not.toContain('Sicherheit & MFA');
   expect(sidebar).toContain('aria-expanded={!collapsed}');
@@ -51,6 +54,20 @@ describe('responsive admin shell',()=>{
   expect(css).toContain('overflow-x:hidden');
   expect(css).toContain('transform:translateX(-100%)');
   expect(css).toContain('width:76px');
+ });
+
+ it('derives the sidebar capability label from real permissions instead of a static read-only badge',()=>{
+  const shell=read('components/DashboardShell.tsx'),css=read('globals.css');
+  for(const marker of['capabilityLabel={capabilityLabel}','writeAccess={','Nur Lesen',"'landingpages.manage')&&can(user.access,'api.manage')&&'Sperren'","'campaigns.edit')&&can(user.access,'api.manage')&&'Campaigns'","'automations.live')&&'Live-Freigabe'","'exports.download')&&'Export'"])expect(shell).toContain(marker);
+  for(const marker of['.sidebarStatus i.read{','.sidebarStatus i.write{'])expect(css).toContain(marker);
+ });
+
+ it('gates the LTV cohort entry like the cohorts page on statistics and finance',()=>{
+  const shell=read('components/DashboardShell.tsx'),cohorts=read('cohorts/page.tsx');
+  expect(cohorts).toContain("can(user.access,'statistics.view')");
+  expect(cohorts).toContain("can(user.access,'finance.view')");
+  expect(shell).toContain("const mayStatistics=can(user.access,'statistics.view')&&can(user.access,'finance.view')");
+  expect(shell).toContain('mayStatistics={mayStatistics}');
  });
 
  it('lets each account persist and edit the visible primary navigation order',()=>{

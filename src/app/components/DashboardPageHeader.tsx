@@ -1,7 +1,7 @@
 import type {ReactNode} from 'react';
 
 type HeaderIcon="monitor"|"affiliate"|"smartlink"|"automation"|"cohorts"|"access"|"security";
-type HeaderStatusTone='live'|'neutral'|'protected';
+type HeaderStatusTone='live'|'neutral'|'protected'|'warning';
 
 const icons:Record<HeaderIcon,ReactNode>={
  monitor:<><path d="M4 5.5h16v11H4z"/><path d="M8 20h8M12 16.5V20M7 12l3-3 2.5 2.5L17 7"/></>,

@@ -15,7 +15,7 @@ const insight={
   money72:{clicks:100,sois:2,cvr:2,firstSales:0,firstSaleRate:0,rebills:1,coinSpend:0,revenue:50,payout:6,profit:44,profitEpc:.44},
   mature14:{clicks:100,sois:40,cvr:40,firstSales:0,firstSaleRate:0,rebills:1,coinSpend:0,revenue:50,payout:120,profit:-70,profitEpc:-.7},
   legacy14:{clicks:20,sois:1,cvr:5,firstSales:1,firstSaleRate:100,rebills:1,coinSpend:0,revenue:50,payout:3,profit:47,profitEpc:2.35},
-  hourly24:[],rotationStartEpoch:null,generatedAt:'2026-07-29T00:00:00.000Z',
+  hourly24:[],daily14:[],rotationStartEpoch:null,generatedAt:'2026-07-29T00:00:00.000Z',
   windows:{traffic:'Heute',economics:'3 Kalendertage',maturity:'14 Tage',granularity:'daily' as const},
   selectedRange:{from:'2026-07-08',to:'2026-07-29',eventCoverageComplete:true,attribution:{total:{clicks:4477,sois:667,cvr:14.9,firstSales:8,firstSaleRate:1.2,rebills:0,coinSpend:165,revenue:133.28,payout:3766,profit:-3632.72,profitEpc:-.811},current:{},legacy:{},beforeRotation:{},transitionDay:{},unassigned:{},rotationDay:null,reconciled:true}},
 } as unknown as SmartlinkInsight;

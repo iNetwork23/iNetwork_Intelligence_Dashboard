@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
   SourceBlockLevel,
@@ -114,6 +114,27 @@ export default function SourceBlockButton(props: Props) {
     [blocks, props],
   );
 
+  const uncertain = useMemo(
+    () =>
+      blocks.find((block) => same(block, props) && block.status === "error"),
+    [blocks, props],
+  );
+  const pending = useMemo(
+    () =>
+      blocks.find((block) => same(block, props) && block.status === "pending"),
+    [blocks, props],
+  );
+  const recoverable = uncertain?.everflowSettingId ? uncertain : undefined;
+  const locked = Boolean(pending || (uncertain && !recoverable));
+  const recovering = Boolean(recoverable) && !productWide;
+  const lockedHintId = useId();
+  const lockedHint = "Manuelle Prüfung laut Runbook nötig";
+  const lockedLabel = uncertain ? "Zustand unklar" : "Verifizierung läuft";
+  const lockedTitle = uncertain
+    ? `${uncertain.error || "Zustand unklar"} · Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow. ${lockedHint}.`
+    : `Verifizierung läuft · Everflow-Bestätigung steht noch aus. ${lockedHint}.`;
+  const recoverTitle = `${recoverable?.error || "Zustand unklar"} · Einzige Aktion: Nach Everflow-Prüfung deaktivieren.`;
+
   const fieldMain = props.trafficMode === "api" ? "ADV1" : "Source";
   const fieldSub = props.trafficMode === "api" ? "ADV2" : "Sub1";
   const source = props.mainValue || "nicht übermittelt";
@@ -162,14 +183,15 @@ export default function SourceBlockButton(props: Props) {
   };
 
   const deactivate = async () => {
-    if (!active) return;
+    const target = active || recoverable;
+    if (!target) return;
     setBusy(true);
     setError("");
     try {
       const response = await fetch("/api/source-blocks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "deactivate", id: active.id }),
+        body: JSON.stringify({ action: "deactivate", id: target.id }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -218,7 +240,7 @@ export default function SourceBlockButton(props: Props) {
           <span>
             <small>{isSubSource ? "Unterquelle" : "Hauptquelle"}</small>
             <b id="source-block-title">
-              {active&&!productWide ? `${controlScope} wieder aktivieren` : productWide ? `${controlScope} überall sperren` : `${controlScope} ausschalten`}
+              {recovering ? `${controlScope} nach Everflow-Prüfung deaktivieren` : active&&!productWide ? `${controlScope} wieder aktivieren` : productWide ? `${controlScope} überall sperren` : `${controlScope} ausschalten`}
             </b>
           </span>
           <button
@@ -257,12 +279,17 @@ export default function SourceBlockButton(props: Props) {
         </dl>
 
         <p className="sourceBlockImpact">
-          {active&&!productWide
+          {(active||recovering)&&!productWide
             ? "Vergütung und Partner-Postback gelten danach wieder normal."
             : productWide
               ? "Diese besonders geschützte Aktion setzt Payout und SOI-/Lead-Postback für die Quelle in allen serverseitig gefundenen Offers dieses Affiliates auf aus. Bei einem Teilfehler werden neu angelegte Regeln zurückgerollt."
               : "Ab Bestätigung werden Vergütung und Partner-Postback für diese Auswahl bei diesem Affiliate und Offer gesperrt – campaignübergreifend. Eingehenden Traffic kann nur der Partner selbst stoppen."}
         </p>
+        {recovering && (
+          <p className="sourceBlockImpact sourceBlockUnclear" role="alert">
+            {`Zustand unklar: ${recoverable?.error || "unbekannt"}. Vorher in Everflow prüfen, ob das Setting existiert. Diese Aktion löscht nur ein exakt passendes Setting und setzt den lokalen Datensatz auf inaktiv.`}
+          </p>
+        )}
 
         {productWide && (
           <label className="sourceBlockReason sourceBlockConfirmation">
@@ -271,7 +298,7 @@ export default function SourceBlockButton(props: Props) {
           </label>
         )}
 
-        {!active && (
+        {!active && !recovering && (
           <label className="sourceBlockReason">
             Notiz <span>optional</span>
             <input
@@ -294,13 +321,15 @@ export default function SourceBlockButton(props: Props) {
           </button>
           <button
             type="button"
-            className={active&&!productWide ? "sourceReactivate" : "sourceConfirmBlock"}
-            onClick={active&&!productWide ? deactivate : activate}
+            className={(active||recovering)&&!productWide ? "sourceReactivate" : "sourceConfirmBlock"}
+            onClick={(active||recovering)&&!productWide ? deactivate : activate}
             disabled={busy || (productWide && confirmation !== requiredConfirmation)}
           >
             {busy
               ? "Wird verifiziert …"
-              : active&&!productWide
+              : recovering
+                ? "Nach Everflow-Prüfung deaktivieren"
+                : active&&!productWide
                 ? `${controlScope} aktivieren`
                 : productWide ? `${controlScope} in allen gefundenen Produkten sperren` : `${controlScope} jetzt ausschalten`}
           </button>
@@ -311,18 +340,49 @@ export default function SourceBlockButton(props: Props) {
 
   return (
     <span className="sourceBlockControl">
-      <button
-        type="button"
-        className={`sourceBlockIconButton${active ? " blocked" : ""}`}
-        onClick={() => {setProductWide(false);setOpen(true)}}
-        aria-label={triggerLabel}
-        title={triggerLabel}
-        aria-pressed={Boolean(active)}
-      >
-        <PowerIcon />
-        <span>{active ? `${controlScope} ausgeschaltet` : `${controlScope} ausschalten`}</span>
-      </button>
-      <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
+      {locked ? (
+        <button
+          type="button"
+          className="sourceBlockIconButton locked"
+          disabled
+          aria-disabled="true"
+          aria-label={`${controlScope} ${isSubSource ? sub : source}: ${lockedLabel}`}
+          aria-describedby={lockedHintId}
+          title={lockedTitle}
+        >
+          <PowerIcon />
+          <span>{lockedLabel}</span>
+        </button>
+      ) : recoverable ? (
+        <button
+          type="button"
+          className="sourceBlockIconButton locked unclear"
+          onClick={() => {setProductWide(false);setOpen(true)}}
+          aria-label={`${controlScope} ${isSubSource ? sub : source}: Zustand unklar · Nach Everflow-Prüfung deaktivieren`}
+          title={recoverTitle}
+        >
+          <PowerIcon />
+          <span>Zustand unklar</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`sourceBlockIconButton${active ? " blocked" : ""}`}
+          onClick={() => {setProductWide(false);setOpen(true)}}
+          aria-label={triggerLabel}
+          title={triggerLabel}
+          aria-pressed={Boolean(active)}
+        >
+          <PowerIcon />
+          <span>{active ? `${controlScope} ausgeschaltet` : `${controlScope} ausschalten`}</span>
+        </button>
+      )}
+      {locked && (
+        <small id={lockedHintId} className="sourceBlockLockedHint">{lockedHint}</small>
+      )}
+      {!locked && !recoverable && (
+        <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{controlScope} überall sperren</button>
+      )}
       {error && (
         <small className="sourceBlockError" role="alert">
           {error}
