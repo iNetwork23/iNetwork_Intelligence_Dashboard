@@ -1,4 +1,5 @@
 import {aggregatePortfolio,type Portfolio,type ReportRow} from './portfolio';
+import{dailySeriesByKey,variantDailyKey,type DailyByKey}from'./daily-series';
 import type{SupabaseClient}from'@supabase/supabase-js';
 import type{PortfolioSnapshotRow}from'./affiliate-source-cache';
 import{buildPortfolioRangePublication,buildPortfolioRangeSnapshotRecordFromAggregates,isPortfolioRangeSnapshotFresh,isValidPortfolioRangeSnapshot,stalePortfolioRangeSnapshotKeys,type PortfolioRangeSnapshotRecord}from'./portfolio-range-snapshots';
@@ -120,7 +121,8 @@ export const rangeDayCount=(range:{from:string|null;to:string})=>range.from?Math
 export function previousReportingRange(range:ReportingRange):{from:string;to:string}|null{const days=rangeDayCount(range);if(!range.from||!Number.isFinite(days)||days>DAILY_SERIES_MAX_DAYS)return null;return{from:shift(range.from,-days),to:shift(range.from,-1)}}
 const sumDay=(date:string,rows:MetricRpcRow[]):PortfolioDailyPoint=>{const point:PortfolioDailyPoint={date,clicks:0,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0};for(const row of rows){point.clicks+=number(row.clicks);point.sois+=number(row.sois);point.firstSales+=number(row.first_sales);point.rebills+=number(row.rebills);point.revenue+=number(row.revenue);point.payout+=number(row.payout);point.profit+=number(row.profit)}for(const key of['revenue','payout','profit']as const)point[key]=Number(point[key].toFixed(2));return point};
 /** Liest je Tag den aktiven Tages-Snapshot (Batches zu 5 Keys wie der Portfolio-Pfad) und summiert im Scope; undefined, sobald ein Tag fehlt oder das Fenster zu lang ist. */
-export async function loadPortfolioDailyFromCache(client:CacheClient,range:ReportingRange,access?:AccessMetadata):Promise<PortfolioDailyPoint[]|undefined>{
+/** Tages-Snapshots (portfolio_day) eines Fensters ≤ 45 Tage, nur wenn jeder Tag einen Snapshot hat; sonst undefined. */
+async function loadPortfolioDayRows(client:CacheClient,range:ReportingRange):Promise<{days:string[];byDay:Map<string,MetricRpcRow[]>}|undefined>{
  if(!client.from||!range.from||rangeDayCount(range)>DAILY_SERIES_MAX_DAYS)return undefined;
  const db=client as unknown as SupabaseClient,days:string[]=[];for(let day=range.from;day<=range.to;day=shift(day,1))days.push(day);
  const{data:markerData,error:markerError}=await db.from('sync_state').select('value').gte('key',`portfolio_day_generation:${range.from}`).lte('key',`portfolio_day_generation:${range.to}`).order('key');
@@ -130,6 +132,21 @@ export async function loadPortfolioDailyFromCache(client:CacheClient,range:Repor
  const keys=days.map(day=>`portfolio_day:${day}:${markers.get(day)}`),byDay=new Map<string,MetricRpcRow[]>();
  for(let start=0;start<keys.length;start+=5){const{data,error}=await db.from('sync_state').select('value').in('key',keys.slice(start,start+5));if(error)throw new Error(`Supabase portfolio daily snapshots: ${error.message}`);for(const item of data||[]){const value=item.value as{date?:string;rows?:PortfolioSnapshotRow[]};if(typeof value.date==='string'&&Array.isArray(value.rows))byDay.set(value.date,value.rows.map(decodePortfolioRow))}}
  if(byDay.size!==days.length)return undefined;
+ return{days,byDay};
+}
+const scopedDayRows=(rows:MetricRpcRow[],access?:AccessMetadata)=>access?filterPartnerRows(rows as unknown as Array<Record<string,unknown>>,access) as unknown as MetricRpcRow[]:rows;
+export async function loadPortfolioDailyFromCache(client:CacheClient,range:ReportingRange,access?:AccessMetadata):Promise<PortfolioDailyPoint[]|undefined>{
+ const loaded=await loadPortfolioDayRows(client,range);
+ if(!loaded)return undefined;
  if(access)assertScopesSupported(access,['affiliate','offer','campaign']);
- return days.map(day=>{const rows=byDay.get(day)||[];return sumDay(day,access?filterPartnerRows(rows as unknown as Array<Record<string,unknown>>,access) as unknown as MetricRpcRow[]:rows)});
+ return loaded.days.map(day=>sumDay(day,scopedDayRows(loaded.byDay.get(day)||[],access)));
+}
+/** Etappe 3: Tagesprofit je Direkt-Variante (Schlüssel wie cockpitItemKey) für die Sparklines der priorisierten Cockpit-Liste; undefined ohne lückenlose Tages-Snapshots oder für Fenster > 45 Tage. */
+export async function loadPortfolioDailyVariantProfitFromCache(client:CacheClient,range:ReportingRange,access?:AccessMetadata):Promise<DailyByKey|undefined>{
+ const loaded=await loadPortfolioDayRows(client,range);
+ if(!loaded)return undefined;
+ if(access)assertScopesSupported(access,['affiliate','offer','campaign']);
+ const points:Array<{date:string;key:string;value:number}>=[];
+ for(const day of loaded.days)for(const row of scopedDayRows(loaded.byDay.get(day)||[],access))if(String(row.campaign_id)==='0')points.push({date:day,key:variantDailyKey(row),value:Number(row.profit)||0});
+ return dailySeriesByKey(points,loaded.days);
 }

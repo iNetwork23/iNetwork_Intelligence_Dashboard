@@ -82,7 +82,7 @@ describe('buildCockpitLists',()=>{
     expect(all.map(r=>r.variantKey)).toEqual(['a','b','c','d']);
     expect(all[0]).toMatchObject({action:'AUSSCHALTEN',severity:'neutral',trafficMode:'tracked',sois:30,clicks:0,cvr:0,firstSales:0,rebills:0,revenue:0});
     expect(all[0].gate).toBeUndefined();
-    const withGate={...variant('g','AUSSCHALTEN',-1,null),recommendation:{...variant('g','AUSSCHALTEN',-1,null).recommendation,gate:{matureSois:50,totalSois:60,requiredSois:50,maturityReached:true,p75Hours:30,latencyConfidence:'hoch',rateLow:0,rateHigh:0.05,benchmarkRate:0.04,confidence:'belastbar'}}};
+    const withGate={...variant('g','AUSSCHALTEN',-1,null),recommendation:{...variant('g','AUSSCHALTEN',-1,null).recommendation,gate:{matureSois:50,totalSois:60,requiredSois:50,maturityReached:true,p75Hours:30,latencyConfidence:'hoch' as const,rateLow:0,rateHigh:0.05,benchmarkRate:0.04,confidence:'belastbar' as const}}};
     expect(buildCockpitLists([analysis('1',[withGate])]).all[0].gate?.matureSois).toBe(50);
   });
 });

@@ -7,6 +7,8 @@ import {
   getAffiliateLeadLatency,
   getAffiliateSourceBreakdown,
   getAffiliateSourceFreshness,
+  getAffiliateDailyByKey,
+  getPortfolioDailyByVariant,
 } from "@/lib/affiliate-optimizer-service";
 import {
   groupAffiliateOffers,
@@ -14,6 +16,7 @@ import {
 } from "@/lib/affiliate-optimizer";
 import { NO_SUB_SOURCE, leadActivityStatus, type SourceBreakdownRow } from "@/lib/source-breakdown";
 import type { LeadLatencyAnalysis } from "@/lib/lead-latency";
+import type { DailyByKey } from "@/lib/daily-series";
 import {
   getCampaignAffiliateMappings,
   getCampaignDirectory,
@@ -191,6 +194,18 @@ export default async function AffiliateOptimizerPage({
       mayPartners && query.mode === "smartlinks"
         ? getCampaignDirectory(user.access)
         : null,
+    // Etappe 3: Tageswerte für die Sparklines der Tracker-Kandidaten (nur Fenster ≤ 45 Tage; Fehler → keine Sparkline).
+    eagerSourceDaily =
+      mayPartners && query.mode === "direct" && query.affiliate
+        ? getAffiliateDailyByKey(
+            query.affiliate,
+            { from: sourcePeriod.from, to: sourcePeriod.to },
+            user.access,
+          ).catch((cause) => {
+            console.error("Source daily series failed", cause);
+            return undefined;
+          })
+        : null,
     eagerDirectSourceData =
       mayPartners && query.mode==='direct' && query.affiliate
         ? Promise.allSettled([
@@ -212,8 +227,9 @@ export default async function AffiliateOptimizerPage({
         : null;
   let analyses, periodMappings, associationMappings;
   let lastLeadDates: Record<string, string> = {};
+  let cockpitDaily: DailyByKey | undefined;
   try {
-    [analyses, periodMappings, associationMappings, lastLeadDates] = await Promise.all([
+    [analyses, periodMappings, associationMappings, lastLeadDates, cockpitDaily] = await Promise.all([
       mayPartners
         ? getAffiliateOptimizationsWithTrend(
             period.servicePeriod,
@@ -233,6 +249,16 @@ export default async function AffiliateOptimizerPage({
         console.error("Last-lead dates failed", cause);
         return {} as Record<string, string>;
       }),
+      // Etappe 3: Tagesprofit je Variante für die Cockpit-Sparklines (nur Übersicht ohne Partnerwahl, Fenster ≤ 45 Tage).
+      mayPartners && !query.affiliate
+        ? getPortfolioDailyByVariant(
+            { from: period.from, to: period.to },
+            user.access,
+          ).catch((cause) => {
+            console.error("Cockpit daily series failed", cause);
+            return undefined;
+          })
+        : Promise.resolve(undefined),
     ]);
   } catch (e) {
     console.error(e);
@@ -332,6 +358,7 @@ export default async function AffiliateOptimizerPage({
       partner: query.partner,
       open: query.open,
     });
+  let sourceDaily: DailyByKey | undefined;
   let sourceRows: SourceBreakdownRow[] = [],
     sourceError = false,
     smartlinkDetailsError = false,
@@ -369,6 +396,15 @@ export default async function AffiliateOptimizerPage({
           user.access,
         ),
       ]));
+    sourceDaily = await (eagerSourceDaily ??
+      getAffiliateDailyByKey(
+        selected.affiliateId,
+        { from: sourcePeriod.from, to: sourcePeriod.to },
+        user.access,
+      ).catch((cause) => {
+        console.error("Source daily series failed", cause);
+        return undefined;
+      }));
     if (sourceResult[0].status === "fulfilled")
       sourceRows = sourceResult[0].value;
     else {
@@ -1165,6 +1201,11 @@ export default async function AffiliateOptimizerPage({
                   sourcePeriodLabel={sourcePeriod.label}
                   blocks={blockMarkers}
                   canManage={canManageSources}
+                  rangeParams={rangeParams}
+                  latency={leadLatency ?? undefined}
+                  affiliateName={selected.affiliate}
+                  offerName={activeOffer.offer}
+                  dailyByKey={sourceDaily}
                 />
               )}
           </section>
@@ -1178,6 +1219,7 @@ export default async function AffiliateOptimizerPage({
               period.period !== "12m" && period.period !== "all"
             }
             blocks={blockMarkers}
+            dailyByKey={cockpitDaily}
           />
           <section className="sectionHead">
             <div>

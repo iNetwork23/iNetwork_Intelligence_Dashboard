@@ -9,7 +9,7 @@ import {ACTION_WORDS,STATE_WORDS,VERDICT_WORDS} from './verdict-vocabulary';
  */
 const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
 /** Dateien der Partnerseite und Verdikt-Anzeige (Agent P) – dort gelten alle Regeln. */
-const OWN_FILES=['src/app/affiliates/AffiliateCockpit.tsx','src/app/affiliates/TrendList.tsx','src/app/affiliates/TrafficActionLists.tsx','src/app/affiliates/CandidateTopN.tsx','src/app/affiliates/AffiliatePanels.tsx','src/app/affiliates/SourceBreakdown.tsx','src/app/affiliates/SourceTable.tsx','src/app/components/SmartlinkPresentation.tsx','src/app/affiliates/SourceBlockButton.tsx','src/lib/affiliate-trend.ts','src/lib/affiliate-priority.ts','src/lib/verdict-trust.ts','src/lib/source-block-markers.ts'];
+const OWN_FILES=['src/app/components/LeitstandSection.tsx','src/app/affiliates/AffiliateCockpit.tsx','src/app/affiliates/TrendList.tsx','src/app/affiliates/TrafficActionLists.tsx','src/app/affiliates/CandidateTopN.tsx','src/app/affiliates/AffiliatePanels.tsx','src/app/affiliates/SourceBreakdown.tsx','src/app/affiliates/SourceTable.tsx','src/app/components/SmartlinkPresentation.tsx','src/app/affiliates/SourceBlockButton.tsx','src/lib/affiliate-trend.ts','src/lib/affiliate-priority.ts','src/lib/verdict-trust.ts','src/lib/source-block-markers.ts'];
 /** Leitstand und Quellenliste (nur lesen): Wortregeln gelten dort ebenso. */
 const SHARED_FILES=['src/app/components/LeitstandSection.tsx','src/app/sources/SourceCandidateList.tsx'];
 const ALL=[...OWN_FILES,...SHARED_FILES];

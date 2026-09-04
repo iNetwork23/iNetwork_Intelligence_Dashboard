@@ -2,6 +2,8 @@ import InstantLink from '../affiliates/InstantLink';
 import {can,type AccessMetadata} from '@/lib/rbac';
 import {describeRollup,formatBlockSince,leitstandAmount,loadLeitstand,mayBlockSources,rollupStaleWarning,LEITSTAND_ROLLUP_PENDING,type LeitstandCounters,type LeitstandRow,type LeitstandView} from '@/lib/leitstand';
 import {NOT_BLOCKABLE_HINT} from '@/lib/source-candidate-link';
+import {signTone} from '@/lib/verdict-vocabulary';
+const toneClass=(tone:ReturnType<typeof signTone>)=>tone==='positive'?'up':tone==='negative'?'down':undefined;
 
 /** Leitstand-Sektion der Startseite (Server-Komponente, kein Client-State): Top-3 Verluste mit Sperrstatus, laufende Eingriffe, Top-3 Skalierung. Die Sperre selbst passiert auf /sources. */
 const SOURCES_HREF='/sources?range=30d',BLOCKS_HREF='/source-blocks';
@@ -15,7 +17,7 @@ function BlockStatus({row,mayBlock,unknown}:{row:LeitstandRow;mayBlock:boolean;u
 }
 function Row({row,finance,mayBlock,withBlock,unknown=false}:{row:LeitstandRow;finance:boolean;mayBlock:boolean;withBlock:boolean;unknown?:boolean}){
  return <li className={`leitstandRow ${row.severity}`}>
-  <div className="leitstandRowMain"><InstantLink href={row.href} className="leitstandRowTitle"><b>{row.title}</b><small>Quelle {row.source}</small></InstantLink><strong className={finance?(row.profit>=0?'up':'down'):undefined}>{leitstandAmount(row,finance)}</strong></div>
+  <div className="leitstandRowMain"><InstantLink href={row.href} className="leitstandRowTitle"><b>{row.title}</b><small>Quelle {row.source}</small></InstantLink><strong className={finance?toneClass(signTone(row.profit,{clicks:row.clicks,sois:row.sois})):undefined}>{leitstandAmount(row,finance)}</strong></div>
   <div className="leitstandRowMeta"><span>{row.leadStatus??'Lead-Status unbekannt'}</span><span className="leitstandReason">{row.reason}</span>{withBlock&&<BlockStatus row={row} mayBlock={mayBlock} unknown={unknown}/>}</div>
  </li>;
 }

@@ -24,13 +24,13 @@ const current=()=>portfolio([path('376','1',{clicks:900,sois:60,profit:-100}),pa
 beforeEach(()=>{vi.clearAllMocks();getDashboard.mockReset();loadConversions.mockResolvedValue([]);loadIndex.mockResolvedValue([]);loadFreshness.mockResolvedValue({complete:true,availableDays:365,expectedDays:365,minDate:'2025-09-05',maxDate:'2026-09-04',generatedAt:'2026-09-04T10:00:00Z'})});
 
 describe('URL verdicts through the lead maturity gate (D3)',()=>{
- it('leaves every affiliate ungated without leadMaturityFor and never loads conversions',async()=>{
+ it('leaves every affiliate ungated (gate „nicht geprüft“) without leadMaturityFor and never loads conversions',async()=>{
   const{getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
   getDashboard.mockResolvedValue(current());
   const result=await getAffiliateOptimizationsWithTrend('custom',range,access,range);
   expect(loadConversions).not.toHaveBeenCalled();
   expect(result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation).toMatchObject({action:'AUSSCHALTEN'});
-  expect((result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation as{gate?:unknown}).gate).toBeUndefined();
+  expect((result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'nicht geprüft'});
  });
  it('gates only the selected affiliate: immature sois turn K1 into WEITER TESTEN with the gate, K3 and SKALIEREN stay',async()=>{
   const{getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
@@ -47,7 +47,7 @@ describe('URL verdicts through the lead maturity gate (D3)',()=>{
   expect(selected.variants.every(v=>'trendVerdict'in v)).toBe(true);
   const other=result.find(a=>a.affiliateId==='412')!;
   expect(other.variants.map(v=>[v.offerUrlId,v.recommendation.action])).toEqual([['3','AUSSCHALTEN'],['4','AUSSCHALTEN']]);
-  expect((other.variants[0].recommendation as{gate?:unknown}).gate).toBeUndefined();
+  expect((other.variants[0].recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'nicht geprüft'});
  });
  it('keeps a K1 kill once enough sois are mature and carries the url benchmark into the gate',async()=>{
   const{getAffiliateOptimizations}=await import('./affiliate-optimizer-service');

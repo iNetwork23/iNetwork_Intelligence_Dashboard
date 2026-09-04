@@ -1,6 +1,7 @@
 import{unstable_cache}from'next/cache';
 import{getDashboard}from'./dashboard-service';
-import type{ReportingPeriod}from'./supabase-reporting';
+import{DAILY_SERIES_MAX_DAYS,loadPortfolioDailyVariantProfitFromCache,rangeDayCount,type ReportingPeriod}from'./supabase-reporting';
+import{candidateDailyKey,dailySeriesByKey,dateRange,type DailyByKey}from'./daily-series';
 import{analyzeAffiliateTraffic}from'./affiliate-optimizer';
 import{loadAffiliateActivityIndex,loadAffiliateConversionsFromCache,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotFreshness}from'./cached-evaluations';
 import{analyzeLeadLatency}from'./lead-latency';
@@ -8,7 +9,7 @@ import{buildLeadMaturityIndex,noLeadMaturityIndex,urlLeadMaturityFor,type LeadMa
 import{applyLeadMaturity,type VerdictGate}from'./decision-engine';
 import type{AffiliateAnalysis,AffiliateVariant,RecommendationAction}from'./affiliate-optimizer';
 import{resolveSourcePeriod}from'./source-period';
-import{attachSourceActivityFromIndex,attachSourceMaturity,mergeSourceWindows}from'./source-breakdown';
+import{attachSourceActivityFromIndex,attachSourceMaturity,mergeSourceWindows,aggregateSourceRows}from'./source-breakdown';
 import{resolveActivityCoverage,sourceScopeCoverageComplete}from'./snapshot-generation';
 import{assertScopesSupported,foreignScopeRequested,scopeFingerprint,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess,sourceRowsForAccess}from'./service-scopes';
@@ -118,4 +119,23 @@ export function getAffiliateLastLeadDates(range:{from:string;to:string}){
   }
   return Object.fromEntries(lastLeadByAffiliate(rows));
  },['affiliate-last-lead-v1',range.from,range.to],{revalidate:300,tags:['supabase-portfolio']})();
+}
+
+/** Etappe 3: Tagesprofit je Tracker-Kandidat des Partners (Schlüssel wie candidateItemKey) für Sparklines – nur Fenster ≤ 45 Tage, 300 s gecacht, wirft bei fremdem Scope. */
+export async function getAffiliateDailyByKey(affiliateId:string,range:{from:string;to:string},access:AccessMetadata):Promise<DailyByKey|undefined>{
+ if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
+ assertScopesSupported(access,['affiliate','offer','campaign','source','sub_source']);
+ if(!range.from||!range.to||rangeDayCount({from:range.from,to:range.to})>DAILY_SERIES_MAX_DAYS)return undefined;
+ return unstable_cache(async()=>{
+  const rows=await sourceWindow(affiliateId,range,access),byDate=new Map<string,typeof rows>();
+  for(const row of rows){const date=row.columns.find(column=>column.column_type==='date')?.id||'';if(!date)continue;(byDate.get(date)??byDate.set(date,[]).get(date)!).push(row)}
+  const dates=dateRange(range.from,range.to),points:Array<{date:string;key:string;value:number}>=[];
+  for(const[date,dayRows]of byDate)for(const leaf of aggregateSourceRows(dayRows))points.push({date,key:candidateDailyKey(leaf),value:leaf.metric.profit});
+  return dailySeriesByKey(points,dates);
+ },['affiliate-daily-by-key-v1',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
+}
+/** Etappe 3: Tagesprofit je Direkt-Variante aller sichtbaren Partner (Cockpit-Sparklines), 300 s gecacht; undefined für Fenster > 45 Tage oder ohne lückenlose Tages-Snapshots. */
+export async function getPortfolioDailyByVariant(range:{from:string;to:string},access:AccessMetadata):Promise<DailyByKey|undefined>{
+ if(!range.from||!range.to||rangeDayCount({from:range.from,to:range.to})>DAILY_SERIES_MAX_DAYS)return undefined;
+ return unstable_cache(()=>loadPortfolioDailyVariantProfitFromCache(getSupabaseAdmin(),{from:range.from,to:range.to,label:''},access),['portfolio-daily-variant-v1',range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['supabase-portfolio']})();
 }
