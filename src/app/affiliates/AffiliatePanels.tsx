@@ -4,13 +4,17 @@ import type { AffiliateVariant } from "@/lib/affiliate-optimizer";
 import { cr, duration, eur, num } from "./affiliate-format";
 import { signTone } from "@/lib/verdict-vocabulary";
 import { toneClass } from "@/lib/verdict-trust";
+import LtvBreakevenLink from "./LtvBreakevenLink";
 
 export function ProfitPeriod({
   label,
   m,
+  affiliateId,
 }: {
   label: string;
   m: AffiliateVariant["days30"];
+  /** Etappe 4: Partner-ID für den Link „LTV-Kurve und Break-even“; ohne Prop aus der URL (affiliate=). */
+  affiliateId?: string;
 }) {
   return (
     <article className="profitPeriod">
@@ -29,6 +33,7 @@ export function ProfitPeriod({
           ? `${cr(m)} CVR · ${num(m.sois)} SOIs aus ${num(m.clicks)} Klicks`
           : `Keine Klicks · ${num(m.sois)} SOIs`}
       </small>
+      <LtvBreakevenLink affiliateId={affiliateId} />
     </article>
   );
 }
