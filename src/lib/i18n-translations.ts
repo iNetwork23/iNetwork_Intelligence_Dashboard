@@ -978,5 +978,18 @@ export const translations = {
   "First-Sales und positivem Profit.": "first sales and positive profit.",
   "Reife nicht prüfbar – keine Conversion-Daten; Ausschalten erst nach geprüfter Wartezeit.": "Maturity not verifiable – no conversion data; switch off only after the waiting time has been checked.",
   "Monetarisiert, aber im Zeitraum negativ; Ausschalten nur bei belegter Unterperformance.": "Monetised, but negative in the period; switch off only with proven underperformance.",
-  "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.": "Test quota not yet mature; gather more evidence before switching off."
+  "Testquote noch nicht reif; vor dem Ausschalten mehr Evidenz sammeln.": "Test quota not yet mature; gather more evidence before switching off.",
+  "Payout je SOI": "Payout per SOI",
+  "Umsatz je SOI": "Revenue per SOI",
+  "Profit je SOI": "Profit per SOI",
+  "Konzentration": "Concentration",
+  "Anteil an SOIs": "Share of SOIs",
+  "Anteil am Profit": "Share of profit",
+  "Δ Median": "Δ median",
+  "keine SOIs": "no SOIs",
+  "kein Median": "no median",
+  "Keine SOIs im Zeitraum": "No SOIs in the period",
+  "Firmen / Affiliates nach Anteil": "Companies / affiliates by share",
+  "Klumpenrisiko · Top-1-Partner ab 40 % Anteil": "Concentration risk · top-1 partner from a 40 % share",
+  "Warnschwelle 40 % Top-1-Anteil": "Warning threshold 40 % top-1 share"
 } as const;
