@@ -1,4 +1,6 @@
-# WLX-Neuaufbau: geprüfte Arbeitspakete und offene Produktionsgates
+# WLX-Neuaufbau: Prüfstand vor dem direkten Produktionsrelease
+
+Historischer Prüfstand vor der anschließenden Live-Anweisung des Nutzers. Der direkte Release und seine aktuellen Produktionsnachweise stehen im [Live-Read-back](WLX-LIVE-READBACK-2026-09-07.md). Die folgenden Angaben beschreiben den Zustand vor dieser Veröffentlichung.
 
 Stand: 2026-09-07 (Europe/Berlin), Provider- und Browserbelege vom 2026-09-06 UTC. Der Neuaufbau ist noch nicht abgeschlossen. Maßgeblich sind das [Asana-Projekt](https://app.asana.com/1/1204855960563003/project/1217096669609420) und [Draft-PR #4](https://github.com/iNetwork23/iNetwork_Intelligence_Dashboard/pull/4).
 

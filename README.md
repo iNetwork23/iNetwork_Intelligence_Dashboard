@@ -5,12 +5,12 @@ Authentifiziertes Everflow-, Smartlink- und Operations-Dashboard mit Supabase-Hi
 ## Release- und Verifikationsstand
 
 - Produktionsalias: `https://wlx-railway-dashboard.vercel.app`.
-- Basis der Bestandsaufnahme vom 6. September 2026: `main` = `55448c107965308bba87d8c3196c1502a2943fa9`.
-- Asana nennt Deployment `dpl_9STwGFdhpN3rRuL5efJqtB52oacG` als READY. Die Zuordnung dieses Deployments zum Commit ist hier noch nicht direkt aus Vercel verifiziert.
-- Der frühere freigegebene Commit `84594ae314401b721a3bc8ba86f53adc89ad8058` ist historisch und kein Nachweis des aktuellen Produktionsstands.
-- Der öffentliche `/api/health`-Read-back vom 6. September antwortet mit HTTP 200, `ok=true` und `dataSource=warm`. Das belegt keine Datenparität, Rollenabnahme oder Migration.
-- Die vier reproduzierten Reife-Testfehler entstehen durch aktuelle Conversion-Zeitstempel außerhalb eines festen Testfensters. Die Tests fixieren nun den 4. September als Uhrzeit; ihre fachlichen Assertions bleiben erhalten. Dies belegt keinen entsprechenden Produktionsfehler.
-- Authentifizierte Rollen-/Browserabnahme, SQL-/Backfill-Read-backs, kontrollierte Providerabläufe und der immutable Vercel-Release bleiben separate offene Gates.
+- Produktiv verifizierte Anwendungskorrekturen vom 7. September 2026: Commit `6d4422e426ac1e51249f0e7822bc553ba98f3414`, Vercel `dpl_5UjL8PbDxdzMRaCFkog37TXxPoZC`, READY. Alias und ausdrückliches Commitfeld sind aus Vercel zurückgelesen.
+- Die direkte Veröffentlichung erfolgte auf ausdrücklichen Nutzerwunsch; eine separate kostenpflichtige Testumgebung wurde nicht angelegt.
+- Health HTTP 200 (`ok=true`, `dataSource=warm`), Kohorten-API ohne Sitzung HTTP 401. Authentifizierte Kohortenfilter bei 390/768/1440 px produktiv geprüft. Einzelheiten: [Live-Read-back](docs/WLX-LIVE-READBACK-2026-09-07.md).
+- 190 Testdateien / 1588 Tests einschließlich der drei Filter-Navigationsregressionen, Lint, Typecheck und Build bestanden; vollständiger Dependency-Audit ohne Befunde. Die vier zuvor zeitabhängigen Reifetests sind deterministisch; daraus wird kein entsprechender Produktionsfehler abgeleitet.
+- Supabase-Objekte, RLS/Grants, Identitätsconstraint und eine scoped Kohortenstichprobe sind verifiziert. Backfill-/Datenparität, LTV-Timeoutursache, Fraud-Speicherausfall, vollständige Rollen-/Browsermatrix und kontrollierte Providerabläufe bleiben offen.
+- Historische Ausgangsstände `55448c107965308bba87d8c3196c1502a2943fa9` und `84594ae314401b721a3bc8ba86f53adc89ad8058` sind keine Behauptung des aktuellen Release-Heads. Den endgültigen Alias-/Commitstand einschließlich anschließender Dokumentationscommits führt WLX-000.
 
 Aktuelle Arbeitsgrundlage: [WLX-000](https://app.asana.com/1/1204855960563003/project/1217096669609420/task/1218213413732033). Für jeden Kandidaten sind saubere Installation, Tests, Lint, Typecheck, Build, Audit, Commit/Tree und echte Produktionsprüfungen erneut erforderlich.
 
