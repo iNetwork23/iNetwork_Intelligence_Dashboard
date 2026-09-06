@@ -2,15 +2,17 @@
 
 Authentifiziertes Everflow-, Smartlink- und Operations-Dashboard mit Supabase-Historie, Affiliate Optimizer, Campaign-/Landingpage-/Source-Tiefenanalyse, RBAC, PWA/Web Push und kontrollierter Source-Sperren-Preview.
 
-## Verifizierter Produktionsstand
+## Release- und Verifikationsstand
 
-- freigegebener Produktcommit: `84594ae314401b721a3bc8ba86f53adc89ad8058`;
-- der aktuelle kanonische Branch darf zusätzlich reine `src/data/automation-journal.ts`-Nachfolger enthalten;
-- Produktionsalias: `https://wlx-railway-dashboard.vercel.app`;
-- operator-lokaler Prüfbericht (nicht Teil dieses Repositories): `/home/hermes/release-artifacts/full-project-check-2026-08-02/WLX-VOLLSTAENDIGER-PROJEKTCHECK-2026-08-02.md`;
-- operator-lokales Manifest (nicht Teil dieses Repositories): `/home/hermes/release-artifacts/WLX-ABNAHME-CHECKLIST-2026-08-02.json`.
+- Produktionsalias: `https://wlx-railway-dashboard.vercel.app`.
+- Basis der Bestandsaufnahme vom 6. September 2026: `main` = `55448c107965308bba87d8c3196c1502a2943fa9`.
+- Asana nennt Deployment `dpl_9STwGFdhpN3rRuL5efJqtB52oacG` als READY. Die Zuordnung dieses Deployments zum Commit ist hier noch nicht direkt aus Vercel verifiziert.
+- Der frühere freigegebene Commit `84594ae314401b721a3bc8ba86f53adc89ad8058` ist historisch und kein Nachweis des aktuellen Produktionsstands.
+- Der öffentliche `/api/health`-Read-back vom 6. September antwortet mit HTTP 200, `ok=true` und `dataSource=warm`. Das belegt keine Datenparität, Rollenabnahme oder Migration.
+- Die vier reproduzierten Reife-Testfehler entstehen durch aktuelle Conversion-Zeitstempel außerhalb eines festen Testfensters. Die Tests fixieren nun den 4. September als Uhrzeit; ihre fachlichen Assertions bleiben erhalten. Dies belegt keinen entsprechenden Produktionsfehler.
+- Authentifizierte Rollen-/Browserabnahme, SQL-/Backfill-Read-backs, kontrollierte Providerabläufe und der immutable Vercel-Release bleiben separate offene Gates.
 
-Der historische Campaign-#23-CTA-, Picker-, Source-Preview-Statement-Timeout- und Rohhistorien-Cachefehler ist im lokalen Kandidaten behoben. Campaign-Umsatz wird nur nach reconcilierten Buckets erklärt; Eventanzahlen werden nicht als kausale Umsatzzuordnung ausgegeben. Neue Releases benötigen trotzdem erneut Tests, immutable Review, Deploymentfingerprint und echte Desktop-/Mobil-Browserklicks.
+Aktuelle Arbeitsgrundlage: [WLX-000](https://app.asana.com/1/1204855960563003/project/1217096669609420/task/1218213413732033). Für jeden Kandidaten sind saubere Installation, Tests, Lint, Typecheck, Build, Audit, Commit/Tree und echte Produktionsprüfungen erneut erforderlich.
 
 ## Everflow-Historiencache mit Supabase
 
@@ -54,34 +56,41 @@ APP_ORIGIN=https://<dashboard-domain>
 - `ltv_cohorts`: bestehende Live-View für Registrierungsmonat × kumulierten Umsatz nach 30/60/90/180/365 Tagen.
 - `private.ltv_cohorts_materialized`: scope-sicherer Produktionscache für die Kohortenoberfläche; `pg_cron` aktualisiert ihn stündlich um Minute 25, ohne einen HTTP-Request offenzuhalten.
 
-## Sync-Status prüfen
+## Health und Synchronisation getrennt prüfen
 
-Angemeldet im Dashboard im Browser öffnen:
+Der öffentliche, lesende Betriebscheck ist `GET /api/health`. Er liefert den Dienststatus und die Datenquellenverfügbarkeit, keine fachliche Vollständigkeitsgarantie.
 
-```text
-https://<dashboard-domain>/api/sync
-```
+**GET /api/sync ist kein lesender Statuscheck.** Mit Cron-Bearer startet er einen schreibenden Synchronisationslauf. Eine angemeldete Browsersitzung allein erhält hier HTTP 405. Manuelle Synchronisation benötigt `POST`, `api.manage` und eine gültige Origin-/CSRF-Prüfung; Fraud-Backfill zusätzlich einen ungescopten Super-Admin mit `statistics.view` und `finance.view`. Solche Aufrufe nur im freigegebenen Scope ausführen und anschließend Persistenz, Coverage und Rollback prüfen.
 
-Beispielantwort:
+### Vercel-Croninventar
 
-```json
-{
-  "mode": "backfill",
-  "from": "2026-07-16",
-  "to": "2026-07-22",
-  "upsertedConversions": 18234,
-  "upsertedMetrics": 7421,
-  "backfillComplete": false
-}
-```
+Die Ausdrücke stehen in `vercel.json` und verwenden UTC. Alle folgenden Routen benötigen den passenden `CRON_SECRET`-Bearer; sie sind keine öffentlichen Statusendpunkte.
 
-Im laufenden Modus kann zusätzlich `"skipped": true` erscheinen, wenn seit dem letzten erfolgreichen 30-Tage-Abgleich noch keine Stunde vergangen ist. Derselbe Status steht in den Vercel Function Logs. Fehler aktualisieren `sync_state` nicht; der nächste Cron setzt am letzten erfolgreichen Chunk fort.
+| Route | Zeitplan (UTC) | Wirkung |
+|---|---|---|
+| `/api/sync/fraud` | `7 * * * *` | Fraud-Conversion-Synchronisation und Paritätsstand |
+| `/api/sync` | `17 * * * *` | Historiencache und Campaign-Snapshots |
+| `/api/sync/reconcile` | `37 3 * * *` | Historienabgleich |
+| `/api/sync/rollups` | `47 * * * *` | Portfolio- und Source-Kandidaten-Rollups, Reifekurzfassungen |
+| `/api/automation/scheduler` | `*/15 * * * *` | Freigegebene aktive Automationskonfigurationen |
+| `/api/push/dispatch` | `*/5 * * * *` | Push-Outbox-Versand |
+| `/api/source-blocks/reconcile` | `27 * * * *` | Provider-/Sperrregister-Abgleich |
+
+Source-Block-Reconciliation liest den Providerzustand und aktualisiert lokale Prüfnachweise; sie erzeugt keine neue Provider-Sperre. Provideraktionen und Versand benötigen unabhängig vom Zeitplan die jeweils dokumentierte Freigabe. Der separate Datenbankjob für die LTV-View wird im Migrationsrunbook beschrieben.
 
 ## Dashboard
 
 Der Account Monitor liest seine Reports aus der Postgres-Funktion `portfolio_metric_rows`. Verfügbar sind Heute, 7 Tage, 30 Tage, 90 Tage, 12 Monate, **365 Tage** sowie ein freier Zeitraum. Der kompatible URL-Wert `period=all` bezeichnet ausdrücklich einen begrenzten 365-Tage-Bereich und keine Lifetime-Historie. `/cohorts` zeigt die LTV-Kohorten; `/api/cohorts?source=…&sub_source=…` liefert dieselben Daten als authentifiziertes JSON.
 
 Im Automation Builder stehen nur tatsächlich implementierte Strategien zur Verfügung: `equal_slots`, `champion_challenger` und für Multi-Offer `matched_rounds`. Der frühere reine Enum-/UI-Wert `full_matrix` wurde entfernt; alte Drafts mit diesem Wert werden explizit abgelehnt und nicht still in eine andere Strategie umgedeutet. Operatoren müssen den betroffenen Draft nach Prüfung der LP-Familien neu anlegen. Eine nicht vorhandene vollständige Offer×Landingpage-Engine wird nicht mehr behauptet.
+
+## Quellen-Leitstand und Deal-Register
+
+`/sources` liest die persistierten 7-/30-Tage-Kandidaten aus den Rollups. Filter, Suche, Sortierung, Datenreife, unvollständige Coverage, Staleness und fehlende Sperrindizes bleiben unterscheidbar. Partner sind ausgeschlossen; Finanzdaten benötigen `finance.view`, Source-Aktionen zusätzlich `landingpages.manage` und `api.manage`. Ein Vorschlag ist keine ausgeführte Sperre.
+
+`/source-blocks` und `/api/source-blocks` zeigen Bestand, Preview, Historie und Reconciliation. Provideränderungen verlangen einen exakten Testscope, unmittelbare Preview, Bestätigung, Provider-/Persistenz-Read-back und Rollback gemäß `docs/SOURCE-BLOCK-CONTROLLED-E2E.md`.
+
+`/settings/deals` und `/api/deals` verwalten partnerspezifische Sonderregeln für interne Nutzer mit `settings.manage`. Gespeicherte Regeln, Defaults und Ladefehler sind getrennt zu behandeln. Produktionsspeicherung, Konkurrenzschutz und Parität der Empfehlungen müssen mit einem freigegebenen Testpartner abgenommen werden; die vorhandene Oberfläche allein belegt dies nicht.
 
 ## Source-Preview und Fraud-Abgrenzung
 
@@ -106,7 +115,7 @@ git diff --check
 
 Die Anwendung erzwingt RBAC serverseitig auf Seiten, API-Routen, Exporten und Reporting-Services. Partner-Sichten werden vor Aggregation auf Affiliate-, Offer-, Campaign-, Source- und Sub-Source-Scopes eingeschränkt; ein leerer Partner-Scope liefert keine Daten. Finanzkennzahlen benötigen zusätzlich `finance.view`. Rollenänderungen, Session-Widerrufe, Impersonation und Audit-Ereignisse werden über die Access-Konsole verwaltet.
 
-Die Produktentscheidung verlangt bewusst keinen MFA-Code beim Dashboard-Login: E-Mail/Benutzername plus Passwort erzeugen nach erfolgreicher serverseitiger Prüfung eine normale Sitzung. Das ist eine vollständige Login-Policy, kein versteckter Bypass; Login-UI, Challenge-Parsing und Session-Gating verlangen daher kein TOTP. Die MFA-Einschreibung ist in Oberfläche und API deaktiviert; der POST-Endpunkt antwortet mit HTTP 410. Die formale Entscheidung und Neubewertungskriterien stehen in `docs/decisions/0001-password-only-no-mandatory-mfa.md`. `APP_ORIGIN` muss auf den kanonischen öffentlichen Ursprung zeigen. Der authentifizierte Export liegt unter `/api/exports`; `CRON_SECRET` autorisiert ausschließlich den maschinellen stündlichen Supabase-Sync, während manuelle Sync-Aufrufe `api.manage` benötigen.
+Die Produktentscheidung verlangt bewusst keinen MFA-Code beim Dashboard-Login: E-Mail/Benutzername plus Passwort erzeugen nach erfolgreicher serverseitiger Prüfung eine normale Sitzung. Das ist eine vollständige Login-Policy, kein versteckter Bypass; Login-UI, Challenge-Parsing und Session-Gating verlangen daher kein TOTP. Die MFA-Einschreibung ist in Oberfläche und API deaktiviert; der POST-Endpunkt antwortet mit HTTP 410. Die formale Entscheidung und Neubewertungskriterien stehen in `docs/decisions/0001-password-only-no-mandatory-mfa.md`. `APP_ORIGIN` muss auf den kanonischen öffentlichen Ursprung zeigen. Der authentifizierte Export liegt unter `/api/exports`; `CRON_SECRET` autorisiert die maschinellen Routen des obigen Croninventars, während manuelle Sync-Aufrufe `api.manage` benötigen.
 
 Die normalisierten RBAC-Migrationen und atomaren SQL-Primitiven sind im Repository enthalten und müssen vor einem Deployment auf der Ziel-Datenbank angewendet und technisch verifiziert werden. Die aktive Runtime verwendet zusätzlich den persistenten Security-Store mit atomarem `INSERT`/Unique-Key für Rate-Limit-Slots, Widerrufsmarkern gegen Session-Reanimation und fail-closed Owner-Locks für sicherheitskritische Mutationen. Der erste Zugang erfolgt kontrolliert über den abschaltbaren Legacy-Super-Admin; nach Einrichtung eines individuellen Super-Admin-Kontos wird `ALLOW_LEGACY_ADMIN=false` gesetzt. Eine lokale Migrationsdatei allein belegt keine produktive Anwendung.
 

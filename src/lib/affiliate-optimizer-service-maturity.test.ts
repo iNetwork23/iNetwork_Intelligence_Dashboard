@@ -1,4 +1,4 @@
-import{beforeEach,describe,expect,it,vi}from'vitest';
+import{afterEach,beforeEach,describe,expect,it,vi}from'vitest';
 import type{Metrics,PathRow,Portfolio,ReportRow}from'./portfolio';
 import type{ConversionRow}from'./everflow';
 import{parseAccessMetadata}from'./rbac';
@@ -11,7 +11,8 @@ const loadConversions=vi.fn(),loadRows=vi.fn(),loadIndex=vi.fn(),loadFreshness=v
 vi.mock('./cached-evaluations',()=>({loadAffiliateConversionsFromCache:(...a:unknown[])=>loadConversions(...a),loadAffiliateSourceRowsRangeFromCache:(...a:unknown[])=>loadRows(...a),loadAffiliateActivityIndex:(...a:unknown[])=>loadIndex(...a),loadSourceSnapshotFreshness:(...a:unknown[])=>loadFreshness(...a)}));
 vi.mock('./supabase',()=>({getSupabaseAdmin:()=>{throw new Error('nicht erwartet')}}));
 
-const now=new Date(),epoch=now.getTime()/1000,range={from:'2026-08-06',to:'2026-09-04'};
+// Keep age-based conversions inside the fixed Berlin reporting window on every test run.
+const now=new Date('2026-09-04T12:00:00Z'),epoch=now.getTime()/1000,range={from:'2026-08-06',to:'2026-09-04'};
 const m=(x:Partial<Metrics>):Metrics=>{const base={clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,payout:0,revenue:0,profit:0,profitEpc:0,...x};return{...base,firstSaleRate:base.sois?100*base.firstSales/base.sois:0}};
 const path=(affiliateId:string,urlId:string,x:Partial<Metrics>):PathRow=>({...m(x),key:`8|${affiliateId}|0|${urlId}`,offerId:'8',offer:'Flirt DE',affiliateId,affiliate:`Partner ${affiliateId}`,campaignId:'0',campaign:'Direkt',offerUrlId:urlId,offerUrl:`LP ${urlId}`,trafficType:'Direkt'});
 const portfolio=(paths:PathRow[]):Portfolio=>({range:{from:range.from,to:range.to,label:'30'},totals:m({}),offers:[],affiliates:[],paths,generatedAt:'2026-09-04T12:00:00Z'});
@@ -21,7 +22,9 @@ const rRow=(source:string,sub:string,r:Partial<Record<'total_click'|'cv'|'first_
 const access=parseAccessMetadata({role:'admin',status:'active',grants:[],denials:[],version:1,scopes:{}});
 // Zwei Partner: 376 mit einer abschaltreifen URL 1 (K1) und einer skalierenden URL 2; 412 mit einer toten URL (K3) und einer K1-URL.
 const current=()=>portfolio([path('376','1',{clicks:900,sois:60,profit:-100}),path('376','2',{clicks:900,sois:40,firstSales:5,profit:200}),path('412','3',{clicks:150,sois:0,profit:-20}),path('412','4',{clicks:900,sois:70,profit:-50})]);
-beforeEach(()=>{vi.clearAllMocks();getDashboard.mockReset();loadConversions.mockResolvedValue([]);loadIndex.mockResolvedValue([]);loadFreshness.mockResolvedValue({complete:true,availableDays:365,expectedDays:365,minDate:'2025-09-05',maxDate:'2026-09-04',generatedAt:'2026-09-04T10:00:00Z'})});
+beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(now);vi.clearAllMocks();getDashboard.mockReset();loadConversions.mockResolvedValue([]);loadIndex.mockResolvedValue([]);loadFreshness.mockResolvedValue({complete:true,availableDays:365,expectedDays:365,minDate:'2025-09-05',maxDate:'2026-09-04',generatedAt:'2026-09-04T10:00:00Z'})});
+
+afterEach(()=>{vi.useRealTimers()});
 
 describe('URL verdicts through the lead maturity gate (D3)',()=>{
  it('leaves every affiliate ungated (gate „nicht geprüft“) without leadMaturityFor and never loads conversions',async()=>{

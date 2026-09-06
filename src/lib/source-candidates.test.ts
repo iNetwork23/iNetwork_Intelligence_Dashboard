@@ -152,7 +152,7 @@ describe('lead maturity in the cron (Etappe 3, D3)',()=>{
 describe('cron options: conversions memo, persisted maturity summary, budget grace, maturity counter',()=>{
  it('loads conversions through options.conversionsFor and persists a young summary per affiliate only when asked',async()=>{
   const{buildSourceCandidatesSnapshot}=await import('./source-candidates');
-  const now=new Date();loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','11000','news',{total_click:900,cv:60,profit:-90})]);
+  const now=new Date('2026-09-04T12:00:00Z');loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','11000','news',{total_click:900,cv:60,profit:-90})]);
   const conversionsFor=vi.fn(async()=>[...Array.from({length:12},()=>soi('376',200,{main:'11000',sub:'news',now})),...Array.from({length:48},()=>soi('376',3,{main:'11000',sub:'news',now}))]);
   const snapshot=await buildSourceCandidatesSnapshot(range,{now,conversionsFor,persistMaturity:true});
   expect(conversionsFor).toHaveBeenCalledWith('376',now);expect(loadConversions).not.toHaveBeenCalled();
