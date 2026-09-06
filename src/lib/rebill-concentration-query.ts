@@ -1,6 +1,6 @@
 import type{RebillEvent}from'./rebill-concentration';
 import type{FraudTrafficMode}from'./fraud-control';
-import type{AccessMetadata}from'./rbac';
+import{isScopeRestricted,type AccessMetadata}from'./rbac';
 import{assertAffiliateOptimizerAggregateAccess}from'./service-scopes';
 export type StoredRebillEvent={type:string;lead_id:string|null;converted_at:string;campaign_id:string|null;offer_id:string|null;offer_url_id:string|null;traffic_mode:string|null;source_id?:string|null;sub_source?:string|null;status:string|null};
 const shift=(day:string,days:number)=>new Date(Date.parse(`${day}T00:00:00Z`)+days*86_400_000).toISOString();
@@ -9,4 +9,4 @@ export function rebillQueryChunks(envelope:{from:string;toExclusive:string},days
 export function rebillQuerySegments(envelope:{from:string;toExclusive:string}){return rebillQueryChunks(envelope).flatMap(chunk=>(['first_sale','rebill']as const).map(type=>({...chunk,type})))}
 const trafficModes=new Set<FraudTrafficMode>(['tracked_smartlink','tracked_direct','clickless_api','unknown']);
 export function mapStoredRebillEvent(row:StoredRebillEvent):RebillEvent|null{if((row.type!=='first_sale'&&row.type!=='rebill')||(row.status!==null&&row.status!=='approved')||!trafficModes.has(row.traffic_mode as FraudTrafficMode))return null;return{type:row.type,customerId:row.lead_id?.trim()||null,convertedAt:row.converted_at,campaignId:row.campaign_id||'0',offerId:row.offer_id||'0',offerUrlId:row.offer_url_id||'0',trafficMode:row.traffic_mode as FraudTrafficMode,sourceId:row.source_id?.trim()||'',subSource:row.sub_source?.trim()||''}}
-export function rebillEventsForAccess(events:RebillEvent[],affiliateId:string,access:AccessMetadata){assertAffiliateOptimizerAggregateAccess(access);if(access.role!=='partner')return events;const scopes=access.scopes;if(!scopes.affiliate.length&&!scopes.offer.length&&!scopes.campaign.length)return[];if(scopes.affiliate.length&&!scopes.affiliate.includes(affiliateId))throw new Error('403 · Affiliate-Scope nicht freigegeben');return events.filter(event=>(!scopes.offer.length||scopes.offer.includes(event.offerId))&&(!scopes.campaign.length||scopes.campaign.includes(event.campaignId)))}
+export function rebillEventsForAccess(events:RebillEvent[],affiliateId:string,access:AccessMetadata){assertAffiliateOptimizerAggregateAccess(access);if(!isScopeRestricted(access))return events;const scopes=access.scopes;if(!scopes.affiliate.length&&!scopes.offer.length&&!scopes.campaign.length)return[];if(scopes.affiliate.length&&!scopes.affiliate.includes(affiliateId))throw new Error('403 · Affiliate-Scope nicht freigegeben');return events.filter(event=>(!scopes.offer.length||scopes.offer.includes(event.offerId))&&(!scopes.campaign.length||scopes.campaign.includes(event.campaignId)))}

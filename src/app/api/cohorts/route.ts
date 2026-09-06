@@ -14,6 +14,6 @@ export async function GET(request:NextRequest){
   }catch(error){
     console.error(error);
     const forbidden=error instanceof Error&&error.message.includes('403');
-    return NextResponse.json({error:forbidden?'Scope nicht freigegeben':error instanceof Error?error.message:'Kohorten konnten nicht geladen werden'},{status:forbidden?403:500});
+    return NextResponse.json({error:forbidden?'Scope nicht freigegeben':'Kohorten konnten nicht geladen werden'},{status:forbidden?403:500});
   }
 }

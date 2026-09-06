@@ -40,11 +40,14 @@ export function effectivePermissions(access:AccessMetadata){const source=access.
 export const can=(access:AccessMetadata,permission:Permission)=>access.status==='active'&&effectivePermissions(access).has(permission);
 const ROW_ALIASES:Record<ScopeKey,string[]>={affiliate:['affiliate','affiliate_id','network_affiliate_id'],offer:['offer','offer_id','network_offer_id'],campaign:['campaign','campaign_id','network_campaign_id'],account:['account','account_id','advertiser_id'],source:['source','source_id','source_value'],sub_source:['sub_source','sub_source_id','sub1','sub_source_value']};
 const rowValue=(row:Record<string,unknown>,key:ScopeKey)=>{for(const alias of ROW_ALIASES[key])if(row[alias]!==undefined&&row[alias]!==null)return String(row[alias]);return''};
-export function filterPartnerRows<T extends Record<string,unknown>>(rows:T[],access:AccessMetadata):T[]{if(access.role!=='partner')return rows;if(!SCOPE_KEYS.some(key=>access.scopes[key].length>0))return[];return rows.filter(row=>SCOPE_KEYS.every(key=>access.scopes[key].length===0||access.scopes[key].includes(rowValue(row,key))));}
-export function foreignScopeRequested(access:AccessMetadata,requested:Partial<Record<ScopeKey,string|undefined>>){return access.role==='partner'&&SCOPE_KEYS.some(key=>Boolean(requested[key])&&!access.scopes[key].includes(String(requested[key])));}
-export function scopeFingerprint(access:AccessMetadata){return `${access.role}|${SCOPE_KEYS.map(key=>`${key}:${[...access.scopes[key]].sort().join(',')}`).join('|')}`}
+export const hasDataScopes=(access:AccessMetadata)=>SCOPE_KEYS.some(key=>access.scopes[key].length>0);
+export const isScopeRestricted=(access:AccessMetadata)=>access.role==='partner'||hasDataScopes(access);
+/** Historical name; assigned scopes constrain internal users as well as partners. */
+export function filterPartnerRows<T extends Record<string,unknown>>(rows:T[],access:AccessMetadata):T[]{if(!isScopeRestricted(access))return rows;if(!hasDataScopes(access))return[];return rows.filter(row=>SCOPE_KEYS.every(key=>access.scopes[key].length===0||access.scopes[key].includes(rowValue(row,key))));}
+export function foreignScopeRequested(access:AccessMetadata,requested:Partial<Record<ScopeKey,string|undefined>>){return SCOPE_KEYS.some(key=>Boolean(requested[key])&&(access.role==='partner'||access.scopes[key].length>0)&&!access.scopes[key].includes(String(requested[key])));}
+export function scopeFingerprint(access:AccessMetadata){return `scopes-v2|${access.role}|${SCOPE_KEYS.map(key=>`${key}:${[...access.scopes[key]].sort().join(',')}`).join('|')}`}
 export function assertScopesSupported(access:AccessMetadata,supported:readonly ScopeKey[]){
- if(access.role!=='partner')return;
+ if(!isScopeRestricted(access))return;
  const unsupported=SCOPE_KEYS.filter(key=>access.scopes[key].length>0&&!supported.includes(key));
  if(unsupported.length)throw new Error(`403 · Scope kann nicht sicher ausgewertet werden: ${unsupported.join(', ')}`);
 }

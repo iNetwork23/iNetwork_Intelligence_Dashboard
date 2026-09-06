@@ -305,7 +305,7 @@ function ScopePreview({
           )}
           {!preview.scopesApply && (
             <p className="scopePreviewNote">
-              Datenfreigaben schränken interne Rollen nicht ein; alle Partner bleiben sichtbar.
+              Ohne zugewiesene Datenfreigaben bleiben für interne Rollen alle Partner sichtbar.
             </p>
           )}
           <div className="scopePreviewLists">

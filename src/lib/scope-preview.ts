@@ -1,14 +1,14 @@
-import {filterPartnerRows,parseAccessMetadata,SCOPE_KEYS,STANDARD_ROLES,type ScopeKey,type StandardRole} from './rbac';
+import {filterPartnerRows,isScopeRestricted,parseAccessMetadata,SCOPE_KEYS,STANDARD_ROLES,type ScopeKey,type StandardRole} from './rbac';
 import type {PathRow} from './portfolio';
 
 /**
  * Scope-Vorschau der Access-Konsole (Etappe 4, Abnahme G): Welche Partner und Offers würde ein Zugang mit dieser Rolle und diesen
  * Datenfreigaben sehen? Reine Funktion über die Pfadzeilen eines Portfolios; die Sichtbarkeit entscheidet ausschließlich
- * rbac.filterPartnerRows (Partner: leerer Scope → nichts, jede gesetzte Dimension muss passen; interne Rollen: alles – Scopes
- * schränken sie nicht ein, deshalb `scopesApply:false`). Nur Namen und SOI-Volumen, nie Geldwerte.
+ * rbac.filterPartnerRows (Partner: leerer Scope → nichts, jede gesetzte Dimension muss passen; interne Rollen: zugewiesene Scopes gelten ebenfalls; ohne Scopes
+ * bleibt die interne Sicht uneingeschränkt). Nur Namen und SOI-Volumen, nie Geldwerte.
  */
 export type ScopePreviewEntity={id:string;name:string;sois:number};
-export type ScopePreview={affiliates:ScopePreviewEntity[];offers:ScopePreviewEntity[];paths:number;hidden:{affiliates:number;offers:number};/** Freigabe-Dimensionen, die die Datenseiten nicht auswerten (dort 403 „Scope kann nicht sicher ausgewertet werden“). */unsupported?:Array<'account'|'source'|'sub_source'>;/** false = die Rolle wird durch Datenfreigaben nicht eingeschränkt (interne Rollen). */scopesApply:boolean};
+export type ScopePreview={affiliates:ScopePreviewEntity[];offers:ScopePreviewEntity[];paths:number;hidden:{affiliates:number;offers:number};/** Freigabe-Dimensionen, die die Datenseiten nicht auswerten (dort 403 „Scope kann nicht sicher ausgewertet werden“). */unsupported?:Array<'account'|'source'|'sub_source'>;/** false = interne Rolle ohne zugewiesene Datenfreigaben. */scopesApply:boolean};
 export type ScopePreviewInput={role:StandardRole;scopes:Partial<Record<ScopeKey,string[]>>};
 export const SCOPE_PREVIEW_MAX_JSON=4000;
 
@@ -22,7 +22,7 @@ export function previewScopeEntities(portfolio:{paths:PathRow[]},input:ScopePrev
  const access=parseAccessMetadata({role:input.role,scopes:input.scopes}),all=portfolio.paths.map(rowOf),visible=filterPartnerRows(all,access);
  const affiliates=collect(visible,'affiliate'),offers=collect(visible,'offer');
  const unsupported=(['account','source','sub_source'] as const).filter(key=>(input.scopes[key]?.length??0)>0);
- return{affiliates,offers,paths:visible.length,hidden:{affiliates:collect(all,'affiliate').length-affiliates.length,offers:collect(all,'offer').length-offers.length},scopesApply:access.role==='partner',unsupported};
+ return{affiliates,offers,paths:visible.length,hidden:{affiliates:collect(all,'affiliate').length-affiliates.length,offers:collect(all,'offer').length-offers.length},scopesApply:isScopeRestricted(access),unsupported};
 }
 const own=(v:unknown):v is Record<string,unknown>=>Boolean(v)&&typeof v==='object'&&!Array.isArray(v);
 /** Query-Eingabe der Vorschau: Rolle aus STANDARD_ROLES, Scopes als JSON-Objekt {scopeKey:string[]} mit Längenbegrenzung; alles andere → null. */

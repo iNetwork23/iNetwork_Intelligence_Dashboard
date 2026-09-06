@@ -41,6 +41,24 @@ describe('materialized LTV cohort access',()=>{
   await expect(getLtvCohorts({},access('partner',{account:['acct']}))).rejects.toThrow('403');
   expect(rpc).not.toHaveBeenCalled();
  });
+ it.each(['super_admin','admin','employee','read_only'] as const)('enforces assigned cohort scopes for internal role %s',async role=>{
+  const {getLtvCohorts}=await import('./cohorts');
+  await getLtvCohorts({},access(role,{affiliate:['a1'],offer:['o1'],campaign:['c1'],source:['s1'],sub_source:['ss1']}));
+  expect(rpc).toHaveBeenCalledWith('ltv_cohorts_scoped_v1',{p_affiliate_ids:['a1'],p_offer_ids:['o1'],p_campaign_ids:['c1'],p_source_ids:['s1'],p_sub_sources:['ss1'],p_source:null,p_sub_source:null});
+  expect(rpc).not.toHaveBeenCalledWith('ltv_cohorts_internal_v1',expect.anything());
+ });
+ it('rejects unsupported and foreign internal scopes before a database read',async()=>{
+  const {getLtvCohorts}=await import('./cohorts');
+  await expect(getLtvCohorts({},access('super_admin',{account:['acct']}))).rejects.toThrow('403');
+  await expect(getLtvCohorts({source:'foreign'},access('admin',{source:['own']}))).rejects.toThrow('403');
+  await expect(getLtvCohorts({subSource:'foreign'},access('employee',{sub_source:['own']}))).rejects.toThrow('403');
+  expect(rpc).not.toHaveBeenCalled();
+ });
+ it('allows a filter on an unrestricted dimension while retaining the internal affiliate restriction',async()=>{
+  const {getLtvCohorts}=await import('./cohorts');
+  await getLtvCohorts({source:'s1'},access('employee',{affiliate:['a1']}));
+  expect(rpc).toHaveBeenCalledWith('ltv_cohorts_scoped_v1',expect.objectContaining({p_affiliate_ids:['a1'],p_source:'s1'}));
+ });
 });
 
 describe('refreshLtvCohorts',()=>{
@@ -65,5 +83,18 @@ describe('refreshLtvCohorts',()=>{
   const {refreshLtvCohorts}=await import('./cohorts');
   await expect(refreshLtvCohorts()).rejects.toThrow('läuft bereits');
   expect(upsert).toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({status:'failed'})}),{onConflict:'key'});
+ });
+ it.each([{status:'failed',error:'refresh_timeout'},null,{}, {status:'unexpected'}])('never turns a non-successful SQL response into ready: %j',async data=>{
+  rpc.mockResolvedValue({data,error:null});
+  const {refreshLtvCohorts}=await import('./cohorts');
+  await expect(refreshLtvCohorts()).rejects.toThrow('Supabase LTV refresh');
+  expect(upsert).not.toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({status:'ready'})}),expect.anything());
+  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({status:'failed'})}),{onConflict:'key'});
+ });
+ it('records the actual database refresh time instead of the request start',async()=>{
+  rpc.mockResolvedValue({data:{status:'refreshed',refreshed_at:'2026-09-06T21:41:00Z'},error:null});
+  const {refreshLtvCohorts}=await import('./cohorts');
+  await refreshLtvCohorts();
+  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({refreshed_at:'2026-09-06T21:41:00Z'})}),{onConflict:'key'});
  });
 });

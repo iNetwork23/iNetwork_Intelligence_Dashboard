@@ -52,10 +52,10 @@ describe('scope preview in the access console',()=>{
   expect(s).toContain('String(fd.get(`s:${key}`) || "")');
   expect(s).toContain("name=\"role\"");
  });
- it('explains both edge cases: empty partner scope and non-restricting internal scopes',()=>{
+ it('explains empty partner scope and internal access without assigned scopes',()=>{
   const s=console();
   expect(s).toContain('Leerer Partner-Scope');
-  expect(s).toContain('Datenfreigaben schränken interne Rollen nicht ein');
+  expect(s).toContain('Ohne zugewiesene Datenfreigaben bleiben für interne Rollen alle Partner sichtbar.');
  });
  it('styles the preview with scoped selectors appended to globals.css (no gradients, no animation)',()=>{
   const css=read('src/app/globals.css'),start=css.indexOf('.accessPage .scopePreview');

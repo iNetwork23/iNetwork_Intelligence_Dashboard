@@ -30,7 +30,7 @@ describe('previewScopeEntities – dieselbe Semantik wie rbac.filterPartnerRows'
   expect(narrowed.paths).toBe(1);
   expect(previewScopeEntities(portfolio,{role:'partner',scopes:{affiliate:['999']}}).paths).toBe(0);
  });
- it('internal roles see everything – populated scopes do not restrict them (like filterPartnerRows) and the preview says so',()=>{
+ it('internal roles are unrestricted only when no data scopes are assigned',()=>{
   const all=previewScopeEntities(portfolio,{role:'employee',scopes:{}});
   expect(ids(all.affiliates)).toEqual(['436','154','6']);
   expect(ids(all.offers)).toEqual(['20','21','22']);
@@ -38,8 +38,8 @@ describe('previewScopeEntities – dieselbe Semantik wie rbac.filterPartnerRows'
   expect(all.hidden).toEqual({affiliates:0,offers:0});
   expect(all.scopesApply).toBe(false);
   const scoped=previewScopeEntities(portfolio,{role:'admin',scopes:{affiliate:['154']}});
-  expect(scoped.paths).toBe(4);
-  expect(scoped.scopesApply).toBe(false);
+  expect(scoped.paths).toBe(2);
+  expect(scoped.scopesApply).toBe(true);
  });
  it('never carries money into the preview',()=>{
   noMoney(previewScopeEntities(portfolio,{role:'super_admin',scopes:{}}));

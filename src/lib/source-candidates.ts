@@ -9,7 +9,7 @@ import type{VerdictGate}from'./decision-engine';
 import{resolveActivityCoverage}from'./snapshot-generation';
 import{resolveSourcePeriod}from'./source-period';
 import{aggregateSourceRows,attachSourceActivityFromIndex,attachSourceMaturity,groupSources,leadActivityStatus,mergeSourceWindows,type SourceBreakdownRow,type TrafficLeaf}from'./source-breakdown';
-import{filterPartnerRows,type AccessMetadata}from'./rbac';
+import{filterPartnerRows,isScopeRestricted,type AccessMetadata}from'./rbac';
 import type{ReportRow}from'./portfolio';
 
 /** Accountweite Quell-Kandidaten (Blätter mit Handlungsbedarf) für den Leitstand – im Rollups-Cron je Zeitraum vorberechnet. */
@@ -87,7 +87,7 @@ export async function publishSourceCandidates(range:{from:string;to:string},opti
 export const isValidSourceCandidatesSnapshot=(value:unknown,range:{from:string;to:string}):value is SourceCandidatesSnapshot=>{const s=value as SourceCandidatesSnapshot|undefined;return Boolean(s&&s.version===1&&s.range?.from===range.from&&s.range?.to===range.to&&Array.isArray(s.rows)&&typeof s.generatedAt==='string')};
 const scopedRow=(row:SourceCandidate)=>({row,affiliate_id:row.affiliateId,offer_id:row.offerId,campaign_id:'0',source_id:row.mainValue??'',sub_source:row.subValue??''});
 /** Partner-Scope wie rbac.filterPartnerRows: leerer Scope → keine Zeilen; jede gesetzte Scope-Dimension muss passen. */
-export const scopeSourceCandidates=(rows:SourceCandidate[],access:AccessMetadata)=>access.role==='partner'?filterPartnerRows(rows.map(scopedRow),access).map(x=>x.row):rows;
+export const scopeSourceCandidates=(rows:SourceCandidate[],access:AccessMetadata)=>isScopeRestricted(access)?filterPartnerRows(rows.map(scopedRow),access).map(x=>x.row):rows;
 /** Snapshots vor der Vokabular-Umstellung (D13) tragen noch das alte Urteilswort; beim Lesen wird es angeglichen. */
 const LEGACY_KILL_WORD='AB'+'SCHALTEN';
 export const normalizeSourceCandidatesSnapshot=(snapshot:SourceCandidatesSnapshot):SourceCandidatesSnapshot=>snapshot.rows.some(row=>(row.action as string)===LEGACY_KILL_WORD)?{...snapshot,rows:snapshot.rows.map(row=>(row.action as string)===LEGACY_KILL_WORD?{...row,action:'AUSSCHALTEN'}:row)}:snapshot;
@@ -102,7 +102,7 @@ export async function loadSourceCandidates(range:{from:string;to:string},access:
  if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
  const snapshot=await loadSnapshot(range);
  if(!snapshot)return null;
- return access.role==='partner'?{...snapshot,rows:scopeSourceCandidates(snapshot.rows,access)}:snapshot;
+ return isScopeRestricted(access)?{...snapshot,rows:scopeSourceCandidates(snapshot.rows,access)}:snapshot;
 }
 
 /** Memo für einen Cron-Lauf: Conversions je Partner einmal laden (beide Zeiträume nutzen dieselben 90 Tage); Fehler werden nicht memoisiert. */
