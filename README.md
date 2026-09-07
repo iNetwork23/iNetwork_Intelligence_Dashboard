@@ -5,11 +5,11 @@ Authentifiziertes Everflow-, Smartlink- und Operations-Dashboard mit Supabase-Hi
 ## Release- und Verifikationsstand
 
 - Produktionsalias: `https://wlx-railway-dashboard.vercel.app`.
-- Produktiv verifizierte Anwendungskorrekturen vom 7. September 2026: Commit `6d4422e426ac1e51249f0e7822bc553ba98f3414`, Vercel `dpl_5UjL8PbDxdzMRaCFkog37TXxPoZC`, READY. Alias und ausdrückliches Commitfeld sind aus Vercel zurückgelesen.
+- Zuletzt vor dem Hydrierungs-/Speicherpaket verifizierter Produktionsstand vom 7. September 2026: Commit `222033b728903fdd059f0b143a5ce93425435f9d`, Vercel `dpl_39GpdvuRyQjRAeB5WULtpvTLoip1`, READY. Dieser Eintrag ist ein datierter Snapshot; den aktuellen Alias-/Commitstand führt WLX-000.
 - Die direkte Veröffentlichung erfolgte auf ausdrücklichen Nutzerwunsch; eine separate kostenpflichtige Testumgebung wurde nicht angelegt.
 - Health HTTP 200 (`ok=true`, `dataSource=warm`), Kohorten-API ohne Sitzung HTTP 401. Authentifizierte Kohortenfilter bei 390/768/1440 px produktiv geprüft. Einzelheiten: [Live-Read-back](docs/WLX-LIVE-READBACK-2026-09-07.md).
 - 190 Testdateien / 1588 Tests einschließlich der drei Filter-Navigationsregressionen, Lint, Typecheck und Build bestanden; vollständiger Dependency-Audit ohne Befunde. Die vier zuvor zeitabhängigen Reifetests sind deterministisch; daraus wird kein entsprechender Produktionsfehler abgeleitet.
-- Supabase-Objekte, RLS/Grants, Identitätsconstraint und eine scoped Kohortenstichprobe sind verifiziert. Backfill-/Datenparität, LTV-Timeoutursache, Fraud-Speicherausfall, vollständige Rollen-/Browsermatrix und kontrollierte Providerabläufe bleiben offen.
+- Supabase-Objekte, RLS/Grants, Identitätsconstraint und eine scoped Kohortenstichprobe sind verifiziert. Der LTV-Stundenjob startet noch mit 120 Sekunden statt dem Funktionsbudget von 900 Sekunden; die gezielte Reparatur ist vorbereitet. [Hydrierungs-/Speicherpaket und Abnahmegrenzen](docs/WLX-CLOSURE-2026-09-07.md). Backfill-/Datenparität, vollständige Rollen-/Browsermatrix und kontrollierte Providerabläufe bleiben offen.
 - Historische Ausgangsstände `55448c107965308bba87d8c3196c1502a2943fa9` und `84594ae314401b721a3bc8ba86f53adc89ad8058` sind keine Behauptung des aktuellen Release-Heads. Den endgültigen Alias-/Commitstand einschließlich anschließender Dokumentationscommits führt WLX-000.
 
 Aktuelle Arbeitsgrundlage: [WLX-000](https://app.asana.com/1/1204855960563003/project/1217096669609420/task/1218213413732033). Für jeden Kandidaten sind saubere Installation, Tests, Lint, Typecheck, Build, Audit, Commit/Tree und echte Produktionsprüfungen erneut erforderlich.
@@ -23,6 +23,7 @@ Das Dashboard speichert Everflow-Conversions und tägliche Reporting-Fakten daue
 1. Ein Supabase-Projekt anlegen.
 2. Die Migrationen bis einschließlich `20260729003000_rebill_concentration_index.sql` einzeln in lexikografischer Reihenfolge aus `supabase/migrations/` ausführen und jeden Schritt per Objekt-Read-back bestätigen. Für die nachfolgenden Fraud-, Identity-, Replacement- und LTV-Schritte ausschließlich `docs/FRAUD-CONTROL-MIGRATION-RUNBOOK.md` verwenden; dessen getrennte `CREATE INDEX CONCURRENTLY`-Dateien dürfen nicht in einen gemeinsamen SQL-Editor-Block aufgenommen werden. Abschließend `20260804094837_atomic_metric_window_replacement.sql` und `20260804095726_harden_metric_replacement_timeout.sql` in dieser Reihenfolge anwenden und die RPC-Signatur sowie Funktions-Timeouts über PostgREST/OpenAPI und `pg_proc.proconfig` prüfen.
 3. Den zusätzlichen Leseindex `20260906215000_index_affiliate_conversion_reads.sql` nur nach dem exakten Scope in `docs/WLX-DATABASE-READBACK-2026-09-06.md` und ausdrücklicher Freigabe einzeln über einen Autocommit-Kanal aufbauen. Die Produktions-Migrationshistorie ist leer, obwohl die bisherigen Objekte weitgehend vorhanden sind; niemals pauschal alle Dateien erneut ausführen.
+   `20260907045500_repair_ltv_cron_statement_budget.sql` korrigiert ausschließlich den bestehenden Stundenjob nach Prüfung seines aktuellen Befehls und ausdrücklicher Freigabe. Zeitplan bleibt `25 * * * *`; kein Sofortlauf. Read-back: Jobbefehl, nächster Lauf und `sync_state.ltv_cohorts_materialized` müssen tatsächlich Erfolg bestätigen. Rückweg: `docs/sql/rollback-ltv-cron-statement-budget.sql`.
 4. In Vercel unter **Project → Settings → Environment Variables** setzen:
 
 ```text

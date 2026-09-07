@@ -92,6 +92,12 @@ export type FraudSourceEvaluation={
 
 const pathKey=(value:{source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string})=>value.attributionPath||[value.sourceDimension||'unknown',value.source,value.subSourceDimension||'unknown',value.subSource].join('\u0000');
 const evaluationKey=(value:{affiliateId:string;offerId:string;campaignId:string;offerUrlId:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string})=>[value.affiliateId,value.offerId,value.campaignId,value.offerUrlId,value.trafficMode,pathKey(value)].join('\u0000');
+/** Evaluation totals span the selected days; retain one compact row per exact attribution path. */
+export function accumulateFraudMetric(groups:Map<string,FraudMetricInput>,row:FraudMetricInput){
+ const key=evaluationKey(row),current=groups.get(key);
+ if(!current){groups.set(key,{...row});return}
+ for(const metric of ['clicks','sois','firstSales','rebills','coinEvents','payout','revenue'] as const)current[metric]+=row[metric];
+}
 const coverageKey=(value:{affiliateId:string;offerId:string;trafficMode:FraudTrafficMode;source:string;subSource:string;sourceDimension?:FraudSourceIdentity['sourceDimension'];subSourceDimension?:FraudSourceIdentity['subSourceDimension'];attributionPath?:string})=>[value.affiliateId,value.offerId,value.trafficMode,pathKey(value)].join('\u0000');
 const approved=(row:FraudConversionInput)=>!row.isScrub&&(!row.status||row.status.toLowerCase()==='approved');
 const identityAvailable=(row:FraudConversionInput)=>hasStableCustomerIdentity(row.leadId);

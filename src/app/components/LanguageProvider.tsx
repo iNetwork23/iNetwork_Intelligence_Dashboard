@@ -1,6 +1,6 @@
 'use client';
 
-import {createContext,useCallback,useContext,useEffect,useRef,useState} from 'react';
+import {createContext,useCallback,useContext,useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import {localizeDisplayText,normalizeLocale,persistLocale,translateText,type DashboardLocale} from '@/lib/i18n';
 
 type LanguageContextValue={locale:DashboardLocale;setLocale:(locale:DashboardLocale)=>void};
@@ -35,3 +35,6 @@ export default function LanguageProvider({children}:{children:React.ReactNode}){
  return <LanguageContext.Provider value={{locale,setLocale:applyLocale}}>{children}</LanguageContext.Provider>;
 }
 export function useLanguage(){const value=useContext(LanguageContext);if(!value)throw new Error('useLanguage must be used inside LanguageProvider');return value}
+const subscribeLocale=()=>()=>{};
+/** Server text stays German for the first hydration render, even in a delayed boundary. */
+export function useHydratedLocale(){const context=useContext(LanguageContext);return useSyncExternalStore(subscribeLocale,()=>context?.locale??'de',()=>'de') as DashboardLocale}

@@ -2,7 +2,7 @@ import 'server-only';
 import {unstable_cache} from 'next/cache';
 import {availableSourceSnapshotDays,decodeSourceSnapshotRow,mapAffiliateSourceRows,type SourceSnapshotRow} from './affiliate-source-cache';
 import {fraudConversionFromCacheRecord,fraudMetricFromReportRow} from './fraud-adapters';
-import {conversionsForFraudRange,deriveCoinBaselines,evaluateFraudSources,evaluateStopCompliance,type FraudConversionInput,type FraudStopRequest} from './fraud-control';
+import {accumulateFraudMetric,conversionsForFraudRange,deriveCoinBaselines,evaluateFraudSources,evaluateStopCompliance,type FraudMetricInput,type FraudConversionInput,type FraudStopRequest} from './fraud-control';
 import {applyFraudSourceCompleteness,fraudCutoverCoverage} from './fraud-readiness';
 import {loadFraudBackfillState} from './fraud-backfill-service';
 import {scopeFingerprint,type AccessMetadata} from './rbac';
@@ -21,16 +21,18 @@ export function assertFraudAccess(access:AccessMetadata){if(!canAccessFraud(acce
 async function loadAccountSourceRows(range:{from:string;to:string}){
   const client=getSupabaseAdmin(),markerPrefix='source_day_generation:',markerResult=await client.from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');
   if(markerResult.error)throw new Error(`Supabase Fraud Source-Generationen: ${markerResult.error.message}`);
-  const markers=availableSourceSnapshotDays(range,(markerResult.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}}),{minimumVersion:4}),reportRows:ReturnType<typeof mapAffiliateSourceRows>=[];
+  const markers=availableSourceSnapshotDays(range,(markerResult.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}}),{minimumVersion:4}),metrics=new Map<string,FraudMetricInput>();
   for(const marker of markers){
     const prefix=`source_day:${marker.date}:${marker.generation}:`;
-    for(let start=0;;start+=4000){
-      const pages=await Promise.all([0,1,2,3].map(index=>client.from('sync_state').select('value').gte('key',prefix).lt('key',`${prefix}\uffff`).order('key').range(start+index*1000,start+index*1000+999)));
-      let count=0;for(const page of pages){if(page.error)throw new Error(`Supabase Fraud Source-Snapshots: ${page.error.message}`);count+=(page.data||[]).length;for(const item of page.data||[]){const value=item.value as{affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]};if(Array.isArray(value.rows))reportRows.push(...mapAffiliateSourceRows(value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||'0',value.affiliate_name||'N/A')),marker.date))}}
-      if(count<4000)break;
+    // A snapshot contains many source rows. Bound the response and release each expanded report immediately.
+    for(let start=0;;start+=100){
+      const page=await client.from('sync_state').select('value').gte('key',prefix).lt('key',`${prefix}\uffff`).order('key').range(start,start+99);
+      if(page.error)throw new Error(`Supabase Fraud Source-Snapshots: ${page.error.message}`);
+      for(const item of page.data||[]){const value=item.value as{affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]};if(!Array.isArray(value.rows))throw new Error('Supabase Fraud Source-Snapshot unvollständig');const reports=mapAffiliateSourceRows(value.rows.map(packed=>decodeSourceSnapshotRow(packed,value.affiliate_id||'0',value.affiliate_name||'N/A')),marker.date);for(const report of reports)accumulateFraudMetric(metrics,fraudMetricFromReportRow(report))}
+      if((page.data||[]).length<100)break;
     }
   }
-  return{markers,metrics:reportRows.map(row=>fraudMetricFromReportRow(row))};
+  return{markers,metrics:[...metrics.values()]};
 }
 
 type ConversionCacheRecord=Parameters<typeof fraudConversionFromCacheRecord>[0];
@@ -56,6 +58,6 @@ function joinCoverage(conversions:FraudConversionInput[]){
 const dashboardCache=(range:{from:string;to:string},accessFingerprint:string)=>unstable_cache(async()=>{
   const[sourceData,stops,backfill]=await Promise.all([loadAccountSourceRows(range),loadStops(),loadFraudBackfillState()]),cutover=fraudCutoverCoverage(backfill,range,stops.map(stop=>stop.requestedAt.slice(0,10))),requiredFrom=cutover.requiredFrom,cutoverReady=cutover.ready,conversionFrom=requiredFrom,conversions=cutoverReady?await loadConversions(conversionFrom,range.to):[],analysisConversions=conversionsForFraudRange(conversions,range),baselines={...auditedBaselines,...deriveCoinBaselines(analysisConversions)},rawEvaluations=evaluateFraudSources({metrics:sourceData.metrics,conversions:analysisConversions,baselines}),stopCompliance=cutoverReady?evaluateStopCompliance(stops,conversions):[],expectedDays=calendarDays(range.from,range.to),sourceComplete=sourceData.markers.length===expectedDays,completeness=applyFraudSourceCompleteness(rawEvaluations,sourceComplete),evaluations=completeness.evaluations;
   return{range,generatedAt:new Date().toISOString(),mode:'shadow' as const,writeEnabled:false,writesPerformed:0,evaluations,activeStops:stops,stopCompliance,baselines,coverage:{cutoverReady,backfillPhase:backfill?.phase||'not_started',backfillReadyAt:backfill?.readyAt||null,coveredFrom:backfill?.coveredFrom||null,coveredThrough:backfill?.coveredThrough||null,sourceDaysAvailable:sourceData.markers.length,sourceDaysExpected:expectedDays,sourceComplete,conversionJoin:cutoverReady?joinCoverage(analysisConversions):null},totals:{affiliates:new Set(evaluations.map(row=>row.affiliateId)).size,offers:new Set(evaluations.map(row=>row.offerId)).size,sources:evaluations.length,highRisk:completeness.highRisk,suspicious:completeness.suspicious,stopViolations:cutoverReady?stopCompliance.filter(row=>row.status==='verstoß').length:null}};
-},['fraud-dashboard-v3',range.from,range.to,accessFingerprint],{revalidate:300,tags:['fraud-dashboard','affiliate-source']})();
+},['fraud-dashboard-v4',range.from,range.to,accessFingerprint],{revalidate:300,tags:['fraud-dashboard','affiliate-source']})();
 
 export async function getFraudDashboard(range:{from:string;to:string},access:AccessMetadata){assertFraudAccess(access);assertFraudRange(range);return dashboardCache(range,scopeFingerprint(access))}
