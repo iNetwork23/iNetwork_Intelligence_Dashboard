@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import Module,{createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
+import ts from 'typescript';
+const require=createRequire(import.meta.url);
+require.extensions['.ts']=(m,filename)=>m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
+const legacy=process.argv[2]==='legacy',count=250000,controlPath=path.resolve('src/lib/fraud-control.ts');
+let control;
+if(legacy){const mod=new Module(controlPath);mod.filename=controlPath;mod.paths=Module._nodeModulePaths(path.dirname(controlPath));mod._compile(ts.transpileModule(execFileSync('git',['show','c69afd0b921e1e9f49af4fc0471c6d246ff109c3:src/lib/fraud-control.ts'],{encoding:'utf8'}),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,controlPath);control=mod.exports}else control=require(controlPath);
+const base={date:'2026-09-01',affiliateId:'1',affiliateName:'Partner',offerId:'50',offerName:'Offer',campaignId:'0',campaignName:'Direct',offerUrlId:'5',offerUrlName:'Landing page',trafficMode:'tracked_direct',source:'source',subSource:'leaf',sourceDimension:'source_id',subSourceDimension:'sub5',clicks:2,sois:1,firstSales:0,rebills:0,coinEvents:0,payout:1,revenue:2};
+const groups=new Map();
+for(let i=0;i<count;i++)control.accumulateFraudMetric(groups,{...base,attributionPath:JSON.stringify(['source_id','source','sub1','campaign','sub2',String(i).padStart(36,'0'),'sub3','placement','sub4','variant','sub5','leaf'])});
+function memory(stage){if(global.gc)global.gc();console.log(JSON.stringify({mode:legacy?'legacy':'bounded',stage,count,...process.memoryUsage()}))}
+memory('metrics');
+const context={conversions:[],baselines:{'50':0.03},now:new Date('2026-09-07T00:00:00Z')};
+const result=legacy?{evaluations:control.evaluateFraudSources({...context,metrics:[...groups.values()]})}:require(path.resolve('src/lib/fraud-dashboard-view.ts')).selectFraudDashboardView(control.iterateFraudEvaluations(groups,context),false);
+memory('evaluated');
+const serialized=JSON.stringify(result);
+console.log(JSON.stringify({mode:legacy?'legacy':'bounded',rows:result.evaluations.length,sources:result.totals?.sources??result.evaluations.length,serializedBytes:Buffer.byteLength(serialized)}));
+memory('serialized');

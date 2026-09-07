@@ -141,7 +141,7 @@ describe('FraudBlockCell: Hohes Risiko → Sperre in höchstens zwei Klicks (Abn
 describe('Fraud-Seite: Sperrspalte, Filter und Farben aus dem Vokabular',()=>{
  it('lädt den Sperr-Index fail-closed, rendert die Sperrspalte je Zeile und bietet den Filter „nur ungesperrte“',()=>{
   const page=read('src/app/fraud/page.tsx');
-  for(const marker of['loadBlockIndex()','sourceBlockMarkerIndex(','<FraudBlockCell','name="blocked"','value="open"','isFraudRowOpen(','fraudRowBlockState(','blockIndexError'])expect(page).toContain(marker);
+  for(const marker of['loadBlockIndex()','sourceBlockMarkerIndex(','<FraudBlockCell','name="blocked"','value="open"','fraudRowBlockState(','blockIndexError'])expect(page).toContain(marker);
   expect(page).toContain('<th>Sperre</th>');
   expect(page).not.toContain('everflow-source-blocks');
  });

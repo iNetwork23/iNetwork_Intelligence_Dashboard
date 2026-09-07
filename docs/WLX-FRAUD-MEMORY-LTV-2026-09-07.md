@@ -1,0 +1,30 @@
+# WLX: Fraud-Speicher und genehmigte LTV-Jobkorrektur
+
+## Produktiver Fehler und gezielte Korrektur
+
+A: GET `/fraud?period=30d` ab 2026-09-07 09:57:06 UTC auf Commit `c69afd0b921e1e9f49af4fc0471c6d246ff109c3`, Deployment `dpl_DEPK1q8vA387BeUFKsMqcYsXo6fq`, cache MISS: Vercel meldet, dass die Instanz wegen Speichermangel beendet wurde. Im Browser folgt um 09:57:48 UTC „Connection closed“ und eine nicht ladbare Seite. Frühere Snapshot-SQL-Timeouts bleiben separat dokumentiert.
+
+B: Der bisherige Reader reduziert Tagesmetriken, baut anschließend aber alle umfangreichen Auswertungsobjekte auf und serialisiert sie für den Cache. Erst die Seite begrenzt auf 250 Zeilen. Zusätzlich hält Next 16.2.12 in `dedupe-fetch` ungelesene Kopien von GET-Antworten bis zum Renderende. Ein ausdrücklich übergebenes AbortSignal umgeht diesen Request-Memoization-Pfad; `unstable_cache` allein verhindert ihn nicht. Dies ist im installierten Frameworkcode geprüft, keine globale Cache- oder Datenbankänderung.
+
+Die Korrektur wertet kompakte Gruppen einzeln aus, zählt alle Affiliates/Offers/Quellen und behält höchstens 250 passende Auswertungen. Risiko-, Pfad-, Such- und Sperrfilter werden vor dieser Grenze angewendet. Die bestehende Sortierung, vollständige Summen und die Neutralisierung bei fehlenden Source-Tagen bleiben erhalten. Der Cache enthält nur diese begrenzte Sicht; Zeitraum, Zugriffsfingerprint, Filter und Sperrindexfingerprint trennen die Einträge. Große Snapshot-/Conversion-GETs verwenden ein ausdrückliches Signal, um zurückgehaltene Response-Kopien zu vermeiden. Die SQL-Timeouts bleiben unverändert; Fehler enthalten nun Datum/Seitennummer zur Eingrenzung.
+
+B: Der vor der Änderung ausgeführte Regressionstest liefert 600 statt höchstens 250 Auswertungen und schlägt fehl. Nach der Korrektur bleibt die Gesamtzahl 600, die Anzeige enthält 250; eine Suche findet auch Quelle 599 mit unveränderter Tagessumme. Zusätzliche Vergleiche prüfen komplette/partielle Historie, Reihenfolge inklusive Gleichständen, Risiko-/Pfadfilter, aktive Sperren und fehlenden Sperrindex. Ein Generator prüft 100000 unterschiedliche Pfade, ohne alle Auswertungen aufzubewahren.
+
+B: Lokaler synthetischer Speichervergleich mit 250000 unterschiedlichen Attributionen, Node v25.6.1, `--expose-gc --max-old-space-size=768`, identischem Metrikinput und GC an Messpunkten: alter Auswertungs-/Serialisierungspfad 1317470208 Bytes RSS, begrenzte Sicht 410320896 Bytes RSS (rund 69 % weniger am letzten Messpunkt). Serialisiertes Ergebnis 292250017 gegenüber 304630 Bytes. Beide zählen 250000 Quellen, die Anzeige enthält wie bisher höchstens 250. Dies sind Messpunkte eines lokalen synthetischen Tests, keine behaupteten Vercel-Peaks oder vollständige Produktionsparität. Die Rohdaten-SQL-Abfrage zur Zahl unterschiedlicher produktiver Pfade lief in einen Timeout; daraus wird keine unbekannte Zahl abgeleitet.
+
+Reproduktion im Repository: `node --expose-gc --max-old-space-size=768 scripts/fraud-memory-profile.mjs legacy` und anschließend derselbe Aufruf mit `bounded`. Der Legacy-Modus liest ausschließlich den versionierten Ausgangscode aus Git; keine produktiven Daten oder Secrets.
+
+Prüfstand vor Veröffentlichung: sauberes `npm ci`, 197 Testdateien / 1603 Tests, Typecheck, Produktionsbuild und Diffprüfung bestanden; Audit 0 Schwachstellen. Lint: 0 Fehler, 1 bestehende Warnung für den ungenutzten Mock-Parameter in `sidebar-hydration.test.tsx`.
+
+## Journal der genau einen LTV-Konfigurationsänderung
+
+- Nutzerfreigabe: „okay mach weiter“ nach der ausdrücklichen Frage zur alleinigen bestehenden LTV-Jobkorrektur. Genehmigter Scope: Job 1, Command auf 15-Minuten-Budget; Zeitplan, Aktivstatus und übrige Jobs unverändert; kein manueller Refresh oder Backfill.
+- Unmittelbarer Preview: `wlx-ltv-cohorts-hourly`, Job 1, aktiv, `25 * * * *`, Befehl `select public.refresh_ltv_cohorts_v1();`. Funktionsbudget 900 Sekunden, bisheriges äußeres Budget 120 Sekunden; letzter Zustand `failed / refresh_timeout` um 09:27 UTC.
+- Erster Versuch endete vor einer Änderung mit `permission denied for table job` beim direkten `FOR UPDATE`. Read-back bestätigte unveränderten Befehl und keinen Migrationseintrag. Keine Rechteänderung ausgeführt.
+- Korrigierte Migration verwendet einen Transaktions-Advisory-Lock zur Serialisierung mit dem Rückweg und die für den bestehenden Jobbesitzer verfügbare `cron.alter_job`-API. Ausgangsbefehl wird weiterhin exakt geprüft. [Offizielle pg_cron-Bedienung](https://supabase.com/docs/guides/cron/quickstart).
+- Ausführung bestätigt am **2026-09-07 09:52:57 UTC**. Supabase-Historie: Version **20260907095257**, Name `repair_ltv_cron_statement_budget`. Repositorydatei wurde von der Preview-ID 20260907045500 auf diese tatsächliche Version umbenannt, ohne erneute Datenbankausführung.
+- Read-back: Job 1 aktiv, Zeitplan unverändert `25 * * * *`; Befehl exakt `set statement_timeout = '15min';` plus echter Zeilenumbruch und `select public.refresh_ltv_cohorts_v1();`. Kein literales Backslash-n. Kein zusätzlicher Job und kein Sofortlauf.
+- Rückweg: `docs/sql/rollback-ltv-cron-statement-budget.sql` prüft exakt den Reparaturbefehl und verwendet denselben Lock sowie `cron.alter_job`. Er wurde auf Rechte und Bedingung geprüft, aber nicht ausgeführt, da die genehmigte Reparatur aktiv bleiben soll.
+- Nächster regulärer Lauf: **10:25 UTC / 12:25 Berlin**. Zum Erstellen dieses Journals steht sein Ergebnis noch aus. `cron.job_run_details.status = succeeded` allein genügt nicht: Die Refreshfunktion fängt Fehler ab; entscheidend ist `sync_state.ltv_cohorts_materialized` mit tatsächlichem Erfolg und neuem Aktualisierungszeitpunkt.
+
+Kein zusätzlicher Index, kein globaler Timeout, kein manueller Backfill/Refresh, keine Rollen-/Provider-/Deal-/Pushänderung. Der genaue Folge-SHA, Build, Browserlauf und das planmäßige Refresh-Ergebnis werden nach Veröffentlichung in WLX-000/WLX-006 und im externen Prüfbericht zurückgelesen. Unabhängiger Review und vollständige Rollen-/Datenparität bleiben eigene Abnahmekriterien.

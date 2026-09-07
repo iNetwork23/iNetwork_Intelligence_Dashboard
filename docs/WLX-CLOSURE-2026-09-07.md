@@ -12,9 +12,9 @@ Ausgangsstand: 222033b728903fdd059f0b143a5ce93425435f9d, produktiv als dpl_39Gpd
 
 Read-back 2026-09-07 etwa 04:49 UTC: Die Funktion refresh_ltv_cohorts_v1 hat statement_timeout=900s. Der bestehende Stundenjob (jobid 1) führt nur `select public.refresh_ltv_cohorts_v1();` aus. Das äußere Statement startet mit 120s. Die letzten drei Läufe endeten jeweils nach etwa 120 Sekunden; der Cron-Aufruf selbst meldete succeeded, während sync_state den abgefangenen Fehler refresh_timeout enthält. Cron-succeeded allein belegt daher keinen erfolgreichen Refresh.
 
-Vorbereitete Migration: `supabase/migrations/20260907045500_repair_ltv_cron_statement_budget.sql`. Sie prüft den unveränderten Ausgangsbefehl und ändert ausschließlich den Stundenjob auf ein vorangestelltes 15-Minuten-Statementbudget. Kein neuer Job, kein geänderter Stundenplan und kein manueller Refresh/Backfill. Das längere Budget kann beim nächsten planmäßigen Lauf längere Datenbanklast verursachen. Der Rückweg prüft den Reparaturbefehl und setzt nur diesen zurück.
+Vorbereitete Migration: `supabase/migrations/20260907095257_repair_ltv_cron_statement_budget.sql`. Sie prüft den unveränderten Ausgangsbefehl und ändert ausschließlich den Stundenjob auf ein vorangestelltes 15-Minuten-Statementbudget. Kein neuer Job, kein geänderter Stundenplan und kein manueller Refresh/Backfill. Das längere Budget kann beim nächsten planmäßigen Lauf längere Datenbanklast verursachen. Der Rückweg prüft den Reparaturbefehl und setzt nur diesen zurück.
 
-Status bei Erstellung dieses Dokuments: ausdrückliche Freigabe angefragt; Migration nicht ausgeführt. Der aktuelle Freigabe-, Ausführungs- und Refresh-Read-back wird in WLX-006, der bestehenden Fraud-/Backfill-Aufgabe und dem externen Prüfbericht geführt.
+Historischer Status bei Erstellung: Freigabe angefragt. Aktualisierung 7. September 09:52:57 UTC: Nutzerfreigabe erteilt und genau diese Jobkorrektur angewendet. Die Datei trägt jetzt die tatsächlich registrierte Supabase-Version 20260907095257. Ausführungsjournal und nächste reguläre Laufprüfung: [Fraud-/LTV-Nachweis](WLX-FRAUD-MEMORY-LTV-2026-09-07.md), WLX-006 und externer Prüfbericht.
 
 ## Aufgabenabschluss
 
