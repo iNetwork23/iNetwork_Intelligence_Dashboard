@@ -22,7 +22,7 @@ Die Geldwerte stimmen nach Rundung auf Cent überein. Dies belegt den Zeitraumfi
 
 Bei echten 390×844 CSS-Pixeln liefen Jahresumsatz und First-Sales-/Rebill-Zahl über ihre zweispaltigen Kennzahlenkarten. DOM-Messung: 135 Pixel Inhaltsbreite, 152 bzw. 165 Pixel Textbreite. Große Median-Deltas ragten ebenfalls über den mobilen Tabellenkartenrand.
 
-Unter 560 Pixeln stehen die Kennzahlen jetzt in einer Spalte. Lange Werte und Median-Deltas dürfen umbrechen. Desktop-/Tablet-Layout und Kennzahlenberechnung bleiben gleich. Der anfänglich direkt nach Viewportwechsel gemessene Body-Überlauf war vorübergehend; nach Layoutabschluss lagen Body und Dokument bei 379 Pixeln. Die Korrektur begründet sich auf dem reproduzierten Textüberlauf innerhalb der Karten.
+Unter 560 Pixeln stehen die Kennzahlen jetzt in einer Spalte. Lange Werte und Median-Deltas dürfen umbrechen. Die folgende Prüfung auf `a1bc445` bestätigte die mobile Korrektur, zeigte jedoch auch im fünffachen Desktop-Raster zu breite Jahreswerte: 173 Pixel Inhaltsbreite bei 182 bzw. 198 Pixel Textbreite. Die Schriftgröße der Kennzahlen richtet sich deshalb zusätzlich zwischen 18 und 24 Pixeln nach der verfügbaren Kartenbreite. Desktop-/Tablet-Raster und Kennzahlenberechnung bleiben gleich. Der anfänglich direkt nach Viewportwechsel gemessene Body-Überlauf war vorübergehend; nach Layoutabschluss lagen Body und Dokument bei 379 Pixeln. Die Korrektur begründet sich auf dem reproduzierten Textüberlauf innerhalb der Karten.
 
 ## Grenzprüfungen
 

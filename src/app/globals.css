@@ -649,6 +649,7 @@ a.blockMarker:hover,a.blockMarker:focus-visible{background:var(--fill-hover);tex
 /* Etappe 4 (W): Betrag je SOI, Median-Vergleich je Zeile, Konzentrations-Kachel – nur Tokens, keine Verläufe/Animationen */
 .medianDelta{display:block;margin-top:3px;color:var(--text-muted);font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .medianDelta.up{color:var(--positive)}.medianDelta.down{color:var(--negative)}
+.kpi{container-type:inline-size}.kpi strong{font-size:clamp(18px,11cqi,24px);white-space:normal;overflow-wrap:anywhere}
 @media(max-width:560px){.kpis{grid-template-columns:minmax(0,1fr)}.kpi.hero{grid-column:auto}.kpi strong{white-space:normal;overflow-wrap:anywhere}.performanceTable .medianDelta{white-space:normal;overflow-wrap:anywhere;max-width:100%}}
 .medianReason{display:block;margin-top:2px;color:var(--text-muted);font-size:10px;font-weight:500;white-space:normal}
 .concentration{display:block;margin-top:10px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);color:inherit;text-decoration:none;min-width:0}
