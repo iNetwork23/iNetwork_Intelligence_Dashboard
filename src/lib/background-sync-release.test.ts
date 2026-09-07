@@ -44,10 +44,10 @@ describe('automatic Supabase reporting refresh',()=>{
   const supabase=read('src/lib/supabase.ts');
   expect(supabase).toContain('prunePortfolioRangeSnapshots');
   expect(supabase).toContain('await prunePortfolioRangeSnapshots(rangeRecords)');
-  expect(supabase).toContain('value:{version:4,date:day');
-  expect(supabase).toContain('const marker={version:4,date:day,generation}');
-  expect(read('src/lib/cached-evaluations.ts')).toContain('{minimumVersion:4}');
-  expect(read('src/lib/fraud-service.ts')).toContain('{minimumVersion:4}');
+  expect(supabase).toContain('value:{version:5,timezoneId:56,date:day');
+  expect(supabase).toContain('const marker={version:5,timezoneId:56,date:day,generation}');
+  expect(read('src/lib/cached-evaluations.ts')).toContain('{minimumVersion:5}');
+  expect(read('src/lib/fraud-service.ts')).toContain('{minimumVersion:5}');
   expect(route).toContain("runtime='nodejs'");
   const rollups=read('src/app/api/sync/rollups/route.ts');
   expect(rollups).toContain('CRON_SECRET');

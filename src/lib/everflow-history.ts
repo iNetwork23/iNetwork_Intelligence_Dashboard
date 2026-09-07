@@ -1,3 +1,4 @@
+import {EVERFLOW_BERLIN_TIMEZONE_ID} from './everflow-timezone';
 import 'server-only';
 import type {EverflowConversion,ReportRow} from './history-cache';
 import {conversionReportBody,loadDailyReportSlices} from './history-cache';
@@ -27,7 +28,7 @@ async function request<T>(url:string,body:unknown,apiKey:string,fetcher:Fetcher)
 }
 
 export const everflowEntityReportBody=(from:string,to:string,affiliateId?:string,offerId?:string)=>({
-  timezone_id:80,
+  timezone_id:EVERFLOW_BERLIN_TIMEZONE_ID,
   currency_id:'EUR',
   columns:['affiliate','offer','campaign','offer_url','source_id','sub1','sub2','sub3','sub4','sub5'].map(column=>({column})),
   query:{filters:[...(affiliateId?[{resource_type:'affiliate',filter_id_value:affiliateId}]:[]),...(offerId?[{resource_type:'offer',filter_id_value:offerId}]:[])],exclusions:[],metric_filters:[],settings:{}} as Record<string,unknown>,

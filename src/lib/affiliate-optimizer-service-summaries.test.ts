@@ -35,7 +35,7 @@ describe('overview gating through persisted lead-maturity summaries (Rollups-Cro
   expect(rec('412','4')).toMatchObject({action:'AUSSCHALTEN',gate:{matureSois:70,totalSois:70,latencyConfidence:'hoch'}});
   expect(rec('500','9')).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten'}});
   expect(loadConversions).not.toHaveBeenCalled();
-  expect(likeSpy).toHaveBeenCalledWith('key','lead\\_maturity:v1:%');
+  expect(likeSpy).toHaveBeenCalledWith('key','lead\\_maturity:berlin-v5:%');
  });
  it('rejects stale summaries (older than two hours) without restoring switch-off verdicts',async()=>{
   summaryRows.mockResolvedValue({data:[{value:{...summary('376',{'8|1':20}),generatedAt:new Date(Date.now()-3*60*60_000).toISOString()}}],error:null});

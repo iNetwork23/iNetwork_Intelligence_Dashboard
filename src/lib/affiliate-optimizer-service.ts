@@ -1,3 +1,4 @@
+import {assertBerlinReportingRange} from './berlin-reporting-contract';
 import{unstable_cache}from'next/cache';
 import{getDashboard}from'./dashboard-service';
 import{DAILY_SERIES_MAX_DAYS,loadPortfolioDailyVariantProfitFromCache,rangeDayCount,type ReportingPeriod}from'./supabase-reporting';
@@ -26,7 +27,7 @@ export async function getAffiliateOptimizations(period:ReportingPeriod='30d',cus
 }
 
 /** Reife-Index je Partner und Zeitraum (300 s); Ladefehler → „keine Daten“ (fail-closed in der Engine), wirft nie. */
-const maturityWindow=(affiliateId:string,range:{from:string;to:string}):Promise<LeadMaturityIndex>=>unstable_cache(async()=>{const now=new Date(),rows=await loadAffiliateConversionsFromCache(affiliateId,90,now);return buildLeadMaturityIndex(rows,analyzeLeadLatency(rows,now),range,now)},['affiliate-lead-maturity-v2',affiliateId,range.from,range.to],{revalidate:300,tags:['affiliate-source',`affiliate-latency-${affiliateId}`,`affiliate-source-${affiliateId}`]})().catch((error:unknown)=>{console.error(`Lead maturity unavailable for affiliate ${affiliateId}`,error);return noLeadMaturityIndex(range)});
+const maturityWindow=(affiliateId:string,range:{from:string;to:string}):Promise<LeadMaturityIndex>=>unstable_cache(async()=>{const now=new Date(),rows=await loadAffiliateConversionsFromCache(affiliateId,90,now);return buildLeadMaturityIndex(rows,analyzeLeadLatency(rows,now),range,now)},['affiliate-lead-maturity-v2-berlin-v5',affiliateId,range.from,range.to],{revalidate:300,tags:['affiliate-source',`affiliate-latency-${affiliateId}`,`affiliate-source-${affiliateId}`]})().catch((error:unknown)=>{console.error(`Lead maturity unavailable for affiliate ${affiliateId}`,error);return noLeadMaturityIndex(range)});
 export async function getAffiliateLeadMaturity(affiliateId:string,range:{from:string;to:string},access:AccessMetadata):Promise<LeadMaturityIndex>{
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
  assertScopesSupported(access,['affiliate']);
@@ -59,7 +60,7 @@ export const loadLeadYoungSummaries=():Promise<Record<string,LeadYoungSummary>>=
  const out:Record<string,LeadYoungSummary>={};
  for(const item of data||[]){const value=(item as{value:unknown}).value;if(isLeadYoungSummary(value))out[value.affiliateId]=value}
  return out;
-},['lead-maturity-summaries-v1'],{revalidate:300,tags:['lead-maturity']})().catch((error:unknown)=>{console.error('Lead maturity summaries unavailable',error);return{} as Record<string,LeadYoungSummary>});
+},['lead-maturity-summaries-v1-berlin-v5'],{revalidate:300,tags:['lead-maturity']})().catch((error:unknown)=>{console.error('Lead maturity summaries unavailable',error);return{} as Record<string,LeadYoungSummary>});
 /** Gate für alle sichtbaren Partner: der gewählte Partner (options.leadMaturityFor) bekommt den frischen Index aus seinen Conversions, alle anderen die Kurzfassung des letzten Rollups – nur wenn das Fenster heute enthält und der Rollup höchstens zwei Stunden alt ist; sonst greift derselbe fail-closed Zustand wie bei nicht ladbaren Conversions. */
 async function gateAffiliates<T extends AffiliateAnalysis>(analyses:T[],range:{from:string;to:string},access:AccessMetadata,options?:LeadMaturityOptions,now=new Date()):Promise<T[]>{
  if(!analyses.length)return analyses;
@@ -68,7 +69,7 @@ async function gateAffiliates<T extends AffiliateAnalysis>(analyses:T[],range:{f
  return analyses.map(a=>{if(selectedIndex&&a.affiliateId===selectedId)return gateAffiliateAnalysis(a,selectedIndex);const summary=summaries[a.affiliateId];return summary&&summaryAppliesTo(summary,range,now)?gateAffiliateAnalysis(a,resolverFromSummary(summary)):gateAffiliateAnalysis(a,noLeadMaturityIndex(range,now))});
 }
 
-const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();
+const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1-berlin-v5',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();
 // Immutable daily snapshots are already persisted. Cache their aggregated
 // consumers below, not this expanded metadata-heavy intermediate (>2 MB live).
 const sourceWindow=async(affiliateId:string,range:{from:string;to:string},access:AccessMetadata)=>sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access);
@@ -76,7 +77,7 @@ const sourceEvaluation=(affiliateId:string,range:{from:string;to:string},activit
  // Aktivität kommt aus dem persistierten Index (eine kleine Abfrage) statt aus 365 Tages-Snapshots; die Reife (D3) aus den Conversions des Partners.
  const [selected,index,freshness,maturity]=await Promise.all([sourceWindow(affiliateId,range,access),loadAffiliateActivityIndex(affiliateId,activityRange),freshnessWindow(activityRange),maturityWindow(affiliateId,range)]);
  return attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows(selected,selected,selected),index,resolveActivityCoverage(activityRange.from,freshness)),maturity);
-},['affiliate-source-evaluation-v8',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source']})();
+},['affiliate-source-evaluation-v8-berlin-v5',affiliateId,range.from,range.to,activityRange.from,activityRange.to,scopeFingerprint(access)],{revalidate:300,tags:[`affiliate-source-${affiliateId}`,'affiliate-source']})();
 
 export async function getAffiliateSourceBreakdown(affiliateId:string,range:{from:string;to:string},access:AccessMetadata,now=new Date()){
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
@@ -103,7 +104,7 @@ export async function getAffiliateSourceFreshness(range:{from:string;to:string})
 export const getAffiliateLeadLatency=(affiliateId:string,access:AccessMetadata)=>{
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
  assertScopesSupported(access,['affiliate']);
- return unstable_cache(async()=>analyzeLeadLatency(await loadAffiliateConversionsFromCache(affiliateId,90)),['affiliate-lead-latency-cache',affiliateId,scopeFingerprint(access),'90d'],{revalidate:900,tags:[`affiliate-latency-${affiliateId}`]})();
+ return unstable_cache(async()=>analyzeLeadLatency(await loadAffiliateConversionsFromCache(affiliateId,90)),['affiliate-lead-latency-cache-berlin-v5',affiliateId,scopeFingerprint(access),'90d'],{revalidate:900,tags:[`affiliate-latency-${affiliateId}`]})();
 };
 
 const NO_COMPARISON:TrendVerdict={status:'insufficient',reason:'Kein Vergleichszeitraum in der 365-Tage-Historie'};
@@ -116,7 +117,7 @@ async function optimizationsWithTrend(period:ReportingPeriod,custom:{from:string
  const comparable=period!=='12m'&&period!=='all',prev=comparable?previousWindow(range.from,range.to):null;
  // Vorfenster ist historisch: eigener Langzeit-Cache statt der 60s des Live-Portfolios,
  // und parallel zum Hauptfenster geladen statt danach.
- const previousPortfolioCached=prev?unstable_cache(()=>getDashboard('custom',prev,access),['affiliate-trend-previous-v1',prev.from,prev.to,scopeFingerprint(access)],{revalidate:3600,tags:['supabase-portfolio']}):null;
+ const previousPortfolioCached=prev?unstable_cache(()=>getDashboard('custom',prev,access),['affiliate-trend-previous-v1-berlin-v5',prev.from,prev.to,scopeFingerprint(access)],{revalidate:3600,tags:['supabase-portfolio']}):null;
  const[current,previousPortfolio]=await Promise.all([getDashboard(period,custom,access),previousPortfolioCached?previousPortfolioCached():Promise.resolve(null)]);
  const analyses=analyzeAffiliateTraffic(current);
  if(!previousPortfolio)
@@ -129,6 +130,7 @@ async function optimizationsWithTrend(period:ReportingPeriod,custom:{from:string
 /** Jüngster SOI-Tag je Affiliate im Zeitraum — für die "Letzter Lead"-Badges der Partnerlisten. */
 export function getAffiliateLastLeadDates(range:{from:string;to:string}){
  return unstable_cache(async()=>{
+  await assertBerlinReportingRange(getSupabaseAdmin(),range);
   const rows:Array<{affiliate_id:string;metric_date:string;sois:number|string}>=[];
   for(let start=0;;start+=1000){
    const{data,error}=await getSupabaseAdmin().from('daily_metrics').select('affiliate_id,metric_date,sois').gt('sois',0).gte('metric_date',range.from).lte('metric_date',range.to).order('metric_date',{ascending:false}).order('id').range(start,start+999);
@@ -138,7 +140,7 @@ export function getAffiliateLastLeadDates(range:{from:string;to:string}){
    if(rows.length>=20000)break;
   }
   return Object.fromEntries(lastLeadByAffiliate(rows));
- },['affiliate-last-lead-v1',range.from,range.to],{revalidate:300,tags:['supabase-portfolio']})();
+ },['affiliate-last-lead-v1-berlin-v5',range.from,range.to],{revalidate:300,tags:['supabase-portfolio']})();
 }
 
 /** Etappe 3: Tagesprofit je Tracker-Kandidat des Partners (Schlüssel wie candidateItemKey) für Sparklines – nur Fenster ≤ 45 Tage, 300 s gecacht, wirft bei fremdem Scope. */
@@ -152,10 +154,10 @@ export async function getAffiliateDailyByKey(affiliateId:string,range:{from:stri
   const dates=dateRange(range.from,range.to),points:Array<{date:string;key:string;value:number}>=[];
   for(const[date,dayRows]of byDate)for(const leaf of aggregateSourceRows(dayRows))points.push({date,key:candidateDailyKey(leaf),value:leaf.metric.profit});
   return dailySeriesByKey(points,dates);
- },['affiliate-daily-by-key-v1',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
+ },['affiliate-daily-by-key-v1-berlin-v5',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
 }
 /** Etappe 3: Tagesprofit je Direkt-Variante aller sichtbaren Partner (Cockpit-Sparklines), 300 s gecacht; undefined für Fenster > 45 Tage oder ohne lückenlose Tages-Snapshots. */
 export async function getPortfolioDailyByVariant(range:{from:string;to:string},access:AccessMetadata):Promise<DailyByKey|undefined>{
  if(!range.from||!range.to||rangeDayCount({from:range.from,to:range.to})>DAILY_SERIES_MAX_DAYS)return undefined;
- return unstable_cache(()=>loadPortfolioDailyVariantProfitFromCache(getSupabaseAdmin(),{from:range.from,to:range.to,label:''},access),['portfolio-daily-variant-v1',range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['supabase-portfolio']})();
+ return unstable_cache(()=>loadPortfolioDailyVariantProfitFromCache(getSupabaseAdmin(),{from:range.from,to:range.to,label:''},access),['portfolio-daily-variant-v1-berlin-v5',range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['supabase-portfolio']})();
 }

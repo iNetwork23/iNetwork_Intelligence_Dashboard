@@ -10,7 +10,7 @@ vi.mock('./supabase', () => ({getSupabaseAdmin: () => ({from: () => {
     in: (_field: string, values: string[]) => {keys = values; return query;},
     abortSignal: (signal: AbortSignal) => {state.signals.push(signal); return query;},
     then: async (resolve: (value: unknown) => unknown) => {
-      if (!keys) return resolve({data: Array.from({length: 19}, (_, i) => ({value: {version: i === 18 ? 3 : 4, date: day(i + 1), generation: `g${i + 1}`}})), error: null});
+      if (!keys) return resolve({data: Array.from({length: 19}, (_, i) => ({value: {version: i === 18 ? 4 : 5, timezoneId: 56, date: day(i + 1), generation: `g${i + 1}`}})), error: null});
       state.batches.push(keys);
       state.active++;
       state.peak = Math.max(state.peak, state.active);

@@ -1,3 +1,5 @@
+import {berlinRangeUtcBounds} from './reporting-day';
+import {EVERFLOW_BERLIN_TIMEZONE_ID} from './everflow-timezone';
 export type SyncPhase='backfill'|'rolling';
 export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null;last_hot_at?:string|null;snapshot_version?:number};
 export type SyncWindow={mode:SyncPhase;from:string;to:string};
@@ -29,7 +31,7 @@ export type DailyMetricRow={
 };
 
 const DAY=86_400_000;
-const SOURCE_SNAPSHOT_VERSION=4;
+const SOURCE_SNAPSHOT_VERSION=5;
 const isoDay=(value:Date)=>value.toISOString().slice(0,10);
 const berlinDay=(value:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
 const fromDay=(value:string)=>new Date(`${value}T12:00:00Z`);
@@ -70,7 +72,7 @@ export function advanceSyncState(state:SyncState,window:SyncWindow,now=new Date(
 
 const text=(value:unknown)=>value===undefined||value===null||value===''?null:String(value);
 const amount=(value:unknown)=>Number.isFinite(Number(value))?Number(value):0;
-export function conversionReportBody(from:string,to:string,affiliateId?:string){if(affiliateId!==undefined&&!/^\d+$/.test(affiliateId))throw new Error('Ungültige Affiliate-ID');return{from,to,timezone_id:80,currency_id:'EUR',show_conversions:true,show_events:true,query:{filters:affiliateId?[{resource_type:'affiliate',filter_id_value:affiliateId}]:[],search_terms:[]}}}
+export function conversionReportBody(from:string,to:string,affiliateId?:string){if(affiliateId!==undefined&&!/^\d+$/.test(affiliateId))throw new Error('Ungültige Affiliate-ID');return{from,to,timezone_id:EVERFLOW_BERLIN_TIMEZONE_ID,currency_id:'EUR',show_conversions:true,show_events:true,query:{filters:affiliateId?[{resource_type:'affiliate',filter_id_value:affiliateId}]:[],search_terms:[]}}}
 
 export function conversionToCacheRow(row:EverflowConversion):ConversionCacheRow|null{
   const normalized=row.event.trim().toLowerCase();
@@ -116,7 +118,12 @@ export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:
   let rawConversions:EverflowConversion[],reports:{base:ReportRow[];events:ReportRow[]};
   if(input.includeConversions===false){rawConversions=[];reports=await input.loadReports(input.from,input.to)}else{const[conversionResult,reportResult]=await Promise.allSettled([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);if(conversionResult.status==='rejected')throw conversionResult.reason;if(reportResult.status==='rejected')throw reportResult.reason;rawConversions=conversionResult.value;reports=reportResult.value}
   const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events,input.includeConversions===false?undefined:rawConversions);
-  await input.store.upsertConversions(conversions);if(input.store.replaceMetrics)await input.store.replaceMetrics(input.from,input.to,metrics);else await input.store.upsertMetrics(metrics);
+  const bounds=berlinRangeUtcBounds(input.from,input.to);
+  if(conversions.some(row=>row.converted_at<bounds.from||row.converted_at>=bounds.toExclusive)||metrics.some(row=>row.metric_date<input.from||row.metric_date>input.to))throw new Error('Providerdaten außerhalb des Berlin-Berichtszeitraums');
+  if(metrics.some(row=>['id','affiliate_id','offer_id','campaign_id','offer_url_id'].some(field=>!String(row[field as keyof DailyMetricRow]??'').trim())))throw new Error('Unvollständige Metrikdimensionen im Berlin-Berichtszeitraum');
+  await input.store.upsertConversions(conversions);
+  if(input.store.replaceMetrics){for(let from=input.from;from<=input.to;from=shift(from,3)){const to=shift(from,2)<input.to?shift(from,2):input.to;await input.store.replaceMetrics(from,to,metrics.filter(row=>row.metric_date>=from&&row.metric_date<=to))}}
+  else await input.store.upsertMetrics(metrics);
   return{conversions,metrics};
 }
 

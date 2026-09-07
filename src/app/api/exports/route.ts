@@ -1,3 +1,4 @@
+import {assertBerlinReportingRange} from '@/lib/berlin-reporting-contract';
 import {NextRequest,NextResponse} from 'next/server';
 import {requirePermission} from '@/lib/session';
 import {audit,requestEvidence} from '@/lib/access-store';
@@ -17,6 +18,7 @@ export async function GET(request:NextRequest){
  const granularity=parseExportGranularity(params.get('granularity'));if(granularity===null)return NextResponse.json({error:'granularity ist ungültig (day oder month)'},{status:400,headers:securityHeaders});
  const from=params.get('from'),to=params.get('to'),filters={from,to,affiliate:requested.affiliate,offer:requested.offer,campaign:requested.campaign,source:requested.source,sub_source:requested.sub_source} satisfies ExportFilters,partnerScopes=auth.user.access.role==='partner'?(Object.values(auth.user.access.scopes).some(values=>values.length)?auth.user.access.scopes:{affiliate:['__no_scope__']}):undefined;
  /* Kappung (Etappe 4): Supabase kappt per max-rows (Default 1000) unabhängig vom eigenen Limit; count:'exact' macht das sichtbar. granularity=month liest seitenweise und summiert je Monat und Dimension. */
+ try{await assertBerlinReportingRange(getSupabaseAdmin(),{from,to})}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Berlin-Tagesdaten nicht verfügbar'},{status:503,headers:securityHeaders})}
  let data:ExportRow[],truncated:boolean,cappedAt:number;
  if(granularity==='month'){const monthly=await loadMonthlyExportRows(getSupabaseAdmin() as never,filters,partnerScopes);if(monthly.error)return NextResponse.json({error:'Export konnte nicht erstellt werden'},{status:500,headers:securityHeaders});data=monthly.rows;truncated=monthly.truncated;cappedAt=monthly.dailyRows}
  else{const query=buildDailyMetricsExportQuery(getSupabaseAdmin() as never,filters,partnerScopes);const result=await query;if(result.error)return NextResponse.json({error:'Export konnte nicht erstellt werden'},{status:500,headers:securityHeaders});data=(result.data||[]) as ExportRow[];truncated=exportTruncated(result);cappedAt=data.length}

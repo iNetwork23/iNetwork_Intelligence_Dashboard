@@ -12,7 +12,7 @@ vi.mock('./supabase',()=>({getSupabaseAdmin:()=>({from})}));
 
 const read=(path:string)=>readFileSync(join(process.cwd(),'src',path),'utf8');
 const now=new Date('2026-09-03T12:20:00Z');
-const rolling:SyncState={phase:'rolling',backfill_start:'2025-09-04',next_end:'2025-09-04',last_success_at:'2026-09-03T12:17:00Z',last_hot_at:'2026-09-03T12:17:00Z',snapshot_version:3};
+const rolling:SyncState={phase:'rolling',backfill_start:'2025-09-04',next_end:'2025-09-04',last_success_at:'2026-09-03T12:17:00Z',last_hot_at:'2026-09-03T12:17:00Z',snapshot_version:5};
 
 describe('deriveDataStatus',()=>{
  it('reports a fresh rolling sync with today as a partial day',async()=>{
@@ -43,16 +43,16 @@ describe('deriveDataStatus',()=>{
  });
  it('derives backfill progress from backfill_start and next_end',async()=>{
   const {deriveDataStatus,headerStatus,describeDataStatus}=await import('./data-status');
-  const status=deriveDataStatus({phase:'backfill',backfill_start:'2025-09-04',next_end:'2026-02-03',last_success_at:'2026-09-03T12:10:00Z'},now);
+  const status=deriveDataStatus({snapshot_version:5,phase:'backfill',backfill_start:'2025-09-04',next_end:'2026-02-03',last_success_at:'2026-09-03T12:10:00Z'},now);
   expect(status).toMatchObject({phase:'backfill',backfillDone:212,backfillTotal:365,todayPartial:false,level:'ok'});
   expect(headerStatus(status)).toEqual({label:'Backfill 212/365',tone:'neutral'});
   expect(describeDataStatus(status).primary).toBe('Backfill 212/365 Tage · heute alle 6 h');
-  expect(deriveDataStatus({phase:'backfill',backfill_start:'2025-09-04',next_end:'2026-09-03',last_success_at:'2026-09-03T12:10:00Z'},now).backfillDone).toBe(0);
-  expect(deriveDataStatus({phase:'backfill',backfill_start:'2025-09-04',next_end:'2025-09-04',last_success_at:'2026-09-03T12:10:00Z'},now).backfillDone).toBe(364);
+  expect(deriveDataStatus({snapshot_version:5,phase:'backfill',backfill_start:'2025-09-04',next_end:'2026-09-03',last_success_at:'2026-09-03T12:10:00Z'},now).backfillDone).toBe(0);
+  expect(deriveDataStatus({snapshot_version:5,phase:'backfill',backfill_start:'2025-09-04',next_end:'2025-09-04',last_success_at:'2026-09-03T12:10:00Z'},now).backfillDone).toBe(364);
  });
  it('lets a stale backfill warn instead of showing neutral progress',async()=>{
   const {deriveDataStatus,headerStatus}=await import('./data-status');
-  const status=deriveDataStatus({phase:'backfill',backfill_start:'2025-09-04',next_end:'2026-02-03',last_success_at:'2026-09-02T12:10:00Z'},now);
+  const status=deriveDataStatus({snapshot_version:5,phase:'backfill',backfill_start:'2025-09-04',next_end:'2026-02-03',last_success_at:'2026-09-02T12:10:00Z'},now);
   expect(status.level).toBe('stale');
   expect(headerStatus(status).tone).toBe('warning');
  });
@@ -67,7 +67,7 @@ describe('deriveDataStatus',()=>{
  });
  it('carries LTV refresh state and fraud cutover readiness',async()=>{
   const {deriveDataStatus,describeDataStatus}=await import('./data-status');
-  const ready=deriveDataStatus(rolling,now,{ltv:{status:'ready',refreshed_at:'2026-09-03T11:25:00Z'},fraud:{phase:'rolling',readyAt:'2026-09-01T00:00:00Z'}});
+  const ready=deriveDataStatus(rolling,now,{ltv:{status:'ready',refreshed_at:'2026-09-03T11:25:00Z'},fraud:{version:4,phase:'rolling',readyAt:'2026-09-01T00:00:00Z'}});
   expect(ready.ltv).toEqual({refreshedAt:'2026-09-03T11:25:00Z',failed:false});
   expect(ready.fraudCutoverReady).toBe(true);
   expect(describeDataStatus(ready).ltv).toBe('LTV-Kohorten 13:25');
@@ -96,7 +96,7 @@ describe('getDataStatus',()=>{
   const status=await getDataStatus();
   expect(from).toHaveBeenCalledWith('sync_state');
   expect(select).toHaveBeenCalledWith('key,value');
-  expect(inFilter).toHaveBeenCalledWith('key',['everflow_history','ltv_cohorts_materialized','fraud_conversion_backfill_v3']);
+  expect(inFilter).toHaveBeenCalledWith('key',['everflow_history','ltv_cohorts_materialized','fraud_conversion_backfill_berlin_v4']);
   expect(status.level).toBe('ok');
   expect(status.ltv.refreshedAt).toBe('2026-09-03T11:25:00Z');
   expect(status.fraudCutoverReady).toBe(false);

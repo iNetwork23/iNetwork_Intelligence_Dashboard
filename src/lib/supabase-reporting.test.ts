@@ -3,6 +3,12 @@ import {backgroundPortfolioPeriods,loadPortfolioFromCache,publishPortfolioRangeR
 import{buildPortfolioRangeSnapshotRecordFromAggregates}from'./portfolio-range-snapshots';
 import{readFileSync}from'node:fs';import{join}from'node:path';
 
+
+function verifiedClient(range:{from:string;to:string},rows:Record<string,unknown>[]=[]){
+ const rpc=vi.fn(),dates:string[]=[];for(let day=range.from;day<=range.to;day=new Date(Date.parse(day+'T12:00Z')+86400000).toISOString().slice(0,10))dates.push(day);
+ const from=vi.fn((table:string)=>{let selectedDay='';const q={select:()=>q,eq:(_key:string,value:string)=>{selectedDay=value;return q},gte:()=>q,lte:()=>q,order:()=>q,in:()=>q,maybeSingle:async()=>({data:null,error:null}),range:async()=>({data:selectedDay===range.to?rows:[],error:null}),then:(resolve:(value:unknown)=>void)=>resolve({data:table==='sync_state'?dates.map(date=>({value:{version:5,timezoneId:56,date,generation:'gen'}})):[],error:null})};return q});return{from,rpc};
+}
+
 describe('Supabase reporting periods',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
   it('supports 90 days, 12 months, the bounded 365-day preset and a custom range',()=>{
@@ -26,9 +32,9 @@ describe('Supabase reporting periods',()=>{
     }
   });
   it('passes an explicitly selected oldest available day through without a 365-day cap',async()=>{
-    const rpc=vi.fn().mockResolvedValue({data:[],error:null});
-    const result=await loadPortfolioFromCache('custom',{rpc},new Date('2026-09-07T11:30:00Z'),{from:'2025-07-23',to:'2025-07-23'});
-    expect(rpc).toHaveBeenCalledWith('portfolio_metric_rows',{p_from:'2025-07-23',p_to:'2025-07-23'});
+    const db=verifiedClient({from:'2025-07-23',to:'2025-07-23'});
+    const result=await loadPortfolioFromCache('custom',db as never,new Date('2026-09-07T11:30:00Z'),{from:'2025-07-23',to:'2025-07-23'});
+    expect(db.rpc).not.toHaveBeenCalled();
     expect(result.range).toMatchObject({from:'2025-07-23',to:'2025-07-23'});
   });
   it('refreshes every frequently used rolling range while historical backfill is still running',()=>{
@@ -38,8 +44,9 @@ describe('Supabase reporting periods',()=>{
 
 describe('portfolio cache adapter',()=>{
   it('loads only the immutable snapshot selected by the active range marker',async()=>{
-    const keys:string[]=[],from=vi.fn(()=>({select:vi.fn(()=>({eq:vi.fn((_column:string,key:string)=>({maybeSingle:vi.fn().mockImplementation(async()=>{keys.push(key);if(key==='portfolio_range_generation:2026-06-23:2026-07-22')return{data:{value:{version:2,from:'2026-06-23',to:'2026-07-22',generation:'gen-1'}},error:null};if(key==='portfolio_range:2026-06-23:2026-07-22:gen-1')return{data:{value:{version:2,from:'2026-06-23',to:'2026-07-22',generation:'gen-1',rows:[{a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'2774',un:'LP',s:'',ss:'',cl:100,cv:10,fs:2,rb:3,cs:4,p:30,r:80,pr:50}]}},error:null};return{data:null,error:null}})}))}))}));
-    const result=await loadPortfolioFromCache('30d',{from,rpc:vi.fn()} as never,new Date('2026-07-22T12:00:00Z'));
+    const keys:string[]=[],from=vi.fn(()=>({select:vi.fn(()=>({eq:vi.fn((_column:string,key:string)=>({maybeSingle:vi.fn().mockImplementation(async()=>{keys.push(key);if(key==='portfolio_range_generation:2026-06-23:2026-07-22')return{data:{value:{version:2,reportingVersion:5,timezoneId:56,from:'2026-06-23',to:'2026-07-22',generation:'gen-1'}},error:null};if(key==='portfolio_range:2026-06-23:2026-07-22:gen-1')return{data:{value:{version:2,reportingVersion:5,timezoneId:56,from:'2026-06-23',to:'2026-07-22',generation:'gen-1',rows:[{a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'2774',un:'LP',s:'',ss:'',cl:100,cv:10,fs:2,rb:3,cs:4,p:30,r:80,pr:50}]}},error:null};return{data:null,error:null}})}))}))}));
+    const proof=verifiedClient({from:'2026-06-23',to:'2026-07-22'});const verifiedFrom=()=>({select:()=>({...from().select(),gte:()=>proof.from('sync_state').select()})});
+    const result=await loadPortfolioFromCache('30d',{from:verifiedFrom,rpc:vi.fn()} as never,new Date('2026-07-22T12:00:00Z'));
     expect(keys).toEqual(['portfolio_range_generation:2026-06-23:2026-07-22','portfolio_range:2026-06-23:2026-07-22:gen-1']);
     expect(result.totals).toMatchObject({clicks:100,sois:10,firstSales:2,rebills:3,coinSpend:4,revenue:80,payout:30,profit:50});
   });
@@ -58,10 +65,10 @@ describe('portfolio cache adapter',()=>{
     expect(deleted).toHaveBeenCalledWith('key',[old]);
   });
   it('loads compact daily snapshots in small batches so cold JSON reads stay below the database statement timeout',()=>{const code=readFileSync(join(process.cwd(),'src/lib/supabase-reporting.ts'),'utf8');expect(code).toContain("start<keys.length;start+=5");expect(code).toContain("keys.slice(start,start+5)");expect(code).not.toContain("keys.slice(start,start+50)")});
-  it('loads aggregated facts through the Postgres RPC and preserves existing KPI aggregation',async()=>{
-    const rpc=vi.fn().mockResolvedValue({data:[{affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Offer',campaign_id:'2',campaign_name:'Campaign',offer_url_id:'2774',offer_url_name:'LP',clicks:100,sois:10,first_sales:2,rebills:3,coin_spend:4,payout:30,revenue:80,profit:50}],error:null});
-    const result=await loadPortfolioFromCache('90d',{rpc} as never,new Date('2026-07-22T12:00:00Z'));
-    expect(rpc).toHaveBeenCalledWith('portfolio_metric_rows',{p_from:'2026-04-24',p_to:'2026-07-22'});
+  it('loads proven daily facts and preserves existing KPI aggregation',async()=>{
+    const rows=[{affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Offer',campaign_id:'2',campaign_name:'Campaign',offer_url_id:'2774',offer_url_name:'LP',clicks:100,sois:10,first_sales:2,rebills:3,coin_spend:4,payout:30,revenue:80,profit:50}];const db=verifiedClient({from:'2026-04-24',to:'2026-07-22'},rows);
+    const result=await loadPortfolioFromCache('90d',db as never,new Date('2026-07-22T12:00:00Z'));
+    expect(db.rpc).not.toHaveBeenCalled();
     expect(result.totals).toMatchObject({clicks:100,sois:10,firstSales:2,rebills:3,coinSpend:4,revenue:80,payout:30,profit:50,cvr:10,firstSaleRate:20});
   });
 });

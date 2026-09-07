@@ -3,10 +3,10 @@ import {advanceFraudBackfillState,buildFraudBackfillParity,initialFraudBackfillS
 
 describe('resumable fraud conversion backfill',()=>{
   const now=new Date('2026-07-30T12:00:00Z');
-  it('starts a versioned 120-day backfill in bounded seven-day chunks',()=>{
+  it('starts a versioned 120-day backfill in three-day chunks accepted by atomic metric replacement',()=>{
     const state=initialFraudBackfillState(now),window=selectFraudBackfillWindow(state,now);
-    expect(state).toMatchObject({version:3,phase:'backfill',windowFrom:'2026-04-02',windowTo:'2026-07-30',nextFrom:'2026-04-02',coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null});
-    expect(window).toEqual({mode:'backfill',from:'2026-04-02',to:'2026-04-08'});
+    expect(state).toMatchObject({version:4,phase:'backfill',windowFrom:'2026-04-02',windowTo:'2026-07-30',nextFrom:'2026-04-02',coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null});
+    expect(window).toEqual({mode:'backfill',from:'2026-04-02',to:'2026-04-04'});
   });
   it('extends initial coverage to an older active compliance stop',()=>{
     const state=initialFraudBackfillState(now,'2026-02-15');
@@ -18,7 +18,7 @@ describe('resumable fraud conversion backfill',()=>{
     state=advanceFraudBackfillState(state,{mode:'backfill',from:'2026-04-02',to:'2026-04-08'},now,parity('2026-04-02','2026-04-08'));
     expect(state.nextFrom).toBe('2026-04-09');
     expect(state.parityVerifiedThrough).toBe('2026-04-08');
-    while(state.phase==='backfill'){const window=selectFraudBackfillWindow(state,now);state=advanceFraudBackfillState(state,window,now,parity(window.from,window.to))}
+    while(state.phase==='backfill'){const window=selectFraudBackfillWindow(state,now);expect((Date.parse(window.to)-Date.parse(window.from))/86400000).toBeLessThanOrEqual(2);state=advanceFraudBackfillState(state,window,now,parity(window.from,window.to))}
     expect(state).toMatchObject({phase:'rolling',nextFrom:'2026-07-31',readyAt:'2026-07-30T12:00:00.000Z',parityVerifiedThrough:'2026-07-30'});
   });
   it('refuses to advance when persisted type counts do not match the provider window',()=>{
@@ -45,13 +45,13 @@ describe('resumable fraud conversion backfill',()=>{
   it('uses contiguous catch-up windows when rolling starts days after the initial cutoff',()=>{
     const parity=(from:string,to:string)=>({from,to,expected:{soi:1,coin_spend:0,first_sale:0,rebill:0},stored:{soi:1,coin_spend:0,first_sale:0,rebill:0},expectedDigest:'authoritative-events',storedDigest:'authoritative-events',reportHasActivity:true,verified:true});
     let state=initialFraudBackfillState(now);
-    while(state.phase==='backfill'){const window=selectFraudBackfillWindow(state,now);state=advanceFraudBackfillState(state,window,now,parity(window.from,window.to))}
+    while(state.phase==='backfill'){const window=selectFraudBackfillWindow(state,now);expect((Date.parse(window.to)-Date.parse(window.from))/86400000).toBeLessThanOrEqual(2);state=advanceFraudBackfillState(state,window,now,parity(window.from,window.to))}
     const delayed=new Date('2026-08-10T12:00:00Z'),first=selectFraudBackfillWindow(state,delayed);
-    expect(first).toEqual({mode:'rolling',from:'2026-07-31',to:'2026-08-06'});
+    expect(first).toEqual({mode:'rolling',from:'2026-07-31',to:'2026-08-02'});
     state=advanceFraudBackfillState(state,first,delayed,parity(first.from,first.to));
-    expect(selectFraudBackfillWindow(state,delayed)).toEqual({mode:'rolling',from:'2026-08-07',to:'2026-08-10'});
-    expect(state.coveredThrough).toBe('2026-08-06');
-    expect(state.parityVerifiedThrough).toBe('2026-08-06');
+    expect(selectFraudBackfillWindow(state,delayed)).toEqual({mode:'rolling',from:'2026-08-03',to:'2026-08-05'});
+    expect(state.coveredThrough).toBe('2026-08-02');
+    expect(state.parityVerifiedThrough).toBe('2026-08-02');
   });
   it('uses a three-day repair window after cutover when coverage is already current',()=>{
     const state={...initialFraudBackfillState(now),phase:'rolling' as const,nextFrom:'2026-07-31',coveredFrom:'2026-04-02',coveredThrough:'2026-07-30',parityVerifiedThrough:'2026-07-30',readyAt:'2026-07-30T10:00:00.000Z'};

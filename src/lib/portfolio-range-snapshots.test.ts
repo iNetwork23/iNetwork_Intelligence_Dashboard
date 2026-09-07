@@ -30,7 +30,7 @@ describe('portfolio range snapshots',()=>{
  it('publishes immutable generated rows behind active range markers',()=>{
   const draft=buildPortfolioRangeSnapshotRecordFromAggregates('2026-04-26','2026-07-24',[]),publication=buildPortfolioRangePublication([draft],'gen-123');
   expect(publication.snapshots).toEqual([{key:'portfolio_range:2026-04-26:2026-07-24:gen-123',value:{...draft.value,version:2,generation:'gen-123'}}]);
-  expect(publication.markers).toEqual([{key:'portfolio_range_generation:2026-04-26:2026-07-24',value:{version:2,from:'2026-04-26',to:'2026-07-24',generation:'gen-123'}}]);
+  expect(publication.markers).toEqual([{key:'portfolio_range_generation:2026-04-26:2026-07-24',value:{version:2,reportingVersion:5,timezoneId:56,from:'2026-04-26',to:'2026-07-24',generation:'gen-123'}}]);
  });
  it('prunes only inactive generated range rows older than the retention cutoff',()=>{
   const prefix='portfolio_range:2026-04-26:2026-07-24:',old=`${prefix}1700000000000-00000000-0000-4000-8000-000000000000`,active=`${prefix}1800000000000-00000000-0000-4000-8000-000000000000`;

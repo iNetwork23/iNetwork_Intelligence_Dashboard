@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {assertBerlinReportingRange} from './berlin-reporting-contract';
 import 'server-only';
 import type {Period} from './dashboard';
 import type {ReportRow} from './portfolio';
@@ -13,6 +15,7 @@ type SourceRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_
 const n=(value:number|string)=>Number(value||0);
 export async function loadAffiliateSourceRowsFromCache(period:Period,affiliateId:string,now=new Date()):Promise<ReportRow[]>{
   const range=berlinDateRange(period,now);
+  await assertBerlinReportingRange(getSupabaseAdmin(),range);
   const {data,error}=await getSupabaseAdmin().rpc('source_metric_rows',{p_from:range.from,p_to:range.to,p_affiliate_id:affiliateId});
   if(error)throw new Error(`Supabase source_metric_rows: ${error.message}`);
   return((data||[]) as SourceRow[]).map(row=>({columns:[
@@ -25,7 +28,7 @@ export async function loadAffiliateSourceRowsFromCache(period:Period,affiliateId
 export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;to:string},affiliateId:string):Promise<ReportRow[]>{
   const markerPrefix='source_day_generation:',markerQuery=await getSupabaseAdmin().from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');
   if(markerQuery.error)throw new Error(`Supabase source generations: ${markerQuery.error.message}`);
-  const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}}),{minimumVersion:4}),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`),snapshotRows:ReportRow[]=[];
+  const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}}),{minimumVersion:5}),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`),snapshotRows:ReportRow[]=[];
   // A snapshot can contain thousands of rows. Decode one bounded response before
   // requesting the next; an explicit signal also avoids retained Next GET clones.
   for(let start=0;start<keys.length;start+=8){
@@ -43,10 +46,10 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
   return snapshotRows;
 }
 
-const sourceMarkers=(data:Array<{value:unknown}>):SourceSnapshotGeneration[]=>(data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}});
+const sourceMarkers=(data:Array<{value:unknown}>):SourceSnapshotGeneration[]=>(data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}});
 async function loadSourceMarkers(range:{from:string;to:string}){const prefix='source_day_generation:',{data,error}=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`${prefix}${range.from}`).lte('key',`${prefix}${range.to}`).order('key');if(error)throw new Error(`Supabase source freshness: ${error.message}`);return sourceMarkers(data||[])}
-export async function loadSourceSnapshotCoverage(range:{from:string;to:string}):Promise<SourceSnapshotCoverage>{return resolveSourceSnapshotCoverage(range,await loadSourceMarkers(range),{minimumVersion:4})}
-export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const accepted=availableSourceSnapshotDays(range,await loadSourceMarkers(range),{minimumVersion:4});return resolveSnapshotFreshness(range.from,range.to,accepted.map(marker=>({date:marker.date,generation:marker.generation})))}
+export async function loadSourceSnapshotCoverage(range:{from:string;to:string}):Promise<SourceSnapshotCoverage>{return resolveSourceSnapshotCoverage(range,await loadSourceMarkers(range),{minimumVersion:5})}
+export async function loadSourceSnapshotFreshness(range:{from:string;to:string}):Promise<SnapshotFreshness>{const accepted=availableSourceSnapshotDays(range,await loadSourceMarkers(range),{minimumVersion:5});return resolveSnapshotFreshness(range.from,range.to,accepted.map(marker=>({date:marker.date,generation:marker.generation})))}
 
 export async function loadAffiliateConversionsFromCache(affiliateId:string,lookbackDays=90,now=new Date()):Promise<Array<ConversionRow&{stableCustomerId?:string}>>{
   const from=new Date(now.getTime()-(lookbackDays-1)*86_400_000).toISOString();
@@ -67,11 +70,10 @@ export async function loadAffiliateConversionsFromCache(affiliateId:string,lookb
 }
 
 /** Persistierter Aktivitäts-Index: eine kleine Zeile statt 365 Tages-Snapshots.
- * Der Fingerabdruck (Tagesanzahl + jüngste Generation) invalidiert den Memo,
+ * Der Fingerabdruck aller Tagesgenerationen invalidiert den Memo,
  * sobald der stündliche Sync neue Snapshots publiziert hat. */
 export const activityMemoFingerprint=(markers:SourceSnapshotGeneration[])=>{
- const last=markers[markers.length-1];
- return `v1:${markers.length}:${last?.date||''}:${last?.generation||''}`;
+ return `berlin-v5:${createHash('sha256').update(JSON.stringify(markers.map(marker=>[marker.date,marker.generation]).sort())).digest('hex')}`;
 };
 type ActivityMemoValue={fingerprint:string;entries:unknown[]};
 export const isValidActivityMemo=(value:unknown,fingerprint:string):value is ActivityMemoValue=>{
@@ -85,9 +87,9 @@ export const decodeActivityEntries=(tuples:unknown[]):SourceActivityEntry[]=>(tu
 export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:string;to:string}):Promise<SourceActivityEntry[]>{
  const markerQuery=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`source_day_generation:${range.from}`).lte('key',`source_day_generation:${range.to}`).order('key');
  if(markerQuery.error)throw new Error(`Supabase activity markers: ${markerQuery.error.message}`);
- const markers=(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;date?:string;generation?:string};return{version:Number(value.version||0),date:value.date||'',generation:value.generation||''}});
- const available=availableSourceSnapshotDays(range,markers,{minimumVersion:4});
- const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:v2:${affiliateId}:${range.from}:${range.to}`;
+ const markers=(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}});
+ const available=availableSourceSnapshotDays(range,markers,{minimumVersion:5});
+ const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:berlin-v5:${affiliateId}:${range.from}:${range.to}`;
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
  if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeActivityEntries(memo.data!.value.entries);
  const history=await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),entries=buildSourceActivityIndex(history);

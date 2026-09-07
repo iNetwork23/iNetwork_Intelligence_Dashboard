@@ -7,15 +7,15 @@ const shift=(day:string,count:number)=>new Date(Date.parse(`${day}T12:00:00Z`)+c
 const dayCount=(from:string,to:string)=>Math.floor((Date.parse(`${to}T12:00:00Z`)-Date.parse(`${from}T12:00:00Z`))/DAY)+1;
 const metrics=['clicks','sois','first_sales','rebills','coin_spend','payout','revenue','profit']as const;
 
-export type PortfolioRangeSnapshot={version:1|2;from:string;to:string;rows:PortfolioSnapshotRow[];generation?:string};
+export type PortfolioRangeSnapshot={version:1|2;reportingVersion?:number;timezoneId?:number;from:string;to:string;rows:PortfolioSnapshotRow[];generation?:string};
 export type PortfolioRangeSnapshotRecord={key:string;value:PortfolioRangeSnapshot};
-export type PortfolioRangeMarkerRecord={key:string;value:{version:2;from:string;to:string;generation:string}};
+export type PortfolioRangeMarkerRecord={key:string;value:{version:2;reportingVersion:number;timezoneId:number;from:string;to:string;generation:string}};
 export type PortfolioAggregateRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number};
 
 export function buildPortfolioRangePublication(records:PortfolioRangeSnapshotRecord[],generation:string){
  return{
-  snapshots:records.map(record=>({key:`portfolio_range:${record.value.from}:${record.value.to}:${generation}`,value:{...record.value,version:2 as const,generation}})),
-  markers:records.map(record=>({key:`portfolio_range_generation:${record.value.from}:${record.value.to}`,value:{version:2 as const,from:record.value.from,to:record.value.to,generation}})),
+  snapshots:records.map(record=>({key:`portfolio_range:${record.value.from}:${record.value.to}:${generation}`,value:{...record.value,version:2 as const,reportingVersion:5,timezoneId:56,generation}})),
+  markers:records.map(record=>({key:`portfolio_range_generation:${record.value.from}:${record.value.to}`,value:{version:2 as const,reportingVersion:5,timezoneId:56,from:record.value.from,to:record.value.to,generation}})),
  };
 }
 
@@ -35,7 +35,7 @@ export function isValidPortfolioRangeSnapshot(value:unknown,from:string,to:strin
 }
 
 export function buildPortfolioRangeSnapshotRecordFromAggregates(from:string,to:string,rows:PortfolioAggregateRow[]):PortfolioRangeSnapshotRecord{
- return{key:`portfolio_range:${from}:${to}`,value:{version:1,from,to,rows:rows.map(row=>({a:row.affiliate_id,an:row.affiliate_name,o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:'',ss:'',cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit}))}};
+ return{key:`portfolio_range:${from}:${to}`,value:{version:1,reportingVersion:5,timezoneId:56,from,to,rows:rows.map(row=>({a:row.affiliate_id,an:row.affiliate_name,o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:'',ss:'',cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit}))}};
 }
 
 function aggregateRange(rows:DailyMetricRow[],from:string,to:string){
@@ -56,5 +56,5 @@ export function buildPortfolioRangeSnapshotRecords(from:string,to:string,rows:Da
  const count=dayCount(from,to);
  if(count>=7)add(shift(to,-6),to);
  add(to,to);
- return Array.from(ranges.values()).map(range=>({key:`portfolio_range:${range.from}:${range.to}`,value:{version:1,...range,rows:aggregateRange(rows,range.from,range.to)}}));
+ return Array.from(ranges.values()).map(range=>({key:`portfolio_range:${range.from}:${range.to}`,value:{version:1,reportingVersion:5,timezoneId:56,...range,rows:aggregateRange(rows,range.from,range.to)}}));
 }

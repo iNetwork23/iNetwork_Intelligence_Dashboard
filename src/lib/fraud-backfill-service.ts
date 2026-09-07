@@ -5,7 +5,7 @@ import {conversionIdentityDigest,refreshConversionRange,refreshHistoryRange} fro
 import {createSupabaseSyncStore,getSupabaseAdmin} from './supabase';
 import {berlinRangeUtcBounds} from './reporting-day';
 
-export const FRAUD_BACKFILL_KEY='fraud_conversion_backfill_v3';
+export const FRAUD_BACKFILL_KEY='fraud_conversion_backfill_berlin_v4';
 const types:FraudConversionType[]=['soi','coin_spend','first_sale','rebill'];
 export async function loadFraudBackfillState():Promise<FraudBackfillState|null>{const {data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',FRAUD_BACKFILL_KEY).maybeSingle();if(error)throw new Error(`Supabase Fraud-Backfill-State: ${error.message}`);return data?.value?normalizeFraudBackfillState(data.value as StoredFraudBackfillState):null}
 async function oldestActiveStopDay(){const {data,error}=await getSupabaseAdmin().from('fraud_stop_requests').select('requested_at').is('deactivated_at',null).order('requested_at').limit(1).maybeSingle();if(error)throw new Error(`Supabase Fraud-Stop-Coverage: ${error.message}`);return data?.requested_at?String(data.requested_at).slice(0,10):null}

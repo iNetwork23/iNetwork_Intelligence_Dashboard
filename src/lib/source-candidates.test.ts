@@ -33,7 +33,7 @@ const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
 beforeEach(()=>{vi.clearAllMocks();loadConversions.mockResolvedValue([]);loadFreshness.mockResolvedValue({complete:true,availableDays:365,expectedDays:365,minDate:'2025-09-05',maxDate:'2026-09-04',generatedAt:'2026-09-04T10:00:00Z'});loadIndex.mockResolvedValue([]);maybeSingle.mockResolvedValue({data:null,error:null});upsert.mockResolvedValue({error:null})});
 afterEach(()=>{vi.useRealTimers()});
 
-describe('sourceCandidatesKey',()=>{it('uses the agreed sync_state namespace',async()=>{const{sourceCandidatesKey}=await import('./source-candidates');expect(sourceCandidatesKey(range)).toBe('source_candidates:v1:2026-08-06:2026-09-04')})});
+describe('sourceCandidatesKey',()=>{it('uses the agreed sync_state namespace',async()=>{const{sourceCandidatesKey}=await import('./source-candidates');expect(sourceCandidatesKey(range)).toBe('source_candidates:berlin-v5:2026-08-06:2026-09-04')})});
 
 describe('evaluateSourceCandidates',()=>{
  const labels={affiliate:'Partner 376',paths:new Map([['8|2766',{offer:'Flirt DE',offerUrl:'LP 2766'}]])};
@@ -157,7 +157,7 @@ describe('cron options: conversions memo, persisted maturity summary, budget gra
   const snapshot=await buildSourceCandidatesSnapshot(range,{now,conversionsFor,persistMaturity:true});
   expect(conversionsFor).toHaveBeenCalledWith('376',now);expect(loadConversions).not.toHaveBeenCalled();
   expect(snapshot.rows[0]).toMatchObject({action:'BEOBACHTEN',gate:{matureSois:12,totalSois:60,maturityReached:false}});
-  expect(upsert).toHaveBeenCalledWith({key:'lead_maturity:v1:376',value:expect.objectContaining({version:1,affiliateId:'376',confidence:'niedrig',youngByUrl:{'8|2766':48}})},{onConflict:'key'});
+  expect(upsert).toHaveBeenCalledWith({key:'lead_maturity:berlin-v5:376',value:expect.objectContaining({version:1,affiliateId:'376',confidence:'niedrig',youngByUrl:{'8|2766':48}})},{onConflict:'key'});
   upsert.mockClear();
   await buildSourceCandidatesSnapshot(range,{now,conversionsFor});
   expect(upsert).not.toHaveBeenCalled();
@@ -225,7 +225,7 @@ describe('publishSourceCandidates',()=>{
   loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','dead','N/A',{total_click:150})]);
   expect(await publishSourceCandidates(range)).toEqual({rows:1,coverageComplete:true});
   expect(from).toHaveBeenCalledWith('sync_state');
-  expect(upsert).toHaveBeenCalledWith({key:'source_candidates:v1:2026-08-06:2026-09-04',value:expect.objectContaining({version:1,range,rows:[expect.objectContaining({mainValue:'dead'})]})},{onConflict:'key'});
+  expect(upsert).toHaveBeenCalledWith({key:'source_candidates:berlin-v5:2026-08-06:2026-09-04',value:expect.objectContaining({version:1,range,rows:[expect.objectContaining({mainValue:'dead'})]})},{onConflict:'key'});
  });
  it('surfaces write failures',async()=>{
   const{publishSourceCandidates}=await import('./source-candidates');
@@ -253,7 +253,7 @@ describe('loadSourceCandidates',()=>{
  it('returns null when the key is missing or belongs to another range (fail-closed)',async()=>{
   const{loadSourceCandidates}=await import('./source-candidates');
   expect(await loadSourceCandidates(range,access('admin'))).toBeNull();
-  expect(eq).toHaveBeenCalledWith('key','source_candidates:v1:2026-08-06:2026-09-04');
+  expect(eq).toHaveBeenCalledWith('key','source_candidates:berlin-v5:2026-08-06:2026-09-04');
   maybeSingle.mockResolvedValue({data:{value:{...stored([]),range:{from:'2026-08-01',to:'2026-09-04'}}},error:null});
   expect(await loadSourceCandidates(range,access('admin'))).toBeNull();
   maybeSingle.mockResolvedValue({data:null,error:{message:'down'}});
@@ -301,7 +301,7 @@ describe('rollups route hook',()=>{
   const response=await GET(new NextRequest('http://localhost/api/sync/rollups',{headers:{authorization:'Bearer secret'}}));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({snapshots:[{key:'portfolio_range:x',rows:1}],sourceCandidates:{'7d':{error:'7d portfolio missing'},'30d':{rows:1,coverageComplete:true}}});
-  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({key:'source_candidates:v1:2026-08-06:2026-09-04'}),{onConflict:'key'});
+  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({key:'source_candidates:berlin-v5:2026-08-06:2026-09-04'}),{onConflict:'key'});
   expect(acquireHistorySyncLock).toHaveBeenCalledTimes(1);expect(release).toHaveBeenCalledTimes(1);
   expect((await GET(new NextRequest('http://localhost/api/sync/rollups'))).status).toBe(401);
  });

@@ -60,9 +60,9 @@ export function leadMaturityFromReport(index:{confidence:LeadMaturityInput['conf
 export const leafLeadMaturityForReport=(index:LeadMaturityIndex,identity:LeadMaturityIdentity,reportSois:number)=>leadMaturityFromReport(index,index.byLeaf[leafMaturityKey(identity)],reportSois);
 /** Reife einer Offer-URL gegen die Berichtszeile (URL-Verdikte des Cockpits). */
 export const urlLeadMaturityForReport=(index:LeadMaturityIndex,offerId:string,offerUrlId:string,reportSois:number)=>leadMaturityFromReport(index,index.byUrl[urlMaturityKey(offerId,offerUrlId)],reportSois);
-/** Persistierte Kurzfassung je Partner (Rollups-Cron, sync_state lead_maturity:v1:{affiliateId}): nur junge SOIs je Offer-URL, damit die Übersicht aller Partner ohne Conversions-Ladung gegated werden kann. */
+/** Persistierte Kurzfassung je Partner (Rollups-Cron, sync_state lead_maturity:berlin-v5:{affiliateId}): nur junge SOIs je Offer-URL, damit die Übersicht aller Partner ohne Conversions-Ladung gegated werden kann. */
 export type LeadYoungSummary={version:1;affiliateId:string;generatedAt:string;p75Hours:number;confidence:LeadMaturityInput['confidence'];fallbackUsed:boolean;youngByUrl:Record<string,number>};
-export const LEAD_MATURITY_SUMMARY_PREFIX='lead_maturity:v1:';
+export const LEAD_MATURITY_SUMMARY_PREFIX='lead_maturity:berlin-v5:';
 export const leadMaturitySummaryKey=(affiliateId:string)=>`${LEAD_MATURITY_SUMMARY_PREFIX}${affiliateId}`;
 export function summarizeLeadMaturity(index:LeadMaturityIndex,affiliateId:string):LeadYoungSummary{
  const youngByUrl:Record<string,number>={};

@@ -8,8 +8,8 @@ export function buildFraudBackfillParity(input:{from:string;to:string;expected:F
   return{from:input.from,to:input.to,expected:input.expected.typeCounts,stored:input.stored.typeCounts,expectedDigest:input.expected.identityDigest,storedDigest:input.stored.identityDigest,reportHasActivity:input.reportHasActivity,verified};
 }
 const strongParity=(value:FraudBackfillParity|null|undefined)=>Boolean(value&&value.verified&&value.expectedDigest&&value.expectedDigest===value.storedDigest&&fraudTypes.every(type=>value.expected[type]===value.stored[type])&&!(value.reportHasActivity&&fraudTypes.every(type=>value.expected[type]===0)));
-export type FraudBackfillState={version:3;phase:'backfill'|'rolling';windowFrom:string;windowTo:string;nextFrom:string;coveredFrom:string|null;coveredThrough:string|null;parityVerifiedThrough:string|null;lastParity:FraudBackfillParity|null;readyAt:string|null;lastSuccessAt:string|null};
-export type StoredFraudBackfillState=Omit<FraudBackfillState,'parityVerifiedThrough'|'lastParity'>&Partial<Pick<FraudBackfillState,'parityVerifiedThrough'|'lastParity'>>;
+export type FraudBackfillState={version:4;phase:'backfill'|'rolling';windowFrom:string;windowTo:string;nextFrom:string;coveredFrom:string|null;coveredThrough:string|null;parityVerifiedThrough:string|null;lastParity:FraudBackfillParity|null;readyAt:string|null;lastSuccessAt:string|null};
+export type StoredFraudBackfillState=Omit<FraudBackfillState,'version'|'parityVerifiedThrough'|'lastParity'>&{version:number}&Partial<Pick<FraudBackfillState,'parityVerifiedThrough'|'lastParity'>>;
 export type FraudBackfillWindow={mode:'backfill'|'rolling';from:string;to:string};
 const berlinDay=(date:Date)=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(date);
 const shift=(day:string,offset:number)=>{const date=new Date(`${day}T12:00:00Z`);date.setUTCDate(date.getUTCDate()+offset);return date.toISOString().slice(0,10)};
@@ -17,10 +17,11 @@ const validDay=(day:string)=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&!Number.isNaN(Date
 
 export function initialFraudBackfillState(now=new Date(),requiredFrom?:string):FraudBackfillState{
   const windowTo=berlinDay(now),defaultFrom=shift(windowTo,-119),windowFrom=requiredFrom&&validDay(requiredFrom)&&requiredFrom<defaultFrom?requiredFrom:defaultFrom;
-  return{version:3,phase:'backfill',windowFrom,windowTo,nextFrom:windowFrom,coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null,lastParity:null,readyAt:null,lastSuccessAt:null};
+  return{version:4,phase:'backfill',windowFrom,windowTo,nextFrom:windowFrom,coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null,lastParity:null,readyAt:null,lastSuccessAt:null};
 }
 export function normalizeFraudBackfillState(value:StoredFraudBackfillState):FraudBackfillState{
-  const normalized:FraudBackfillState={...value,parityVerifiedThrough:value.parityVerifiedThrough||null,lastParity:value.lastParity||null};
+  if(value.version!==4)return{...value,version:4,phase:'backfill',nextFrom:value.windowFrom,coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null,lastParity:null,readyAt:null,lastSuccessAt:null};
+  const normalized:FraudBackfillState={...value,version:4,parityVerifiedThrough:value.parityVerifiedThrough||null,lastParity:value.lastParity||null};
   if(normalized.phase==='rolling'&&(!normalized.parityVerifiedThrough||!strongParity(normalized.lastParity)||normalized.lastParity?.to!==normalized.parityVerifiedThrough))return{...normalized,phase:'backfill',nextFrom:normalized.windowFrom,coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null,lastParity:null,readyAt:null};
   return normalized;
 }
@@ -30,14 +31,15 @@ export function requireFraudCoverageFrom(state:FraudBackfillState,requiredFrom:s
   return{...state,phase:'backfill',windowFrom:requiredFrom,windowTo:windowTo>state.windowTo?windowTo:state.windowTo,nextFrom:requiredFrom,coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null,lastParity:null,readyAt:null};
 }
 export function invalidateFraudBackfillState(state:FraudBackfillState):FraudBackfillState{return{...state,readyAt:null,parityVerifiedThrough:null,lastParity:null}}
+// Metric replacement accepts at most three inclusive Berlin days, including backfill and catch-up.
 export function selectFraudBackfillWindow(state:FraudBackfillState,now=new Date()):FraudBackfillWindow{
-  if(state.version!==3)throw new Error('Unbekannte Fraud-Backfill-Version');
+  if(state.version!==4)throw new Error('Unbekannte Fraud-Backfill-Version');
   if(state.phase==='rolling'){
     const to=berlinDay(now),covered=state.coveredThrough||state.windowTo,catchupFrom=shift(covered,1);
-    if(catchupFrom<=to){const proposed=shift(catchupFrom,6);return{mode:'rolling',from:catchupFrom,to:proposed>to?to:proposed}}
+    if(catchupFrom<=to){const proposed=shift(catchupFrom,2);return{mode:'rolling',from:catchupFrom,to:proposed>to?to:proposed}}
     return{mode:'rolling',from:shift(to,-2),to};
   }
-  const proposed=shift(state.nextFrom,6);return{mode:'backfill',from:state.nextFrom,to:proposed>state.windowTo?state.windowTo:proposed};
+  const proposed=shift(state.nextFrom,2);return{mode:'backfill',from:state.nextFrom,to:proposed>state.windowTo?state.windowTo:proposed};
 }
 export function advanceFraudBackfillState(state:FraudBackfillState,window:FraudBackfillWindow,now:Date,newParity:FraudBackfillParity):FraudBackfillState{
   if(!strongParity(newParity)||newParity.from!==window.from||newParity.to!==window.to)throw new Error('Fraud-Backfill-Parity ist nicht verifiziert');
