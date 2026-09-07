@@ -192,7 +192,7 @@ describe('Leitstand loaders',()=>{
   const counters=await loadLeitstandCounters(new Date('2026-09-04T12:00:00Z'));
   expect(counters).toEqual({openKill:3,activeBlocks:1,incidents:1});
   expect(cacheSpy).toHaveBeenCalledTimes(1);
-  expect(cacheSpy.mock.calls[0][0]).toEqual(['leitstand-counters-v1','2026-08-06','2026-09-04']);
+  expect(cacheSpy.mock.calls[0][0]).toEqual(['leitstand-counters-v1-berlin-v5','2026-08-06','2026-09-04']);
   const options=cacheSpy.mock.calls[0][1] as{revalidate:number;tags:string[]};
   expect(options.revalidate).toBeGreaterThanOrEqual(60);expect(options.revalidate).toBeLessThanOrEqual(120);
   expect(options.tags.sort()).toEqual(['source-blocks','source-candidates']);

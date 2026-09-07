@@ -1,4 +1,5 @@
 import 'server-only';
+import {berlinRangeUtcBounds} from './reporting-day';
 import {randomUUID}from'node:crypto';
 import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import {canonicalMetricRows,type ConversionCacheRow,type DailyMetricRow,type SyncState,type SyncStore} from './history-cache';
@@ -76,6 +77,13 @@ async function acquireMetricReplaceLock(){return acquireSyncStateLock('daily_met
 export async function acquireHistorySyncLock(){return acquireSyncStateLock('everflow_history_sync_lock',10*60_000,'Reporting-Sync')}
 
 
+/** Delete every affected UTC bucket before changing canonical events, including partial days. */
+async function invalidateRebillUtcDays(from:string,to:string){
+  const prefix='rebill_day_berlin_v4:';
+  const {error}=await getSupabaseAdmin().from('sync_state').delete().gte('key',prefix).lt('key','rebill_day_berlin_v4;').gte('value->>date',from).lte('value->>date',to);
+  throwIfError(error,'Rebill cache invalidation');
+}
+
 export function createSupabaseSyncStore():SyncStore{
   return{
     async getState(){
@@ -83,8 +91,8 @@ export function createSupabaseSyncStore():SyncStore{
       throwIfError(error,'sync_state read');
       return(data?.value as SyncState|undefined)||null;
     },
-    async upsertConversions(rows){if(rows.length)await upsertBatches('conversions',rows)},
-    async replaceConversions(from,to,rows){const result=await getSupabaseAdmin().rpc('replace_conversion_window',{p_from:from,p_to:to,p_rows:rows});throwIfError(result.error,'atomic conversion window replacement');if(Number(result.data)!==rows.length)throw new Error('Supabase atomic conversion window replacement: row count mismatch')},
+    async upsertConversions(rows){if(rows.length){const dates=rows.map(row=>row.converted_at.slice(0,10)).sort();await invalidateRebillUtcDays(dates[0],dates[dates.length-1]);await upsertBatches('conversions',rows)}},
+    async replaceConversions(from,to,rows){const bounds=berlinRangeUtcBounds(from,to);await invalidateRebillUtcDays(bounds.from.slice(0,10),new Date(Date.parse(bounds.toExclusive)-1).toISOString().slice(0,10));const result=await getSupabaseAdmin().rpc('replace_conversion_window',{p_from:from,p_to:to,p_rows:rows});throwIfError(result.error,'atomic conversion window replacement');if(Number(result.data)!==rows.length)throw new Error('Supabase atomic conversion window replacement: row count mismatch')},
     async upsertMetrics(rows){if(rows.length)await upsertBatches('daily_metrics',rows)},
     async replaceMetrics(from,to,rows){
       const release=await acquireMetricReplaceLock();try{const canonical=canonicalMetricRows(rows),result=await getSupabaseAdmin().rpc('replace_metric_window',{p_from:from,p_to:to,p_rows:canonical});throwIfError(result.error,'atomic metric window replacement');if(Number(result.data)!==canonical.length)throw new Error('Supabase atomic metric window replacement: row count mismatch');await upsertSourceSnapshots(from,to,rows)}finally{await release()}

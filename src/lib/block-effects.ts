@@ -43,5 +43,5 @@ async function computeBlockEffects(range:{from:string;to:string},affiliateId?:st
 }
 /** Aktive Sperren mit Verstoßsummen seit effectiveAt (Zeilen ab min(range.from, effectiveAt) bis range.to), 120 s gecacht unter Tag 'source-blocks'. */
 export async function loadBlockEffects(range:{from:string;to:string},affiliateId?:string):Promise<BlockEffect[]>{
- return unstable_cache(()=>computeBlockEffects(range,affiliateId),['block-effects-v1',range.from,range.to,affiliateId||'all'],{revalidate:120,tags:[BLOCK_EFFECTS_CACHE_TAG]})();
+ return unstable_cache(()=>computeBlockEffects(range,affiliateId),['block-effects-v1-berlin-v5',range.from,range.to,affiliateId||'all'],{revalidate:120,tags:[BLOCK_EFFECTS_CACHE_TAG]})();
 }

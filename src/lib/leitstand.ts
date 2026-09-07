@@ -76,5 +76,5 @@ const systemAccess=()=>internalAccess??=parseAccessMetadata({role:'admin',status
 /** Shell-Zähler (Sidebar-Badges): accountweit, einmal je 90 s über beide Tags gebündelt; Aufrufer gated auf interne Rollen mit dashboard.view. */
 export async function loadLeitstandCounters(now=new Date()):Promise<LeitstandCounters>{
  const range=leitstandRange(now);
- return unstable_cache(async()=>{const[snapshot,index]=await Promise.all([loadSourceCandidates(range,systemAccess()),loadBlockIndex()]);return countLeitstand(snapshot?.rows??[],index)},['leitstand-counters-v1',range.from,range.to],{revalidate:LEITSTAND_COUNTERS_REVALIDATE_SECONDS,tags:['source-candidates','source-blocks']})();
+ return unstable_cache(async()=>{const[snapshot,index]=await Promise.all([loadSourceCandidates(range,systemAccess()),loadBlockIndex()]);return countLeitstand(snapshot?.rows??[],index)},['leitstand-counters-v1-berlin-v5',range.from,range.to],{revalidate:LEITSTAND_COUNTERS_REVALIDATE_SECONDS,tags:['source-candidates','source-blocks']})();
 }

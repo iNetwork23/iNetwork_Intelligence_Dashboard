@@ -96,7 +96,7 @@ async function readStoredSnapshot(range:{from:string;to:string}):Promise<SourceC
  if(error)throw new Error(`Supabase source candidates: ${error.message}`);
  return isValidSourceCandidatesSnapshot(data?.value,range)?normalizeSourceCandidatesSnapshot(data.value):null;
 }
-const loadSnapshot=(range:{from:string;to:string})=>unstable_cache(()=>readStoredSnapshot(range),['source-candidates-v1',range.from,range.to],{revalidate:120,tags:['source-candidates']})();
+const loadSnapshot=(range:{from:string;to:string})=>unstable_cache(()=>readStoredSnapshot(range),['source-candidates-v1-berlin-v5',range.from,range.to],{revalidate:120,tags:['source-candidates']})();
 /** Liest den vorberechneten Key (120 s Cache); fehlt er → null (fail-closed). Partner sehen nur Zeilen im eigenen Scope. */
 export async function loadSourceCandidates(range:{from:string;to:string},access:AccessMetadata):Promise<SourceCandidatesSnapshot|null>{
  if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
