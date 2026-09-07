@@ -10,6 +10,18 @@ const slot=(id:string,profit:number):SmartSlot=>({id,name:`LP ${id}`,offerId:'57
 const recommendation=(id:string):SlotRecommendation=>({slotId:id,action:'rotate',severity:'critical',reasonCode:'mature',title:'Austausch empfohlen',detail:'50 SOIs ohne robuste Sales-Evidenz.'});
 
 describe('Campaign executive decision surface',()=>{
+ it('keeps the Campaign deep-link target and separate event windows in the incomplete-data fallback',()=>{
+  const coverage={from:'2026-08-25',to:'2026-09-07',acceptedFrom:'2026-08-25',acceptedTo:'2026-09-07',acceptedDays:13,expectedDays:14,missingDays:['2026-09-02']};
+  const current={...slot('2946',0),sourceCoverage:{...coverage,from:'2026-09-01'}};
+  const legacy={id:'196',name:'Former LP',offerId:'17',metrics14:money(0),sourceCoverage:coverage};
+  const html=renderToStaticMarkup(<IncompleteEventCampaignDetail campaignId={23} campaignName="TrafficHunt" rangeLabel="09.08.–07.09.2026" revenue={254.10} payout={2014} profit={-1759.90} currentSlots={[current]} legacySlots={[legacy]}/>);
+  expect(html.match(/id="campaign-23"/g)).toHaveLength(1);
+  expect(html).toContain('Event-Zeitraum: 01.09.2026–07.09.2026');
+  expect(html).toContain('Event-Zeitraum: 25.08.2026–07.09.2026');
+  expect(html).toContain('Summe der unten ausgewiesenen LP-Zeiträume');
+  expect(html).toContain('Profit · 09.08.–07.09.2026');
+ });
+
  it('separates historical loss from the current rotation and prioritizes current actions',()=>{const html=renderToStaticMarkup(<CampaignExecutiveDecision campaignId={146} campaignName="Traffic Company" rangeLabel="30 Tage" total={money(-5467.87,1243.13,6711)} current={money(-336.89,754.11,1091)} beforeRotation={money(-5041.94,289.06,5331)} transitionDay={money(-58.02,149.98,208)} unassigned={money(-81,0,81)} slots={[slot('101',-200),slot('102',-136.89)]} recommendations={[recommendation('101'),recommendation('102')]} sourceIncomplete/>);expect(html).toContain('Campaign #146 verliert 5.467,87');expect(html).toContain('Der größte Verlust liegt vor der aktuellen Rotation');expect(html).toContain('Aktuelle Rotation');expect(html).toContain('-336,89');expect(html).toContain('Vor Rotationsreferenz');expect(html).toContain('-5.041,94');expect(html).toContain('Was jetzt geprüft werden muss');expect(html).toContain('LP #101');expect(html).toContain('LP #102');expect(html).toContain('Nicht eindeutig zugeordnete Kosten prüfen');expect(html).toContain('Source-Daten unvollständig');expect(html).toContain('1.243,13');expect(html).toContain('6.711,00')});
 
  it('does not manufacture a stop action when the current sample has no critical recommendation',()=>{const html=renderToStaticMarkup(<CampaignExecutiveDecision campaignId={146} campaignName="Test" rangeLabel="30 Tage" total={money(-20,0,20)} current={{...money(-20,0,20),sois:5}} beforeRotation={money(0)} transitionDay={money(0)} unassigned={money(0)} slots={[slot('101',-20)]} recommendations={[]}/>);expect(html).toContain('Aktuelle Rotation weiter prüfen');expect(html).not.toMatch(/sofort stoppen/i)});
