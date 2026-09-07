@@ -5,7 +5,7 @@ describe('history cache sync windows',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
   it('starts a resumable 365-day backfill with a maximum three-day chunk for retry headroom',()=>{
     const state=initialSyncState(now);
-    expect(state).toEqual({phase:'backfill',backfill_start:'2025-07-23',next_end:'2026-07-22',last_success_at:null,last_hot_at:null,snapshot_version:5});
+    expect(state).toEqual({phase:'backfill',backfill_start:'2025-07-23',backfill_end:'2026-07-22',next_end:'2026-07-22',last_success_at:null,last_hot_at:null,snapshot_version:5});
     expect(selectSyncWindow(state,now)).toEqual({mode:'backfill',from:'2026-07-20',to:'2026-07-22'});
   });
   it('moves backwards and switches to a two-day hot window after the final chunk',()=>{

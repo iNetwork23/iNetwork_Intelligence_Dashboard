@@ -7,7 +7,7 @@ export const STALE_AFTER_MINUTES=90;
 export type DataStatusLevel='ok'|'stale'|'unknown';
 export type LtvSyncState={status?:string|null;refreshed_at?:string|null;failed_at?:string|null;error?:string|null};
 export type FraudSyncState={version?:number;phase?:string|null;readyAt?:string|null};
-export type DataStatus={syncAt:string|null;syncAgeMinutes:number|null;phase:SyncPhase|null;backfillDone:number|null;backfillTotal:365;todayPartial:boolean;ltv:{refreshedAt:string|null;failed:boolean};fraudCutoverReady:boolean;level:DataStatusLevel};
+export type DataStatus={syncAt:string|null;syncAgeMinutes:number|null;phase:SyncPhase|null;backfillDone:number|null;backfillTotal:number;todayPartial:boolean;ltv:{refreshedAt:string|null;failed:boolean};fraudCutoverReady:boolean;level:DataStatusLevel};
 export type HeaderStatus={label:string;tone:'live'|'warning'|'neutral'};
 type SyncStates={history:SyncState|null;ltv:LtvSyncState|null;fraud:FraudSyncState|null};
 
@@ -24,11 +24,12 @@ export function deriveDataStatus(state:SyncState|null,now:Date,extra:{ltv?:LtvSy
   if(state?.snapshot_version!==5)state=null;
   const syncTime=parseTime(state?.last_success_at),syncAt=syncTime===null?null:state!.last_success_at,syncAgeMinutes=syncTime===null?null:Math.max(0,Math.round((now.getTime()-syncTime)/60_000)),phase=state?.phase??null;
   const startIndex=state?dayIndex(state.backfill_start):NaN,endIndex=state?dayIndex(state.next_end):NaN;
-  const backfillDone=phase==='rolling'?BACKFILL_TOTAL_DAYS:phase==='backfill'&&Number.isFinite(startIndex)&&Number.isFinite(endIndex)?Math.min(BACKFILL_TOTAL_DAYS,Math.max(0,BACKFILL_TOTAL_DAYS-1-(endIndex-startIndex))):null;
+  const plannedEnd=state?.backfill_end?dayIndex(state.backfill_end):NaN,backfillTotal=Number.isFinite(startIndex)&&Number.isFinite(plannedEnd)?Math.max(BACKFILL_TOTAL_DAYS,plannedEnd-startIndex+1):BACKFILL_TOTAL_DAYS;
+  const backfillDone=phase==='rolling'?backfillTotal:phase==='backfill'&&Number.isFinite(startIndex)&&Number.isFinite(endIndex)?Math.min(backfillTotal,Math.max(0,backfillTotal-1-(endIndex-startIndex))):null;
   const todayPartial=phase==='rolling'&&syncTime!==null&&berlinDay(new Date(syncTime))===berlinDay(now);
   const ltv=extra.ltv||null,ltvRefreshedAt=ltv?.status!=='failed'&&parseTime(ltv?.refreshed_at)!==null?ltv!.refreshed_at!:null,fraud=extra.fraud||null;
   const level:DataStatusLevel=!state||syncAgeMinutes===null?'unknown':syncAgeMinutes>STALE_AFTER_MINUTES?'stale':'ok';
-  return{syncAt,syncAgeMinutes,phase,backfillDone,backfillTotal:BACKFILL_TOTAL_DAYS,todayPartial,ltv:{refreshedAt:ltvRefreshedAt,failed:ltv?.status==='failed'},fraudCutoverReady:fraud?.version===4&&fraud.phase==='rolling'&&parseTime(fraud.readyAt)!==null,level};
+  return{syncAt,syncAgeMinutes,phase,backfillDone,backfillTotal,todayPartial,ltv:{refreshedAt:ltvRefreshedAt,failed:ltv?.status==='failed'},fraudCutoverReady:fraud?.version===4&&fraud.phase==='rolling'&&parseTime(fraud.readyAt)!==null,level};
 }
 
 export function headerStatus(status:DataStatus):HeaderStatus{

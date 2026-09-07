@@ -1,7 +1,7 @@
 import {berlinRangeUtcBounds} from './reporting-day';
 import {EVERFLOW_BERLIN_TIMEZONE_ID} from './everflow-timezone';
 export type SyncPhase='backfill'|'rolling';
-export type SyncState={phase:SyncPhase;backfill_start:string;next_end:string;last_success_at:string|null;last_hot_at?:string|null;snapshot_version?:number};
+export type SyncState={phase:SyncPhase;backfill_start:string;backfill_end?:string;next_end:string;last_success_at:string|null;last_hot_at?:string|null;snapshot_version?:number};
 export type SyncWindow={mode:SyncPhase;from:string;to:string};
 export type ReportRow={columns:{column_type:string;id:string;label:string}[];reporting:Record<string,number>};
 import{createHash}from'node:crypto';
@@ -51,7 +51,7 @@ export async function loadDailyReportSlices<T>(from:string,to:string,loadDay:(da
 
 export function initialSyncState(now=new Date()):SyncState{
   const end=berlinDay(now);
-  return{phase:'backfill',backfill_start:shift(end,-364),next_end:end,last_success_at:null,last_hot_at:null,snapshot_version:SOURCE_SNAPSHOT_VERSION};
+  return{phase:'backfill',backfill_start:shift(end,-364),backfill_end:end,next_end:end,last_success_at:null,last_hot_at:null,snapshot_version:SOURCE_SNAPSHOT_VERSION};
 }
 
 export function selectSyncWindow(state:SyncState,now=new Date()):SyncWindow{
@@ -107,6 +107,7 @@ const legacyStableMetricId=(row:ReportRow)=>`metric:${legacyMetricDimensions.map
 
 export type SyncStore={
   getState:()=>Promise<SyncState|null>;
+  getEarliestMetricDay?:()=>Promise<string|null>;
   upsertConversions:(rows:ConversionCacheRow[])=>Promise<void>;
   replaceConversions?:(from:string,to:string,rows:ConversionCacheRow[])=>Promise<void>;
   upsertMetrics:(rows:DailyMetricRow[])=>Promise<void>;
@@ -142,6 +143,11 @@ export async function runHistorySync(input:{
 }){
   const now=input.now||new Date();
   const storedState=await input.store.getState(),state=storedState?.snapshot_version===SOURCE_SNAPSHOT_VERSION?storedState:initialSyncState(now);
+  if(storedState?.snapshot_version!==SOURCE_SNAPSHOT_VERSION){
+    const firstMetricDay=await input.store.getEarliestMetricDay?.();
+    const valid=(value:string|null|undefined):value is string=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(`${value}T12:00Z`))&&new Date(`${value}T12:00Z`).toISOString().slice(0,10)===value;
+    state.backfill_start=[state.backfill_start,storedState?.backfill_start,firstMetricDay].filter(valid).sort()[0];
+  }
   if(state.phase==='rolling'&&state.last_success_at&&now.getTime()-Date.parse(state.last_success_at)<55*60_000){
     const window=selectSyncWindow(state,now);
     return{mode:'rolling' as const,from:window.from,to:window.to,upsertedConversions:0,upsertedMetrics:0,backfillComplete:true,skipped:true,conversionRows:[] as ConversionCacheRow[]};

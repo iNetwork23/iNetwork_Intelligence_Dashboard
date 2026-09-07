@@ -91,6 +91,7 @@ export function createSupabaseSyncStore():SyncStore{
       throwIfError(error,'sync_state read');
       return(data?.value as SyncState|undefined)||null;
     },
+    async getEarliestMetricDay(){const {data,error}=await getSupabaseAdmin().from('daily_metrics').select('metric_date').order('metric_date').limit(1).maybeSingle();throwIfError(error,'earliest reporting day');return typeof data?.metric_date==='string'?data.metric_date:null},
     async upsertConversions(rows){if(rows.length){const dates=rows.map(row=>row.converted_at.slice(0,10)).sort();await invalidateRebillUtcDays(dates[0],dates[dates.length-1]);await upsertBatches('conversions',rows)}},
     async replaceConversions(from,to,rows){const bounds=berlinRangeUtcBounds(from,to);await invalidateRebillUtcDays(bounds.from.slice(0,10),new Date(Date.parse(bounds.toExclusive)-1).toISOString().slice(0,10));const result=await getSupabaseAdmin().rpc('replace_conversion_window',{p_from:from,p_to:to,p_rows:rows});throwIfError(result.error,'atomic conversion window replacement');if(Number(result.data)!==rows.length)throw new Error('Supabase atomic conversion window replacement: row count mismatch')},
     async upsertMetrics(rows){if(rows.length)await upsertBatches('daily_metrics',rows)},
