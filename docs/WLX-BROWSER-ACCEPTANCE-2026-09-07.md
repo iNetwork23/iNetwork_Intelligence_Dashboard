@@ -36,6 +36,14 @@ Ein Test der echten verzögert hydrierten AdminSidebar reproduziert die Änderun
 
 Der Regressionstest bestätigt nach der Korrektur DE/EN-Wechsel, unveränderte Linkparameter, Ein-/Ausklappen und Bearbeitungsmodus sowie Designwechsel und Logoutbeschriftung. Es wird kein Logout oder Rollenwechsel ausgelöst. Prüfergebnis: 195 Dateien / 1598 Tests, Lint, Typecheck, Build und Diffprüfung bestanden; unveränderte Dependencies. Der tatsächliche kalte Browserlauf des neuen SHA wird nach Veröffentlichung separat zurückgelesen.
 
+## Folgepaket: gestreamter Startseiteninhalt
+
+Auf `0704fdc51cce24aa9f8a946b3563f4d8f8230471`, Deployment `dpl_3j1qVb2WhoJbCVv9EshjtPafhP53`, sind die geschützte Seitenleiste, Ein-/Ausklappen, Sprachwechsel und unveränderte Markeninitialen produktiv bestätigt. Um 09:27:52 UTC trat beim kalten englischen Startseitenaufruf weiterhin React #418 auf. Der geschützte Seitenleistenbaum allein deckt die gestreamten Serverinhalte nicht ab.
+
+Der neue Regressionstest reproduziert den Konflikt an der servergerenderten Accountüberschrift und den Geldwerten. Die Startseite einschließlich ihrer Fehler-/403-Zweige verwendet jetzt einen React-eigenen lokalisierten Main-Bereich mit stabiler anfänglicher Sprache. Die bestehende Main-DOM-Struktur, Datenladung und serverseitigen Berechtigungen bleiben erhalten. Der Test bestätigt anschließend die englischen Texte und vollständigen Geldbeträge sowie den Rückwechsel nach Deutsch ohne Hydrierungsfehler. Prüfergebnis: 196 Dateien / 1599 Tests, Lint, Typecheck, Build, Audit mit null Befunden und Diffprüfung bestanden. Der neue Live-Nachweis wird nach Veröffentlichung am exakten SHA festgehalten.
+
+Der planmäßige LTV-Refresh ist am 7. September um 09:27 UTC erneut nach zwei Minuten mit `failed / refresh_timeout` beendet worden. Job 1 besitzt unverändert den alten Befehl; die angefragte konkrete Freigabe wurde bislang nicht erteilt.
+
 ## Verbleibende Abnahmen
 
 WLX-006 und WLX-011 bleiben offen: Fraud-Laufzeit, vollständige Kohorten-Rohdatenparität, Rollen-/State-/Theme-/Accessibility-Matrix und kontrollierte Stop-/Providerabläufe sind noch nicht vollständig abgenommen. LTV-Jobkorrektur und Affiliate-Index sind weiterhin nur vorbereitet; keine Migration, kein manueller Refresh/Backfill und keine Geschäftsdatenmutation wurden ausgelöst. Die gesonderte Freigabegrenze aus Abschnitt 8 des Auftrags bleibt bestehen.
