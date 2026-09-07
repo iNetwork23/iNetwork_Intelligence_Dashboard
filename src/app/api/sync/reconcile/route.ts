@@ -20,6 +20,6 @@ export async function GET(request:NextRequest){
    const refreshed=await refreshHistoryRange({store:createSupabaseSyncStore(),from:range.from!,to:range.to,loadConversions:source.loadConversions,loadReports:source.loadReports});
    revalidateTag('affiliate-source',{expire:0});revalidateTag('affiliate-source-freshness',{expire:0});
    return NextResponse.json({mode:'scheduled-30d-reconcile',from:range.from,to:range.to,upsertedMetrics:refreshed.metrics.length});
-  }finally{revalidateTag('affiliate-rebills',{expire:0});await release()}
+  }finally{try{revalidateTag('affiliate-rebills',{expire:0})}finally{await release()}}
  }catch(error){console.error('Everflow 30-day reconciliation failed',error);return NextResponse.json({error:error instanceof Error?error.message:'30-Tage-Abgleich fehlgeschlagen'},{status:500})}
 }
