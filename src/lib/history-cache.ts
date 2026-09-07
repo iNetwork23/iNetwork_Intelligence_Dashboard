@@ -115,9 +115,9 @@ export type SyncStore={
   setState:(state:SyncState)=>Promise<void>;
 };
 
-export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
+export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string,options?:{includeEvents?:boolean})=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
   let rawConversions:EverflowConversion[],reports:{base:ReportRow[];events:ReportRow[]};
-  if(input.includeConversions===false){rawConversions=[];reports=await input.loadReports(input.from,input.to)}else{const[conversionResult,reportResult]=await Promise.allSettled([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);if(conversionResult.status==='rejected')throw conversionResult.reason;if(reportResult.status==='rejected')throw reportResult.reason;rawConversions=conversionResult.value;reports=reportResult.value}
+  if(input.includeConversions===false){rawConversions=[];reports=await input.loadReports(input.from,input.to,{includeEvents:true})}else{const[conversionResult,reportResult]=await Promise.allSettled([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);if(conversionResult.status==='rejected')throw conversionResult.reason;if(reportResult.status==='rejected')throw reportResult.reason;rawConversions=conversionResult.value;reports=reportResult.value}
   const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events,input.includeConversions===false?undefined:rawConversions);
   const bounds=berlinRangeUtcBounds(input.from,input.to);
   if(conversions.some(row=>row.converted_at<bounds.from||row.converted_at>=bounds.toExclusive)||metrics.some(row=>row.metric_date<input.from||row.metric_date>input.to))throw new Error('Providerdaten außerhalb des Berlin-Berichtszeitraums');
@@ -139,7 +139,7 @@ export async function refreshConversionRange(input:{store:SyncStore;from:string;
 export async function runHistorySync(input:{
   store:SyncStore;now?:Date;
   loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;
-  loadReports:(from:string,to:string)=>Promise<{base:ReportRow[];events:ReportRow[]}>;
+  loadReports:(from:string,to:string,options?:{includeEvents?:boolean})=>Promise<{base:ReportRow[];events:ReportRow[]}>;
 }){
   const now=input.now||new Date();
   const storedState=await input.store.getState(),state=storedState?.snapshot_version===SOURCE_SNAPSHOT_VERSION?storedState:initialSyncState(now);

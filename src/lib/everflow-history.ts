@@ -79,29 +79,36 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     return Array.from(new Map(rows.map(row=>[row.conversion_id||JSON.stringify(row),row])).values());
   };
 
-  const loadReports=async(from:string,to:string)=>{
+  const loadReportRows=async(from:string,to:string,full:boolean,events:boolean)=>{
+    const reportBody=(day:string,affiliate?:string,offer?:string)=>{const body=everflowEntityReportBody(day,day,affiliate,offer);return {...body,columns:[...body.columns,...(full?[{column:'adv1'},{column:'adv2'}]:[]),...(events?[{column:'event_name'}]:[])]}};
+    const report=async(body:unknown)=>{const result=await call<{table?:ReportRow[];incomplete_results?:boolean}>(`${BASE}/networks/reporting/entity/table`,body);if(!Array.isArray(result.table))throw new Error('Everflow entity report missing table');if(result.incomplete_results===true&&result.table.length<10_000)throw new Error('Everflow entity report incomplete_results');return result};
     const rows=await loadDailyReportSlices(from,to,async day=>{
-      const result=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day));
+      const result=await report(reportBody(day));
       const unpartitioned=result.table||[];
       if(unpartitioned.length<10_000)return datedRows(day,unpartitioned);
-      const discovery=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,affiliateDiscoveryBody(day)),affiliateRows=discovery.table||[];
+      const discovery=await report(affiliateDiscoveryBody(day)),affiliateRows=discovery.table||[];
       if(affiliateRows.length>=10_000)throw new Error(`Everflow daily affiliate discovery reached the 10,000-row cap for ${day}`);
       const ids=Array.from(new Set(affiliateRows.map(affiliateId).filter(Boolean)));
       if(!ids.length)throw new Error(`Everflow daily entity report could not discover affiliates for ${day}`);
       const partitions=await mapBounded(ids,4,async id=>{
-        const partition=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day,id)),affiliateTable=partition.table||[];
+        const partition=await report(reportBody(day,id)),affiliateTable=partition.table||[];
         if(affiliateTable.length<10_000)return affiliateTable;
-        const discovery=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,offerDiscoveryBody(day,id)),offerRows=discovery.table||[];
+        const discovery=await report(offerDiscoveryBody(day,id)),offerRows=discovery.table||[];
         if(offerRows.length>=10_000)throw new Error(`Everflow daily offer discovery reached the 10,000-row cap for ${day}, affiliate ${id}`);
         const offerIds=Array.from(new Set(offerRows.map(offerId).filter(Boolean)));
         if(!offerIds.length)throw new Error(`Everflow daily entity report could not discover offers for ${day}, affiliate ${id}`);
-        const offerPartitions=await mapBounded(offerIds,4,async offer=>{const result=await call<{table?:ReportRow[]}>(`${BASE}/networks/reporting/entity/table`,everflowEntityReportBody(day,day,id,offer)),table=result.table||[];if(table.length>=10_000)throw new Error(`Everflow daily entity report reached the 10,000-row cap for ${day}, affiliate ${id}, offer ${offer}`);return table});
+        const offerPartitions=await mapBounded(offerIds,4,async offer=>{const result=await report(reportBody(day,id,offer)),table=result.table||[];if(table.length>=10_000)throw new Error(`Everflow daily entity report reached the 10,000-row cap for ${day}, affiliate ${id}, offer ${offer}`);return table});
         return offerPartitions.flat();
       });
       return datedRows(day,partitions.flat());
     },Number.MAX_SAFE_INTEGER,2);
-    const base=rows.filter(row=>Number(row.reporting.total_click||0)>0);
-    return{base,events:[] as ReportRow[]};
+    return rows;
+  };
+
+  const loadReports=async(from:string,to:string,options?:{includeEvents?:boolean})=>{
+    const full=options?.includeEvents===true,rows=await loadReportRows(from,to,full,false);
+    const events=full?await loadReportRows(from,to,true,true):[];
+    return{base:full?rows:rows.filter(row=>Number(row.reporting.total_click||0)>0),events};
   };
 
   return{loadConversions,loadReports};
