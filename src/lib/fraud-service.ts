@@ -29,11 +29,11 @@ async function loadAccountSourceRows(range:{from:string;to:string}){
     const prefix=`source_day:${marker.date}:${marker.generation}:`;
     // Bound responses; an explicit signal also opts out of Next request memoization.
     // Otherwise its unread response clones keep every preceding JSON page alive until render ends.
-    for(let start=0;;start+=100){
-      const page=await client.from('sync_state').select('value').gte('key',prefix).lt('key',`${prefix}\uffff`).order('key').abortSignal(new AbortController().signal).range(start,start+99);
-      if(page.error)throw new Error(`Supabase Fraud Source-Snapshots (${marker.date}, page ${start / 100 + 1}): ${page.error.message}`);
+    for(let start=0;;start+=8){
+      const page=await client.from('sync_state').select('value').gte('key',prefix).lt('key',`${prefix}\uffff`).order('key').abortSignal(new AbortController().signal).range(start,start+7);
+      if(page.error)throw new Error(`Supabase Fraud Source-Snapshots (${marker.date}, page ${start / 8 + 1}): ${page.error.message}`);
       for(const item of page.data||[]){const value=item.value as{affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]};if(!Array.isArray(value.rows))throw new Error('Supabase Fraud Source-Snapshot unvollständig');const reports=mapAffiliateSourceRows(value.rows.map(packed=>decodeSourceSnapshotRow(packed,value.affiliate_id||'0',value.affiliate_name||'N/A')),marker.date);for(const report of reports)accumulateFraudMetric(metrics,fraudMetricFromReportRow(report))}
-      if((page.data||[]).length<100)break;
+      if((page.data||[]).length<8)break;
     }
   }
   return{markers,metrics};
@@ -63,6 +63,6 @@ const dashboardCache=(range:{from:string;to:string},accessFingerprint:string,fil
   const[sourceData,stops,backfill]=await Promise.all([loadAccountSourceRows(range),loadStops(),loadFraudBackfillState()]),cutover=fraudCutoverCoverage(backfill,range,stops.map(stop=>stop.requestedAt.slice(0,10))),requiredFrom=cutover.requiredFrom,cutoverReady=cutover.ready,conversionFrom=requiredFrom,conversions=cutoverReady?await loadConversions(conversionFrom,range.to):[],analysisConversions=conversionsForFraudRange(conversions,range),baselines={...auditedBaselines,...deriveCoinBaselines(analysisConversions)},rawEvaluations=iterateFraudEvaluations(sourceData.metrics,{conversions:analysisConversions,baselines}),stopCompliance=cutoverReady?evaluateStopCompliance(stops,conversions):[],expectedDays=calendarDays(range.from,range.to),sourceComplete=sourceData.markers.length===expectedDays,view=selectFraudDashboardView(rawEvaluations,sourceComplete,filters,markers);
   sourceData.metrics.clear();
   return{range,generatedAt:new Date().toISOString(),mode:'shadow' as const,writeEnabled:false,writesPerformed:0,evaluations:view.evaluations,filteredSources:view.filteredSources,activeStops:stops,stopCompliance,baselines,coverage:{cutoverReady,backfillPhase:backfill?.phase||'not_started',backfillReadyAt:backfill?.readyAt||null,coveredFrom:backfill?.coveredFrom||null,coveredThrough:backfill?.coveredThrough||null,sourceDaysAvailable:sourceData.markers.length,sourceDaysExpected:expectedDays,sourceComplete,conversionJoin:cutoverReady?joinCoverage(analysisConversions):null},totals:{...view.totals,stopViolations:cutoverReady?stopCompliance.filter(row=>row.status==='verstoß').length:null}};
-},['fraud-dashboard-v5',range.from,range.to,accessFingerprint,JSON.stringify(filters),createHash('sha256').update(JSON.stringify(markers??null)).digest('hex')],{revalidate:300,tags:['fraud-dashboard','affiliate-source']})();
+},['fraud-dashboard-v6',range.from,range.to,accessFingerprint,JSON.stringify(filters),createHash('sha256').update(JSON.stringify(markers??null)).digest('hex')],{revalidate:300,tags:['fraud-dashboard','affiliate-source']})();
 
 export async function getFraudDashboard(range:{from:string;to:string},access:AccessMetadata,filters:FraudDashboardFilters={},markers?:SourceBlockMarkerIndex){assertFraudAccess(access);assertFraudRange(range);return dashboardCache(range,scopeFingerprint(access),filters,markers)}

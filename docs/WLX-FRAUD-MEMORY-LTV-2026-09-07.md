@@ -16,6 +16,12 @@ Reproduktion im Repository: `node --expose-gc --max-old-space-size=768 scripts/f
 
 Prüfstand vor Veröffentlichung: sauberes `npm ci`, 197 Testdateien / 1603 Tests, Typecheck, Produktionsbuild und Diffprüfung bestanden; Audit 0 Schwachstellen. Lint: 0 Fehler, 1 bestehende Warnung für den ungenutzten Mock-Parameter in `sidebar-hydration.test.tsx`.
 
+## Live-Folgeprüfung und engeres Antwortbudget
+
+A: Der erste Aufruf auf dem Speicherpaket `344193259ff9c16934f0c010265cc5cce89d0bdb` / `dpl_HC8HpSUpYDeuDoksnnJT1UMhSaux` ab 10:15:46 UTC endet mit einem jetzt genau zuordenbaren SQL-Timeout für 2026-08-27, Seite 1. Damit ist die Speicheränderung lokal belegt, aber dieser Live-Aufruf kein vollständiger Fraud-PASS.
+
+B: Der betroffene Tagespräfix enthält 33 Objekte und 9041631 JSON-Bytes. Bei acht Objekten pro Antwort verteilen sich diese auf 1006706, 1358252, 173870, 6478071 und 24732 Bytes. Der Reader verwendet deshalb nun höchstens acht Snapshotobjekte je Abfrage. Auch das größte Paket bleibt variabel; dies ist keine harte Byte-Grenze und kein pauschaler Beleg für alle Zeiträume. Zwei Reader-Regressionen schlagen mit dem alten Abfragebudget fehl und prüfen nach der Korrektur weiterhin alle Chunk-/Tages-/Affiliate-Summen und späte Suchtreffer. Der nächste Live-Lauf wird gesondert zurückgelesen; keine Änderung an SQL-Timeouts oder Rechten.
+
 ## Journal der genau einen LTV-Konfigurationsänderung
 
 - Nutzerfreigabe: „okay mach weiter“ nach der ausdrücklichen Frage zur alleinigen bestehenden LTV-Jobkorrektur. Genehmigter Scope: Job 1, Command auf 15-Minuten-Budget; Zeitplan, Aktivstatus und übrige Jobs unverändert; kein manueller Refresh oder Backfill.
