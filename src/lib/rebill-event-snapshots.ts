@@ -3,7 +3,7 @@ import type{RebillEvent}from'./rebill-concentration';
 import type{ConversionCacheRow}from'./history-cache';
 import type{FraudTrafficMode}from'./fraud-control';
 const DAY=86_400_000,shift=(day:string,count:number)=>new Date(Date.parse(`${day}T00:00:00Z`)+count*DAY).toISOString().slice(0,10),days=(from:string,to:string)=>{const result:string[]=[];for(let day=from;day<=to;day=shift(day,1))result.push(day);return result};
-const trafficModes=new Set<FraudTrafficMode>(['tracked_smartlink','tracked_direct','clickless_api']),validTrafficMode=(value:unknown):value is FraudTrafficMode=>typeof value==='string'&&trafficModes.has(value as FraudTrafficMode);
+const trafficModes=new Set<FraudTrafficMode>(['tracked_smartlink','tracked_direct','clickless_api','unknown']),validTrafficMode=(value:unknown):value is FraudTrafficMode=>typeof value==='string'&&trafficModes.has(value as FraudTrafficMode);
 type SnapshotEvent={i:string;t:'first_sale'|'rebill';l:string;d:string;c:string;o:string;u:string;m:FraudTrafficMode;s:string;ss:string};
 export type RebillDaySnapshot={version:4;proof?:string;affiliateId:string;date:string;events:SnapshotEvent[]};
 export type RebillDaySnapshotRecord={key:string;value:RebillDaySnapshot};

@@ -1,4 +1,5 @@
 import type{FraudTrafficMode}from'./fraud-control';
+import{stableCustomerIdentity}from'./customer-identity';
 
 export type RebillEvent={type:'first_sale'|'rebill';customerId:string|null;convertedAt:string;campaignId:string;offerId:string;offerUrlId:string;trafficMode:FraudTrafficMode;sourceId?:string;subSource?:string};
 export type RebillScope={trafficMode:FraudTrafficMode;campaignId?:string;offerId?:string;offerUrlId?:string;sourceId?:string;subSource?:string};
@@ -15,7 +16,7 @@ const emptyBuckets=():CustomerBuckets=>({byCampaign:new Map(),byPath:new Map(),b
 const campaignKey=(scope:RebillScope)=>`${scope.trafficMode}|${scope.campaignId||'0'}`;
 const pathKey=(scope:RebillScope)=>`${campaignKey(scope)}|${scope.offerId||'0'}|${scope.offerUrlId||'0'}`;
 const sourcePathKey=(scope:RebillScope)=>`${pathKey(scope)}|${scope.sourceId||''}|${scope.subSource||''}`;
-const add=(buckets:CustomerBuckets,event:RebillEvent)=>{const campaignId=campaignKey(event),campaign=buckets.byCampaign.get(campaignId)||[];campaign.push(event.customerId);buckets.byCampaign.set(campaignId,campaign);const key=pathKey(event),path=buckets.byPath.get(key)||[];path.push(event.customerId);buckets.byPath.set(key,path);const sourceKey=sourcePathKey(event),sourcePath=buckets.bySourcePath.get(sourceKey)||[];sourcePath.push(event.customerId);buckets.bySourcePath.set(sourceKey,sourcePath)};
+const add=(buckets:CustomerBuckets,event:RebillEvent)=>{const customerId=event.trafficMode==='unknown'?null:stableCustomerIdentity(event.customerId),campaignId=campaignKey(event),campaign=buckets.byCampaign.get(campaignId)||[];campaign.push(customerId);buckets.byCampaign.set(campaignId,campaign);const key=pathKey(event),path=buckets.byPath.get(key)||[];path.push(customerId);buckets.byPath.set(key,path);const sourceKey=sourcePathKey(event),sourcePath=buckets.bySourcePath.get(sourceKey)||[];sourcePath.push(customerId);buckets.bySourcePath.set(sourceKey,sourcePath)};
 export function buildRebillCustomerIndex(events:RebillEvent[],range:{from:string;to:string}):RebillCustomerIndex{const index={rebills:emptyBuckets(),firstSales:emptyBuckets()};for(const event of events){const day=berlinDay(event.convertedAt);if(day<range.from||day>range.to)continue;add(event.type==='rebill'?index.rebills:index.firstSales,event)}return index}
 const idsForScope=(buckets:CustomerBuckets,scope:RebillScope)=>Object.prototype.hasOwnProperty.call(scope,'sourceId')||Object.prototype.hasOwnProperty.call(scope,'subSource')?buckets.bySourcePath.get(sourcePathKey(scope))||[]:scope.offerId||scope.offerUrlId?buckets.byPath.get(pathKey(scope))||[]:scope.campaignId?buckets.byCampaign.get(campaignKey(scope))||[]:[];
 export function rebillCustomerIdsFromIndex(index:RebillCustomerIndex,scope:RebillScope){return idsForScope(index.rebills,scope)}
