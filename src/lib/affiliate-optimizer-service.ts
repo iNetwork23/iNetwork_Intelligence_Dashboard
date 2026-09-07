@@ -69,7 +69,9 @@ async function gateAffiliates<T extends AffiliateAnalysis>(analyses:T[],range:{f
 }
 
 const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();
-const sourceWindow=(affiliateId:string,range:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access),['affiliate-source-supabase-v5',affiliateId,range.from,range.to,scopeFingerprint(access)],{revalidate:300,tags:['affiliate-source',`affiliate-source-${affiliateId}`]})();
+// Immutable daily snapshots are already persisted. Cache their aggregated
+// consumers below, not this expanded metadata-heavy intermediate (>2 MB live).
+const sourceWindow=async(affiliateId:string,range:{from:string;to:string},access:AccessMetadata)=>sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access);
 const sourceEvaluation=(affiliateId:string,range:{from:string;to:string},activityRange:{from:string;to:string},access:AccessMetadata)=>unstable_cache(async()=>{
  // Aktivität kommt aus dem persistierten Index (eine kleine Abfrage) statt aus 365 Tages-Snapshots; die Reife (D3) aus den Conversions des Partners.
  const [selected,index,freshness,maturity]=await Promise.all([sourceWindow(affiliateId,range,access),loadAffiliateActivityIndex(affiliateId,activityRange),freshnessWindow(activityRange),maturityWindow(affiliateId,range)]);
