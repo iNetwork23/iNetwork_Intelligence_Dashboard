@@ -112,9 +112,9 @@ describe('Everflow fraud source dimensions',()=>{
     const fetcher=vi.fn<typeof fetch>(async()=>json({conversions:page,paging:{total_count:4000}}));
     await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-07-01','2026-07-01')).rejects.toThrow('duplicate');
     expect(fetcher).toHaveBeenCalledTimes(6);
-    expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual(Array.from({length:3},()=>[
-      'https://api.eflow.team/v1/networks/reporting/conversions?page=1&page_size=2000',
-      'https://api.eflow.team/v1/networks/reporting/conversions?page=2&page_size=2000',
+    expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual([2000,1000,500].map(size=>[
+      `https://api.eflow.team/v1/networks/reporting/conversions?page=1&page_size=${size}`,
+      `https://api.eflow.team/v1/networks/reporting/conversions?page=2&page_size=${size}`,
     ]).flat());
     expect(fetcher.mock.calls.map(call=>JSON.parse(String(call[1]?.body)))).not.toEqual(expect.arrayContaining([expect.objectContaining({page:expect.anything()})]));
   });
@@ -136,6 +136,33 @@ describe('Everflow fraud source dimensions',()=>{
     expect(fetcher.mock.calls.map(call=>{const body=JSON.parse(String(call[1]?.body));return[body.from,body.to]})).toEqual([
       ['2026-07-01','2026-07-01'],['2026-07-02','2026-07-02'],['2026-07-03','2026-07-03'],
     ]);
+  });
+
+  it('recovers a stable missing page-boundary row using a different page size',async()=>{
+    const all=Array.from({length:2074},(_,index)=>({conversion_id:`row-${index}`}));
+    const fetcher=vi.fn<typeof fetch>(async(url,init)=>{
+      const params=new URL(String(url)).searchParams,page=Number(params.get('page')),size=Number(params.get('page_size'));
+      expect(JSON.parse(String(init?.body))).toMatchObject({from:'2026-08-31',to:'2026-08-31',timezone_id:56,query:{filters:[{resource_type:'affiliate',filter_id_value:'154'}]}});
+      const rows=all.slice((page-1)*size,page*size);
+      if(size===2000&&page===2)rows[0]=all[1999];
+      return json({conversions:rows,paging:{total_count:all.length,page_size:size,page}});
+    });
+    const result=await createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31','154');
+    expect(new Set(result.map(row=>row.conversion_id))).toEqual(new Set(all.map(row=>row.conversion_id)));
+    expect(fetcher.mock.calls.some(call=>new URL(String(call[0])).searchParams.get('page_size')==='1000')).toBe(true);
+  });
+
+  it('rejects an incomplete result after all differently sized passes with its date and counts',async()=>{
+    const all=Array.from({length:2074},(_,index)=>({conversion_id:`row-${index}`})),available=all.filter(row=>row.conversion_id!=='row-2000');
+    const fetcher=vi.fn<typeof fetch>(async url=>{const params=new URL(String(url)).searchParams,page=Number(params.get('page')),size=Number(params.get('page_size'));return json({conversions:available.slice((page-1)*size,page*size),paging:{total_count:all.length,page_size:size,page}})});
+    await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31')).rejects.toThrow('2026-08-31: 2073/2074');
+    expect([...new Set(fetcher.mock.calls.map(call=>new URL(String(call[0])).searchParams.get('page_size')))]).toEqual(['2000','1000','500']);
+  });
+
+  it('does not certify stale rows when the provider total shrinks below the collected identities',async()=>{
+    let call=0;
+    const fetcher=vi.fn<typeof fetch>(async()=>json(++call===1?{conversions:Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`})),paging:{total_count:2001}}:{conversions:[{conversion_id:'row-2000'}],paging:{total_count:1999}}));
+    await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31')).rejects.toThrow('total_count');
   });
 
   it('retries a transient Everflow Big Query rate limit before failing the slice',async()=>{

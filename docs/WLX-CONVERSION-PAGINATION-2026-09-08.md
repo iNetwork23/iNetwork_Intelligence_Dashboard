@@ -1,0 +1,11 @@
+# Conversion pagination: recovery with changed page boundaries
+
+At September 7, 2026, 23:37:53 UTC, production `f10c684` rejected the next history window (August 31–September 2): 2,073 unique conversions versus provider `total_count` 2,074. No day in this window was published and the cursor remained September 2. September 3–8 had previously passed Berlin v5/TZ56 and database event/metric count and financial parity checks.
+
+The existing paginator retried the same 2,000-row boundaries three times. The correction retains three bounded passes but requests 2,000, 1,000 and 500 rows respectively. This can recover an identity repeatedly omitted at an offset boundary; it does not establish that this was the cause of the live discrepancy. Only an exact match between collected distinct identities and the provider total is accepted. A total below the collected identity count now fails explicitly. Missing, invalid or permanently incomplete totals and repeated pages still fail closed. Errors include the affected date and counts, without event/customer data.
+
+The official [paging documentation](https://developers.everflow.io/user-guide/paging) specifies query-string `page` and `page_size`, a usual maximum of 2,000, and `total_count` as the available result count. The request body, Berlin timezone, affiliate filters, conversion/event inclusion, history windows and all database write contracts are unchanged. Smaller pages are used only after an incomplete pass; a complete first pass incurs no extra requests. On persistent failures the request count can rise, but attempts remain bounded. Route timeouts remain in force.
+
+Three regression tests were first run against the preceding implementation and failed: recovery of a persistent page-boundary omission, retention of fail-closed behavior across all three page sizes with date/count diagnostics, and refusal to certify stale extra identities after a provider total decreases. These then passed with the correction. Existing repeat-page and live-insert coverage remains required.
+
+Code validation and independent review must pass before deployment. Live success and full history/Fraud acceptance remain separate gates; no incomplete provider response is treated as zero or certified as complete.

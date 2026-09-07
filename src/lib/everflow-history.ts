@@ -53,9 +53,11 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
   const limit=createLimiter(8),call=<T>(url:string,body:unknown)=>limit(()=>request<T>(url,body,apiKey,fetcher));
   const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
-    const pageSize=2000,unique=new Map<string,EverflowConversion>();
+    const unique=new Map<string,EverflowConversion>();
     let expectedTotal:number|undefined,repeatedPage=false;
-    for(let pass=1;pass<=3;pass++){
+    // A stable tie at an offset boundary can omit the same identity on every
+    // retry. Change the boundaries while retaining the exact total-count guard.
+    for(const pageSize of [2000,1000,500]){
       const fingerprints=new Set<string>();
       for(let page=1;;page++){
         const result=await call<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId));
@@ -66,12 +68,13 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
         fingerprints.add(fingerprint);
         for(let index=0;index<rows.length;index++)unique.set(identities[index],rows[index]);
-        if(unique.size>=expectedTotal)return Array.from(unique.values());
+        if(unique.size>expectedTotal)throw new Error(`Everflow conversion pagination total_count changed below collected identities for ${from}: ${unique.size}/${expectedTotal}`);
+        if(unique.size===expectedTotal)return Array.from(unique.values());
         if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
       }
     }
     const reason=repeatedPage?'duplicate/repeated page; ':'';
-    throw new Error(`Everflow conversion pagination ${reason}total_count unvollständig: ${unique.size}/${expectedTotal??'unknown'}`);
+    throw new Error(`Everflow conversion pagination ${reason}total_count unvollständig for ${from}: ${unique.size}/${expectedTotal??'unknown'}`);
   };
   const loadConversions=async(from:string,to:string,affiliateId?:string)=>{
     if(from===to)return loadConversionSlice(from,to,affiliateId);
