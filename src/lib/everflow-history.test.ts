@@ -165,6 +165,20 @@ describe('Everflow fraud source dimensions',()=>{
     await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31')).rejects.toThrow('total_count');
   });
 
+  it('rejects a decreasing total even when it equals a stale union from the previous pass',async()=>{
+    let call=0;
+    const initial=Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`}));
+    const fetcher=vi.fn<typeof fetch>(async()=>json(++call===1?{conversions:initial,paging:{total_count:2001}}:call===2?{conversions:[],paging:{total_count:2001}}:{conversions:initial.slice(0,1000),paging:{total_count:2000}}));
+    await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31')).rejects.toThrow('total_count decreased');
+  });
+
+  it('rebuilds the identity set on a new pass instead of mixing stale same-count rows',async()=>{
+    const initial=Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`})),current=[...initial.slice(0,1999),{conversion_id:'row-2000'},{conversion_id:'row-2001'}];
+    const fetcher=vi.fn<typeof fetch>(async url=>{const params=new URL(String(url)).searchParams,page=Number(params.get('page')),size=Number(params.get('page_size'));return json({conversions:size===2000?(page===1?initial:[]):current.slice((page-1)*size,page*size),paging:{total_count:2001}})});
+    const result=await createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31');
+    expect(new Set(result.map(row=>row.conversion_id))).toEqual(new Set(current.map(row=>row.conversion_id)));
+  });
+
   it('retries a transient Everflow Big Query rate limit before failing the slice',async()=>{
     let attempts=0;
     const fetcher=vi.fn<typeof fetch>(async()=>{attempts++;return attempts===1

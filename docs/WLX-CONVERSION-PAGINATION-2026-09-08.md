@@ -8,4 +8,8 @@ The official [paging documentation](https://developers.everflow.io/user-guide/pa
 
 Three regression tests were first run against the preceding implementation and failed: recovery of a persistent page-boundary omission, retention of fail-closed behavior across all three page sizes with date/count diagnostics, and refusal to certify stale extra identities after a provider total decreases. These then passed with the correction. Existing repeat-page and live-insert coverage remains required.
 
+Independent review identified another shrinking-total case: the lower count could equal a stale union from the preceding pass, falsely hiding one deleted and one missing identity. A fourth regression reproduced this failure. The final correction rejects every decrease from a previously observed total before updating the union or checking success, even when the new total equals the old union size. This deliberately stops instead of combining incompatible provider snapshots.
+
+Each retry also starts with an empty identity set. A fifth regression first reproduced a stale same-count substitution across passes, then passed with this reset. Recovery must yield a complete fresh pass; discarded identities from preceding passes cannot complete it. This does not imply the provider supplies transactionally isolated pagination: concurrent same-count changes within one pass cannot in general be detected using count metadata alone.
+
 Code validation and independent review must pass before deployment. Live success and full history/Fraud acceptance remain separate gates; no incomplete provider response is treated as zero or certified as complete.

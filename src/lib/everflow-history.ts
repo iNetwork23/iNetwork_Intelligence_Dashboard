@@ -58,11 +58,13 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     // A stable tie at an offset boundary can omit the same identity on every
     // retry. Change the boundaries while retaining the exact total-count guard.
     for(const pageSize of [2000,1000,500]){
+      unique.clear();
       const fingerprints=new Set<string>();
       for(let page=1;;page++){
         const result=await call<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId));
         const rows=result.conversions||[],reportedTotal=result.paging?.total_count;
         if(!Number.isSafeInteger(reportedTotal)||Number(reportedTotal)<0)throw new Error(`Everflow conversion pagination missing or invalid total_count on page ${page}`);
+        if(expectedTotal!==undefined&&Number(reportedTotal)<expectedTotal)throw new Error(`Everflow conversion pagination total_count decreased for ${from}: ${expectedTotal}/${reportedTotal}`);
         expectedTotal=Number(reportedTotal);
         const identities=rows.map(row=>row.conversion_id||JSON.stringify(row)),fingerprint=JSON.stringify(identities);
         if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
