@@ -5,11 +5,31 @@ import{readFileSync}from'node:fs';import{join}from'node:path';
 
 describe('Supabase reporting periods',()=>{
   const now=new Date('2026-07-22T12:00:00Z');
-  it('supports 90 days, 12 months, all history and a custom range',()=>{
+  it('supports 90 days, 12 months, the bounded 365-day preset and a custom range',()=>{
     expect(reportingRange('90d',now)).toMatchObject({from:'2026-04-24',to:'2026-07-22'});
     expect(reportingRange('12m',now)).toMatchObject({from:'2025-07-23',to:'2026-07-22'});
     expect(reportingRange('all',now)).toMatchObject({from:'2025-07-23',to:'2026-07-22'});
     expect(reportingRange('custom',now,{from:'2024-01-03',to:'2024-02-04'})).toMatchObject({from:'2024-01-03',to:'2024-02-04'});
+  });
+  it.each([
+    ['summer midnight', [['2026-07-22T21:59:59.999Z','2025-07-23','2026-07-22'],['2026-07-22T22:00:00Z','2025-07-24','2026-07-23']]],
+    ['winter midnight', [['2026-01-15T22:59:59.999Z','2025-01-16','2026-01-15'],['2026-01-15T23:00:00Z','2025-01-17','2026-01-16']]],
+    ['spring DST', [['2026-03-29T00:59:59Z','2025-03-30','2026-03-29'],['2026-03-29T01:00:00Z','2025-03-30','2026-03-29']]],
+    ['autumn DST', [['2026-10-25T00:59:59Z','2025-10-26','2026-10-25'],['2026-10-25T01:00:00Z','2025-10-26','2026-10-25']]],
+    ['leap day', [['2024-02-29T12:00:00Z','2023-03-02','2024-02-29']]],
+    ['production acceptance day', [['2026-09-07T11:30:00Z','2025-09-08','2026-09-07']]],
+  ])('keeps exactly 365 inclusive Berlin dates across %s',(_label,cases)=>{
+    for(const[instant,from,to]of cases){
+      const range=reportingRange('all',new Date(instant));
+      expect(range).toMatchObject({from,to});
+      expect((Date.parse(to)-Date.parse(from))/86_400_000+1).toBe(365);
+    }
+  });
+  it('passes an explicitly selected oldest available day through without a 365-day cap',async()=>{
+    const rpc=vi.fn().mockResolvedValue({data:[],error:null});
+    const result=await loadPortfolioFromCache('custom',{rpc},new Date('2026-09-07T11:30:00Z'),{from:'2025-07-23',to:'2025-07-23'});
+    expect(rpc).toHaveBeenCalledWith('portfolio_metric_rows',{p_from:'2025-07-23',p_to:'2025-07-23'});
+    expect(result.range).toMatchObject({from:'2025-07-23',to:'2025-07-23'});
   });
   it('refreshes every frequently used rolling range while historical backfill is still running',()=>{
     expect(backgroundPortfolioPeriods).toEqual(['7d','30d','90d','all']);
