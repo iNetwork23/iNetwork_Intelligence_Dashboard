@@ -26,7 +26,7 @@ export async function GET(request:NextRequest){
   if(!auth.cron)return NextResponse.json({error:'Methode nicht erlaubt'},{status:405,headers:{Allow:'POST'}});
   if(request.nextUrl.searchParams.has('refresh'))return NextResponse.json({error:'Manuelle Refreshes erfordern POST'},{status:405});
   try{
-    const release=await acquireHistorySyncLock();try{const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});if(result.conversionRows.length){await publishRebillDaySnapshots(result.conversionRows,{from:result.from,to:result.to});for(const affiliateId of new Set(result.conversionRows.map(row=>row.affiliate_id).filter(Boolean)))revalidateTag(`affiliate-rebills-${affiliateId}`,{expire:0})}const{conversionRows,...publicResult}=result;void conversionRows;expireSourceCaches();const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',12);return NextResponse.json({...publicResult,campaigns})}finally{await release()}
+    const release=await acquireHistorySyncLock();try{const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||'');const result=await runHistorySync({store:createSupabaseSyncStore(),loadConversions:source.loadConversions,loadReports:source.loadReports});if(result.conversionRows.length){await publishRebillDaySnapshots(result.conversionRows,{from:result.from,to:result.to});for(const affiliateId of new Set(result.conversionRows.map(row=>row.affiliate_id).filter(Boolean)))revalidateTag(`affiliate-rebills-${affiliateId}`,{expire:0})}const{conversionRows,...publicResult}=result;void conversionRows;expireSourceCaches();const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',12);return NextResponse.json({...publicResult,campaigns})}finally{revalidateTag('affiliate-rebills',{expire:0});await release()}
   }catch(error){return failure(error)}
 }
 
@@ -48,7 +48,7 @@ export async function POST(request:NextRequest){
     expireSourceCaches();
     const campaigns=await syncCampaignSnapshots(process.env.EVERFLOW_API_KEY||'',60);
     return NextResponse.json({mode:'manual-30d',from:range.from,to:range.to,upsertedConversions:refreshed.conversions.length,upsertedMetrics:refreshed.metrics.length,campaigns});
-    }finally{await release()}
+    }finally{revalidateTag('affiliate-rebills',{expire:0});await release()}
   }catch(error){return failure(error)}
 }
 function failure(error:unknown){console.error('Everflow history sync failed',error);return NextResponse.json({error:'Sync fehlgeschlagen'},{status:500})}
