@@ -8,8 +8,11 @@ declare
   v_jobid bigint;
   v_command text;
 begin
+  -- cron.job allows SELECT but not UPDATE/FOR UPDATE for its regular owner.
+  -- Serialize this repair and its rollback; mutate through pg_cron's owner-checked API.
+  perform pg_advisory_xact_lock(hashtextextended('wlx-ltv-cohorts-hourly-command', 0));
   select jobid, command into strict v_jobid, v_command
-  from cron.job where jobname = 'wlx-ltv-cohorts-hourly' for update;
+  from cron.job where jobname = 'wlx-ltv-cohorts-hourly';
   if btrim(v_command) <> 'select public.refresh_ltv_cohorts_v1();' then
     raise exception 'LTV hourly command changed since preview; review before applying';
   end if;
