@@ -31,7 +31,14 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
   for(let start=0;start<keys.length;start+=8){
     const result=await getSupabaseAdmin().from('sync_state').select('value').in('key',keys.slice(start,start+8)).abortSignal(new AbortController().signal);
     if(result.error)throw new Error(`Supabase source snapshots: ${result.error.message}`);
-    for(const item of result.data||[]){const value=item.value as{date?:string;affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]};if(Array.isArray(value.rows)){const decoded=value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));snapshotRows.push(...mapAffiliateSourceRows(decoded,value.date))}}
+    for(const item of result.data||[]){
+      const value=item.value as{date?:string;affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]}|null;
+      // A missing affiliate-day record can be legitimate. A returned but malformed
+      // record must never silently reduce history used by a source-block preview.
+      if(!value||!Array.isArray(value.rows))throw new Error('Supabase source snapshots: invalid snapshot');
+      const decoded=value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));
+      snapshotRows.push(...mapAffiliateSourceRows(decoded,value.date));
+    }
   }
   return snapshotRows;
 }

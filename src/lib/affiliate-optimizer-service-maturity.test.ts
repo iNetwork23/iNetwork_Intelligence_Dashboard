@@ -27,13 +27,13 @@ beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(now);vi.cle
 afterEach(()=>{vi.useRealTimers()});
 
 describe('URL verdicts through the lead maturity gate (D3)',()=>{
- it('leaves every affiliate ungated (gate „nicht geprüft“) without leadMaturityFor and never loads conversions',async()=>{
+ it('fails closed for unselected affiliates without a valid summary and never loads their conversions',async()=>{
   const{getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
   getDashboard.mockResolvedValue(current());
   const result=await getAffiliateOptimizationsWithTrend('custom',range,access,range);
   expect(loadConversions).not.toHaveBeenCalled();
-  expect(result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation).toMatchObject({action:'AUSSCHALTEN'});
-  expect((result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'nicht geprüft'});
+  expect(result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation).toMatchObject({action:'BEOBACHTEN'});
+  expect((result.find(a=>a.affiliateId==='376')?.variants.find(v=>v.offerUrlId==='1')?.recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'keine Daten'});
  });
  it('gates only the selected affiliate: immature sois turn K1 into WEITER TESTEN with the gate, K3 and SKALIEREN stay',async()=>{
   const{getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
@@ -49,8 +49,8 @@ describe('URL verdicts through the lead maturity gate (D3)',()=>{
   expect(selected.variants.map(v=>v.offerUrlId)).toEqual(['2','1']);
   expect(selected.variants.every(v=>'trendVerdict'in v)).toBe(true);
   const other=result.find(a=>a.affiliateId==='412')!;
-  expect(other.variants.map(v=>[v.offerUrlId,v.recommendation.action])).toEqual([['3','AUSSCHALTEN'],['4','AUSSCHALTEN']]);
-  expect((other.variants[0].recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'nicht geprüft'});
+  expect(other.variants.map(v=>[v.offerUrlId,v.recommendation.action])).toEqual([['4','BEOBACHTEN'],['3','AUSSCHALTEN']]);
+  expect((other.variants[0].recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'keine Daten'});
  });
  it('keeps a K1 kill once enough sois are mature and carries the url benchmark into the gate',async()=>{
   const{getAffiliateOptimizations}=await import('./affiliate-optimizer-service');
@@ -118,5 +118,13 @@ describe('gateAffiliateAnalysis',()=>{
   expect(analysis.variants.find(v=>v.offerUrlId==='1')?.recommendation.action).toBe('AUSSCHALTEN');
   expect(gated.variants.map(v=>[v.offerUrlId,v.recommendation.action])).toEqual([['2','SKALIEREN'],['1','WEITER TESTEN']]);
   expect(gated.bestVariantKey).toBe('376|8|2');
+ });
+});
+
+describe('source-block preview data integrity',()=>{
+ it('rejects unreadable source history even when all generation markers are complete',async()=>{
+  loadRows.mockRejectedValue(new Error('Supabase source snapshots: invalid snapshot'));
+  const{getAffiliateSourceScopeRows}=await import('./affiliate-optimizer-service');
+  await expect(getAffiliateSourceScopeRows('376',range,access)).rejects.toThrow('invalid snapshot');
  });
 });

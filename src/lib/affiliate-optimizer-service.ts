@@ -51,7 +51,7 @@ export function gateAffiliateAnalysis<T extends AffiliateAnalysis>(analysis:T,ma
  const stop=variants.filter(x=>x.recommendation.action==='AUSSCHALTEN').length,scale=variants.filter(x=>x.recommendation.action==='SKALIEREN').length;
  return{...analysis,variants,bestVariantKey:variants[0]?.key??analysis.bestVariantKey,summary:`${variants.length} direkte Offer-/URL-Varianten · ${stop} Ausschaltkandidaten · ${scale} Skalierungskandidaten`};
 }
-/** Persistierte Reife-Kurzfassungen aller Partner (Rollups-Cron), 300 s gecacht unter Tag 'lead-maturity'; Fehler → leere Map (Übersicht bleibt ungegated, Gate „nicht geprüft“). */
+/** Persistierte Reife-Kurzfassungen aller Partner (Rollups-Cron), 300 s gecacht unter Tag 'lead-maturity'; Fehler → leere Map; die Übersicht verwendet dann das fail-closed Gate „keine Daten“. */
 export const loadLeadYoungSummaries=():Promise<Record<string,LeadYoungSummary>>=>unstable_cache(async()=>{
  // Prefix-Suche wie access-store.list (LIKE mit maskierten Wildcards) – ein Bereichsscan über Sonderzeichen hängt an der Kollation.
  const{data,error}=await getSupabaseAdmin().from('sync_state').select('value').like('key',`${LEAD_MATURITY_SUMMARY_PREFIX.replace(/[%_]/g,'\\$&')}%`).limit(2000);
@@ -60,12 +60,12 @@ export const loadLeadYoungSummaries=():Promise<Record<string,LeadYoungSummary>>=
  for(const item of data||[]){const value=(item as{value:unknown}).value;if(isLeadYoungSummary(value))out[value.affiliateId]=value}
  return out;
 },['lead-maturity-summaries-v1'],{revalidate:300,tags:['lead-maturity']})().catch((error:unknown)=>{console.error('Lead maturity summaries unavailable',error);return{} as Record<string,LeadYoungSummary>});
-/** Gate für alle sichtbaren Partner: der gewählte Partner (options.leadMaturityFor) bekommt den frischen Index aus seinen Conversions, alle anderen die Kurzfassung des letzten Rollups – nur wenn das Fenster heute enthält und der Rollup höchstens zwei Stunden alt ist; sonst bleibt der Partner ungegated (Gate „nicht geprüft“). */
+/** Gate für alle sichtbaren Partner: der gewählte Partner (options.leadMaturityFor) bekommt den frischen Index aus seinen Conversions, alle anderen die Kurzfassung des letzten Rollups – nur wenn das Fenster heute enthält und der Rollup höchstens zwei Stunden alt ist; sonst greift derselbe fail-closed Zustand wie bei nicht ladbaren Conversions. */
 async function gateAffiliates<T extends AffiliateAnalysis>(analyses:T[],range:{from:string;to:string},access:AccessMetadata,options?:LeadMaturityOptions,now=new Date()):Promise<T[]>{
  if(!analyses.length)return analyses;
  const selectedId=options?.leadMaturityFor,selectedVisible=Boolean(selectedId&&analyses.some(a=>a.affiliateId===selectedId)&&!foreignScopeRequested(access,{affiliate:selectedId}));
  const[summaries,selectedIndex]=await Promise.all([loadLeadYoungSummaries(),selectedVisible?maturityWindow(selectedId!,range):Promise.resolve(null)]);
- return analyses.map(a=>{if(selectedIndex&&a.affiliateId===selectedId)return gateAffiliateAnalysis(a,selectedIndex);const summary=summaries[a.affiliateId];return summary&&summaryAppliesTo(summary,range,now)?gateAffiliateAnalysis(a,resolverFromSummary(summary)):a});
+ return analyses.map(a=>{if(selectedIndex&&a.affiliateId===selectedId)return gateAffiliateAnalysis(a,selectedIndex);const summary=summaries[a.affiliateId];return summary&&summaryAppliesTo(summary,range,now)?gateAffiliateAnalysis(a,resolverFromSummary(summary)):gateAffiliateAnalysis(a,noLeadMaturityIndex(range,now))});
 }
 
 const freshnessWindow=(range:{from:string;to:string})=>unstable_cache(()=>loadSourceSnapshotFreshness(range),['affiliate-source-freshness-v1',range.from,range.to],{revalidate:300,tags:['affiliate-source-freshness']})();

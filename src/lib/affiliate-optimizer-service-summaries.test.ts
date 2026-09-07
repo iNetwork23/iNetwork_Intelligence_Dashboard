@@ -26,28 +26,28 @@ const current=()=>portfolio([path('376','1',{clicks:900,sois:60,profit:-100}),pa
 beforeEach(()=>{vi.clearAllMocks();getDashboard.mockResolvedValue(current());loadConversions.mockResolvedValue([])});
 
 describe('overview gating through persisted lead-maturity summaries (Rollups-Cron)',()=>{
- it('gates every partner with a summary without loading conversions; partners without summary stay ungated',async()=>{
+ it('gates every partner with a summary without loading conversions; partners without summary fail closed',async()=>{
   summaryRows.mockResolvedValue({data:[{value:summary('376',{'8|1':20})},{value:summary('412',{})},{value:{version:9}}],error:null});
   const{getAffiliateOptimizations}=await import('./affiliate-optimizer-service');
   const result=await getAffiliateOptimizations('30d',undefined,access);
   const rec=(affiliateId:string,url:string)=>result.find(a=>a.affiliateId===affiliateId)!.variants.find(v=>v.offerUrlId===url)!.recommendation as{action:string;gate?:{matureSois:number;totalSois:number;latencyConfidence:string}};
   expect(rec('376','1')).toMatchObject({action:'WEITER TESTEN',gate:{matureSois:40,totalSois:60,latencyConfidence:'hoch'}});
   expect(rec('412','4')).toMatchObject({action:'AUSSCHALTEN',gate:{matureSois:70,totalSois:70,latencyConfidence:'hoch'}});
-  expect(rec('500','9')).toMatchObject({action:'AUSSCHALTEN',gate:{latencyConfidence:'nicht geprüft'}});
+  expect(rec('500','9')).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten'}});
   expect(loadConversions).not.toHaveBeenCalled();
   expect(likeSpy).toHaveBeenCalledWith('key','lead\\_maturity:v1:%');
  });
- it('ignores a stale summary (older than two hours) and leaves the partner ungated',async()=>{
+ it('rejects stale summaries (older than two hours) without restoring switch-off verdicts',async()=>{
   summaryRows.mockResolvedValue({data:[{value:{...summary('376',{'8|1':20}),generatedAt:new Date(Date.now()-3*60*60_000).toISOString()}}],error:null});
   const{getAffiliateOptimizations}=await import('./affiliate-optimizer-service');
   const result=await getAffiliateOptimizations('30d',undefined,access);
-  expect(result.find(a=>a.affiliateId==='376')!.variants.find(v=>v.offerUrlId==='1')!.recommendation).toMatchObject({action:'AUSSCHALTEN',gate:{latencyConfidence:'nicht geprüft'}});
+  expect(result.find(a=>a.affiliateId==='376')!.variants.find(v=>v.offerUrlId==='1')!.recommendation).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten'}});
  });
- it('falls back to ungated verdicts when the summaries cannot be read',async()=>{
+ it('fails closed when summaries cannot be read',async()=>{
   summaryRows.mockResolvedValue({data:null,error:{message:'boom'}});
   const{getAffiliateOptimizations}=await import('./affiliate-optimizer-service');
   const result=await getAffiliateOptimizations('30d',undefined,access);
-  expect((result.find(a=>a.affiliateId==='376')!.variants.find(v=>v.offerUrlId==='1')!.recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'nicht geprüft'});
+  expect((result.find(a=>a.affiliateId==='376')!.variants.find(v=>v.offerUrlId==='1')!.recommendation as{gate?:{latencyConfidence:string}}).gate).toMatchObject({latencyConfidence:'keine Daten'});
  });
  it('prefers the fresh conversions index for the selected partner and the summary for the others',async()=>{
   summaryRows.mockResolvedValue({data:[{value:summary('376',{'8|1':20})},{value:summary('412',{'8|4':30})}],error:null});
@@ -70,10 +70,13 @@ describe('summary applicability (window contains today, rollup at most two hours
   expect(summaryAppliesTo({generatedAt:'2026-09-04T09:47:00.000Z'},{from:'2026-08-06',to:'2026-09-04'},now)).toBe(false);
   expect(summaryAppliesTo({generatedAt:'kaputt'},{from:'2026-08-06',to:'2026-09-04'},now)).toBe(false);
  });
- it('applies the summary only through the applicability rule inside gateAffiliates',async()=>{
-  const{summaryAppliesTo}=await import('./lead-maturity');
-  const service=(await import('node:fs')).readFileSync((await import('node:path')).join(process.cwd(),'src/lib/affiliate-optimizer-service.ts'),'utf8');
-  expect(service).toContain('summary&&summaryAppliesTo(summary,range,now)?gateAffiliateAnalysis(a,resolverFromSummary(summary)):a');
-  expect(typeof summaryAppliesTo).toBe('function');
+ it.each(['historical', 'malformed'])('does not use a %s summary to authorize switch-off recommendations',async(kind)=>{
+  const historical={from:'2025-01-01',to:'2025-01-31'};
+  getDashboard.mockResolvedValue({...current(),range:kind==='historical'?historical:range});
+  summaryRows.mockResolvedValue({data:[{value:kind==='malformed'?{...summary('376',{}),p75Hours:'invalid'}:summary('376',{})}],error:null});
+  const{getAffiliateOptimizations}=await import('./affiliate-optimizer-service');
+  const result=await getAffiliateOptimizations('custom',kind==='historical'?historical:range,access);
+  expect(result.find(a=>a.affiliateId==='376')!.variants.find(v=>v.offerUrlId==='1')!.recommendation).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten'}});
+  expect(loadConversions).not.toHaveBeenCalled();
  });
 });
