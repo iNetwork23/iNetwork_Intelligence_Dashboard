@@ -22,12 +22,12 @@ function englishNumberToGerman(value:string){const [whole,fraction]=value.split(
 export function localizeDisplayText(value:string,locale:DashboardLocale){
  if(locale==='en')return value
   .replace(/\b(\d{2})\.(\d{2})\.(\d{4})\b/g,'$1/$2/$3')
-  .replace(/(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*€/g,(_,number:string)=>`€${germanNumberToEnglish(number)}`)
+  .replace(/(\d+(?:\.\d{3})*(?:,\d+)?)\s*€/g,(_,number:string)=>`€${germanNumberToEnglish(number)}`)
   .replace(/(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*%/g,(_,number:string)=>`${germanNumberToEnglish(number)}%`)
   .replace(/\b\d{1,3}(?:\.\d{3})+\b/g,number=>number.replaceAll('.',','));
  return value
   .replace(/\b(\d{2})\/(\d{2})\/(\d{4})\b/g,'$1.$2.$3')
-  .replace(/€(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/g,(_,number:string)=>`${englishNumberToGerman(number)} €`)
+  .replace(/€(\d+(?:,\d{3})*(?:\.\d+)?)/g,(_,number:string)=>`${englishNumberToGerman(number)} €`)
   .replace(/(\d{1,3}(?:,\d{3})*(?:\.\d+)?)%/g,(_,number:string)=>`${englishNumberToGerman(number)} %`)
   .replace(/\b\d{1,3}(?:,\d{3})+\b/g,number=>number.replaceAll(',','.'));
 }

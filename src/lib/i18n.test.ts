@@ -36,4 +36,10 @@ describe('dashboard internationalization',()=>{
   expect(localizeDisplayText('€1,234.50 · 12.40% · 29/07/2026 · 2,500 SOIs','de')).toBe('1.234,50 € · 12,40 % · 29.07.2026 · 2.500 SOIs');
   expect(localizeDisplayText('Source 25022','en')).toBe('Source 25022');
  });
+ it('keeps complete ungrouped monetary deltas when switching languages',()=>{
+  expect(localizeDisplayText('Δ Median +56954,22 € (+10113 %)','en')).toBe('Δ Median +€56954.22 (+10113%)');
+  expect(localizeDisplayText('Δ Median +€56954.22 (+10113%)','de')).toBe('Δ Median +56954,22 € (+10113 %)');
+  expect(localizeDisplayText('-123456789,10 €','en')).toBe('-€123456789.10');
+  expect(localizeDisplayText('-€123456789.10','de')).toBe('-123456789,10 €');
+ });
 });
