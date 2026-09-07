@@ -18,6 +18,16 @@ Die Währungsumwandlung erkennt nun die vollständige Ganzzahl in beiden Sprachr
 
 Prüfstand des Zahlenpakets: 193 Dateien / 1594 Tests bestanden; zusätzlich gezielte Sprach-/DOM-/Hydrierungstests, Lint, Typecheck, Produktionsbuild, vollständiger Dependency-Audit mit null Befunden und Diffprüfung bestanden. Die reale Kontrolle der korrigierten Anzeige erfolgt nach dem Deployment mit dessen exaktem Commitnachweis.
 
-## Verbleibende Grenzen
+## Folgepaket: Zeitraumsteuerung nach kaltem Seitenaufruf
+
+Die Geldkorrektur ist auf `f78cd699e9d15b2ebf35db595da1aac2d26cc3fb`, Deployment `dpl_ut92vkJcvgjRfas7XbJfNWYoA2sL`, produktiv bestätigt: Englisch → Deutsch → Englisch erhält komplette Beträge und Vorzeichen. Beim kalten Startseitenaufruf trat daneben um 09:06:17 UTC erneut React #418 auf.
+
+Drei neue verzögerte Hydrierungstests reproduzieren den Konflikt in der globalen, kompakten und Source-Zeitraumsteuerung. Die Komponenten besitzen ihre Texte/Attribute jetzt selbst, mit stabilem anfänglichem Hydrierungssnapshot und anschließendem Localewechsel. Ein gemeinsamer React-Helfer erhält die DOM-Struktur, Events und Refs; er fügt keinen Layoutwrapper hinzu. Fehler werden nicht unterdrückt.
+
+Die Tests bestätigen außerdem Monats-/Jahreswechsel, freie Datumseingaben, Presetnavigation, bestehende Affiliate-Parameter und den Source-Disclosure-Anker. Der bestehende kompakte Feedback-Vertrag bleibt erhalten; seine Source-Strukturprüfung wurde an den expliziten Lokalisierungsaufruf angepasst. Aktueller Prüfstand: 194 Dateien / 1597 Tests, Lint, Typecheck, Build und Audit mit null Befunden bestanden. Der exakte Folge-Commit und seine erneute Liveprüfung werden nach Veröffentlichung in WLX-000 zurückgelesen.
+
+Für Affiliate 154 stimmen auf Seite 1/3/6 jeweils Anzahl, Registrierungssumme, alle fünf Umsatzsummen sowie erste/letzte Gruppenschlüssel zwischen UI und `private.ltv_cohorts_materialized` überein: 100/100/44 Zeilen, 18883/118/113788 Registrierungen; keine fremde Affiliate-ID in diesen 244 sichtbaren Zeilen. Insgesamt: 544 Gruppen und 173597 Registrierungen. Die direkte Abfrage der nicht materialisierten Rohdatenview endete im Statement-Timeout; sie ist ausdrücklich kein bestandener Rohdatenabgleich.
+
+## Verbleibende Abnahmen
 
 WLX-006 und WLX-011 bleiben offen: Fraud-Laufzeit, vollständige Kohorten-Rohdatenparität, Rollen-/State-/Theme-/Accessibility-Matrix und kontrollierte Stop-/Providerabläufe sind noch nicht vollständig abgenommen. LTV-Jobkorrektur und Affiliate-Index sind weiterhin nur vorbereitet; keine Migration, kein manueller Refresh/Backfill und keine Geschäftsdatenmutation wurden ausgelöst. Die gesonderte Freigabegrenze aus Abschnitt 8 des Auftrags bleibt bestehen.
