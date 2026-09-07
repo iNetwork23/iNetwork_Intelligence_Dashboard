@@ -1,4 +1,5 @@
 "use client";
+import LocalizedRoot from '../../components/LocalizedRoot';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   actionResultMessage,
@@ -90,7 +91,7 @@ function PermissionMatrix({
         ? "grant"
         : "inherit";
   return (
-    <div className="permissionGroups">
+    <LocalizedRoot><div className="permissionGroups">
       {groups.map(([group, items]) => (
         <section className="permissionGroup" key={group}>
           <h4>{group}</h4>
@@ -126,7 +127,7 @@ function PermissionMatrix({
           </div>
         </section>
       ))}
-    </div>
+    </div></LocalizedRoot>
   );
 }
 function parsePermissions(fd: FormData, permissions: string[], prefix = "p") {
@@ -140,16 +141,16 @@ function ScopeSummary({ user }: { user: User }) {
     (user.access.scopes[key] || []).map((value) => ({ key, label, value })),
   );
   return entries.length ? (
-    <div className="scopeChips" aria-label="Aktuelle Datenfreigaben">
+    <LocalizedRoot><div className="scopeChips" aria-label="Aktuelle Datenfreigaben">
       {entries.map((item) => (
         <span key={`${item.key}:${item.value}`}>
           <small>{item.label}</small>
           {item.value}
         </span>
       ))}
-    </div>
+    </div></LocalizedRoot>
   ) : (
-    <p className="emptyHint">Keine individuellen Datenfreigaben</p>
+    <LocalizedRoot><p className="emptyHint">Keine individuellen Datenfreigaben</p></LocalizedRoot>
   );
 }
 const scopePreviewList = (
@@ -160,7 +161,7 @@ const scopePreviewList = (
   const shown = items.slice(0, SCOPE_PREVIEW_NAMES),
     rest = items.length - shown.length;
   return (
-    <div>
+    <LocalizedRoot><div>
       <span>
         {label} · {items.length}
         {hidden > 0 ? ` (${hidden} ausgeblendet)` : ""}
@@ -180,7 +181,7 @@ const scopePreviewList = (
         <p className="emptyHint">Keine sichtbar</p>
       )}
       {rest > 0 && <small>+ {rest} weitere</small>}
-    </div>
+    </div></LocalizedRoot>
   );
 };
 /**
@@ -274,7 +275,7 @@ function ScopePreview({
   }, [roleOptions, fallbackRole, user.id]);
   const preview = state.preview;
   return (
-    <div className="scopePreview" ref={host} aria-live="polite" aria-busy={state.status === "loading"}>
+    <LocalizedRoot><div className="scopePreview" ref={host} aria-live="polite" aria-busy={state.status === "loading"}>
       <span className="sectionKicker">VORSCHAU</span>
       {state.status === "error" && (
         <p className="scopePreviewError" role="alert">
@@ -316,7 +317,7 @@ function ScopePreview({
       ) : (
         state.status === "loading" && <p className="emptyHint">Vorschau wird berechnet …</p>
       )}
-    </div>
+    </div></LocalizedRoot>
   );
 }
 
@@ -400,7 +401,7 @@ export default function AccessConsole() {
   };
   if (!data) {
     return (
-      <div className="accessLoading" aria-live="polite">
+      <LocalizedRoot><div className="accessLoading" aria-live="polite">
         {loadError ? (
           <div className="accessError">
             <strong>Laden fehlgeschlagen</strong>
@@ -415,7 +416,7 @@ export default function AccessConsole() {
             <p>Benutzer und Rechte werden geladen …</p>
           </>
         )}
-      </div>
+      </div></LocalizedRoot>
     );
   }
   const permissions = data.permissions || [],
@@ -500,7 +501,7 @@ export default function AccessConsole() {
       })),
   ].slice(0, 8);
   return (
-    <div className="accessConsole" aria-busy={Boolean(pendingAction)}>
+    <LocalizedRoot><div className="accessConsole" aria-busy={Boolean(pendingAction)}>
       <div className="accessToolbar">
         <nav className="accessTabs" aria-label="Bereiche">
           {views
@@ -1256,6 +1257,6 @@ export default function AccessConsole() {
           </div>
         </form>
       </dialog>
-    </div>
+    </div></LocalizedRoot>
   );
 }
