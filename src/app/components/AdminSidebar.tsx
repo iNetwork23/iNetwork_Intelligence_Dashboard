@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "../affiliates/InstantLink";
 import {usePathname,useSearchParams} from "next/navigation";
 import {withGlobalPeriod} from "@/lib/period-controls";
 import {useEffect,useState} from "react";
@@ -8,6 +8,8 @@ import {moveSidebarItem,moveSidebarItemByVisibleOrder,parseSidebarOrder} from "@
 import ThemeToggle from "./ThemeToggle";
 import LanguageToggle from "./LanguageToggle";
 import OneSignalLogoutForm from "./OneSignalLogoutForm";
+import {useHydratedLocale} from "./LanguageProvider";
+import {localizeClientRoot} from "./LocalizedLinkContent";
 
 type Props={
  email:string;
@@ -39,7 +41,7 @@ const PRIMARY_ROUTES=["/","/sources","/cohorts","/fraud","/affiliates","/automat
 const placeSourcesUnderHome=(order:string[])=>{const rest=order.filter(href=>href!=="/sources");rest.splice(rest.indexOf("/")+1,0,"/sources");return rest};
 /** Globaler Zeitraum (period/from/to) wandert in jeden internen Link mit (D5); Links ohne gesetzten Zeitraum bleiben unverändert. */
 /** Badge nur mit Wert > 0 (null = Zähler nicht ladbar); Werte kommen als Props aus der Shell, kein Client-Fetch. */
-const Badge=({item}:{item:NavItem})=>typeof item.badge==="number"&&item.badge>0?<small className="sidebarBadge" aria-label={`${item.badge} ${item.badgeLabel||""}`.trim()} title={item.badgeLabel}>{item.badge}</small>:null;
+const Badge=({item}:{item:NavItem})=>{const locale=useHydratedLocale();return typeof item.badge==="number"&&item.badge>0?localizeClientRoot(<small className="sidebarBadge" aria-label={`${item.badge} ${item.badgeLabel||""}`.trim()} title={item.badgeLabel}>{item.badge}</small>,locale):null};
 const icons:Record<IconName,React.ReactNode>={
  monitor:<><rect x="3" y="4" width="18" height="15" rx="2"/><path d="M8 22h8M12 19v3M7 9h3v6H7zm7-2h3v8h-3z"/></>,
  chart:<><path d="M4 19V9m6 10V5m6 14v-7m4 9H2"/></>,
@@ -56,6 +58,7 @@ function GripIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><circle c
 function ArrowIcon({direction}:{direction:"up"|"down"}){return <svg viewBox="0 0 24 24" aria-hidden="true" className={direction}><path d="m7 14 5-5 5 5"/></svg>}
 
 export default function AdminSidebar(props:Props){
+ const locale=useHydratedLocale();
  const pathname=usePathname(),searchParams=useSearchParams(),storageKey=`wlx-sidebar-order:${props.email.trim().toLowerCase()}`;
  const[collapsed,setCollapsed]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[editing,setEditing]=useState(false),[order,setOrder]=useState<string[]>(PRIMARY_ROUTES),[dragging,setDragging]=useState<string|null>(null),[announcement,setAnnouncement]=useState("");
  useEffect(()=>{const saved=window.localStorage.getItem("wlx-sidebar-collapsed")==="1";setCollapsed(saved);document.documentElement.dataset.sidebarCollapsed=saved?"true":"false"},[]);
@@ -86,11 +89,11 @@ export default function AdminSidebar(props:Props){
  const dropOn=(target:string)=>{if(dragging&&dragging!==target)commitOrder(moveSidebarItem(order,dragging,target),dragging);setDragging(null)};
  const toggleEditing=()=>{if(!editing&&collapsed){setCollapsed(false);window.localStorage.setItem("wlx-sidebar-collapsed","0");document.documentElement.dataset.sidebarCollapsed="false"}setEditing(current=>!current)};
  return <>
-  <button className="mobileSidebarToggle" type="button" aria-label="Navigation öffnen" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><span/><span/><span/></button>
-  <button className={`sidebarBackdrop ${mobileOpen?"visible":""}`} type="button" aria-label="Navigation schließen" onClick={()=>setMobileOpen(false)}/>
-  <aside className={`adminSidebar ${mobileOpen?"mobileOpen":""} ${editing?"ordering":""}`} data-sidebar-collapsed={collapsed} aria-label="Hauptnavigation">
-   <div className="sidebarBrand"><span className="brandMark">ME</span><div><strong>ME Media</strong><small>Performance Intelligence</small></div><button type="button" className="sidebarCollapse" aria-label={collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen"} aria-expanded={!collapsed} onClick={toggleCollapsed}>‹</button></div>
-   <div className="sidebarWorkspace"><span className="workspaceAvatar">{props.email.slice(0,1).toUpperCase()}</span><div><small>Angemeldet als</small><strong>{props.email}</strong></div></div>
+  {localizeClientRoot(<button className="mobileSidebarToggle" type="button" aria-label="Navigation öffnen" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><span/><span/><span/></button>,locale)}
+  {localizeClientRoot(<button className={`sidebarBackdrop ${mobileOpen?"visible":""}`} type="button" aria-label="Navigation schließen" onClick={()=>setMobileOpen(false)}/>,locale)}
+  {localizeClientRoot(<aside className={`adminSidebar ${mobileOpen?"mobileOpen":""} ${editing?"ordering":""}`} data-sidebar-collapsed={collapsed} aria-label="Hauptnavigation">
+   <div className="sidebarBrand"><span className="brandMark" data-no-translate>ME</span><div><strong>ME Media</strong><small>Performance Intelligence</small></div><button type="button" className="sidebarCollapse" aria-label={collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen"} aria-expanded={!collapsed} onClick={toggleCollapsed}>‹</button></div>
+   <div className="sidebarWorkspace"><span className="workspaceAvatar" data-no-translate>{props.email.slice(0,1).toUpperCase()}</span><div><small>Angemeldet als</small><strong data-no-translate>{props.email}</strong></div></div>
    {props.impersonating&&<div className="sidebarImpersonation"><strong>Impersonation aktiv</strong><small>Akteur {props.actorId}</small><form action="/api/auth/impersonation/exit" method="post"><button>Verlassen</button></form></div>}
    <div className="sidebarNavHeader"><span>Bereiche</span><button type="button" className={editing?"active":""} aria-pressed={editing} onClick={toggleEditing}><PencilIcon/><span>{editing?"Fertig":"Bearbeiten"}</span></button></div>
    <nav className="sidebarNav" aria-label="Dashboard-Bereiche">
@@ -101,6 +104,6 @@ export default function AdminSidebar(props:Props){
    <span className="sidebarOrderAnnouncement" aria-live="polite">{announcement}</span>
    <nav className="sidebarNav sidebarSecondary" aria-label="Verwaltung">{secondary.filter(item=>item.show).map(item=><Link key={item.href} href={withGlobalPeriod(item.href,searchParams)} prefetch={false} className={active(item.href)?"active":""} aria-current={active(item.href)?"page":undefined} title={collapsed?item.label:undefined}><Icon name={item.icon}/><span>{item.label}</span><Badge item={item}/></Link>)}</nav>
    <div className="sidebarFooter"><div className="sidebarStatus"><i className={props.writeAccess?"write":"read"}/><span>{props.capabilityLabel}</span><small>{props.role.replaceAll("_"," ")}</small></div><div className="sidebarActions"><div className="sidebarPreferences"><div className="sidebarPreference"><span>Sprache</span><LanguageToggle compact/></div><div className="sidebarPreference"><span>Darstellung</span><ThemeToggle showLabel/></div></div><OneSignalLogoutForm configured={props.oneSignalConfigured}/></div></div>
-  </aside>
+  </aside>,locale)}
  </>
 }

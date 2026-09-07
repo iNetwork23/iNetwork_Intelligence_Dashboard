@@ -28,6 +28,14 @@ Die Tests bestätigen außerdem Monats-/Jahreswechsel, freie Datumseingaben, Pre
 
 Für Affiliate 154 stimmen auf Seite 1/3/6 jeweils Anzahl, Registrierungssumme, alle fünf Umsatzsummen sowie erste/letzte Gruppenschlüssel zwischen UI und `private.ltv_cohorts_materialized` überein: 100/100/44 Zeilen, 18883/118/113788 Registrierungen; keine fremde Affiliate-ID in diesen 244 sichtbaren Zeilen. Insgesamt: 544 Gruppen und 173597 Registrierungen. Die direkte Abfrage der nicht materialisierten Rohdatenview endete im Statement-Timeout; sie ist ausdrücklich kein bestandener Rohdatenabgleich.
 
+## Folgepaket: verzögert geladene Seitenleiste
+
+Auf `a125d84c159c7c1be17264435cb291da17841795`, Deployment `dpl_2rG9Yqeaib9STj4xAdJbn6PxEq6U`, funktionieren Monats-/Jahreswechsel und freie Datumsfelder produktiv. Beim kalten englischen Startseitenaufruf um 09:20:52 UTC trat aber weiterhin React #418 auf. Dieses Release erhält deshalb keinen allgemeinen Hydrierungs-PASS.
+
+Ein Test der echten verzögert hydrierten AdminSidebar reproduziert die Änderung von `Hauptnavigation`/`ME` zu `Main navigation`/`M.E` vor Reacts Übernahme. Die Seitenleiste, Badges, Designschalter und Logoutbeschriftung verwenden nun ebenfalls den stabilen Hydrierungssnapshot. Navigationslinks verwenden die bereits geschützte Linkkomponente; DOM-Struktur, Berechtigungen, Events und Formular-Ref bleiben erhalten. Markeninitialen und Benutzeridentität sind von der Übersetzung ausgenommen.
+
+Der Regressionstest bestätigt nach der Korrektur DE/EN-Wechsel, unveränderte Linkparameter, Ein-/Ausklappen und Bearbeitungsmodus sowie Designwechsel und Logoutbeschriftung. Es wird kein Logout oder Rollenwechsel ausgelöst. Prüfergebnis: 195 Dateien / 1598 Tests, Lint, Typecheck, Build und Diffprüfung bestanden; unveränderte Dependencies. Der tatsächliche kalte Browserlauf des neuen SHA wird nach Veröffentlichung separat zurückgelesen.
+
 ## Verbleibende Abnahmen
 
 WLX-006 und WLX-011 bleiben offen: Fraud-Laufzeit, vollständige Kohorten-Rohdatenparität, Rollen-/State-/Theme-/Accessibility-Matrix und kontrollierte Stop-/Providerabläufe sind noch nicht vollständig abgenommen. LTV-Jobkorrektur und Affiliate-Index sind weiterhin nur vorbereitet; keine Migration, kein manueller Refresh/Backfill und keine Geschäftsdatenmutation wurden ausgelöst. Die gesonderte Freigabegrenze aus Abschnitt 8 des Auftrags bleibt bestehen.
