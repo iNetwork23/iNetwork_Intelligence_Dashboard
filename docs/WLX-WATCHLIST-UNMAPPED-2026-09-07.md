@@ -7,3 +7,5 @@ B: Die Watchlist behandelt nur positive sichere IDs als Affiliate-Scope. Eine fe
 Verhaltensnachweis mit echter Watchlist-Komponente: neuer kontextloser Favorit, gespeicherter Nullfavorit mit Entfernen sowie echter gespeicherter Affiliate. Vor der Änderung zwei Fehler und ein PASS; danach alle drei PASS. Keine Campaign-, Source- oder andere Provideränderung.
 
 Der produktiv angelegte Testfavorit wird nach der Live-Verifikation über die UI entfernt. Die vollständige Partnerrollen-/Scope-Abnahme von WLX-013 bleibt getrennt.
+
+A/B: Dieselbe leere Campaign enthielt sechs gespeicherte LP-Slots mit Status `deleted`. Der Listenheader bezeichnet sie deshalb neutral als „Landingpages“; die individuellen Status bleiben sichtbar, statt alle sechs fälschlich als aktiv zu bezeichnen.
