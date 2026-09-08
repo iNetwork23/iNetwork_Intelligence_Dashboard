@@ -6,6 +6,18 @@ const row=(date:string,clicks:number):DailyMetricRow=>({id:`metric:${date}`,metr
 const shift=(day:string,count:number)=>new Date(Date.parse(`${day}T12:00:00Z`)+count*86_400_000).toISOString().slice(0,10);
 
 describe('portfolio range snapshots',()=>{
+ it('preserves proven click eligibility while aggregating mixed source modes',()=>{
+  const tracked={...row('2026-09-01',100),raw:{traffic_mode:'tracked'}};
+  const api={...row('2026-09-02',9),raw:{traffic_mode:'api'}};
+  expect(buildPortfolioRangeSnapshotRecords('2026-09-01','2026-09-02',[tracked])[0].value.rows[0].ce).toBe(true);
+  const mixed=buildPortfolioRangeSnapshotRecords('2026-09-01','2026-09-02',[tracked,api])[0].value.rows[0];
+  expect(mixed).toMatchObject({cl:109,cv:2,pr:6,ce:false});
+  expect(buildPortfolioRangeSnapshotRecords('2026-09-01','2026-09-02',[tracked,{...api,raw:{}}])[0].value.rows[0].ce).toBe(false);
+  const aggregate={affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Offer',campaign_id:'0',campaign_name:'Direct',offer_url_id:'2774',offer_url_name:'LP',clicks:100,sois:10,first_sales:1,rebills:0,coin_spend:0,payout:5,revenue:10,profit:5,click_metrics_eligible:true};
+  const valid=buildPortfolioRangeSnapshotRecordFromAggregates('2026-09-01','2026-09-02',[aggregate]).value;
+  expect(valid.rows[0].ce).toBe(true);
+  expect(isValidPortfolioRangeSnapshot({...valid,rows:[{...valid.rows[0],ce:'true'}]},valid.from,valid.to)).toBe(false);
+ });
  it('pre-aggregates the exact rolling range plus today and seven days for one-row reads',()=>{
   const from='2026-06-23',to='2026-07-22',rows=Array.from({length:30},(_,index)=>row(shift(from,index),index+1));
   const records=buildPortfolioRangeSnapshotRecords(from,to,rows),byKey=new Map(records.map(record=>[record.key,record.value]));

@@ -6,7 +6,7 @@ import type {Metrics,Portfolio} from './portfolio';
 
 export function getDashboard(period:ReportingPeriod,custom?:{from?:string;to?:string},access?:AccessMetadata){
   const from=custom?.from||'',to=custom?.to||'',scopeKey=access?scopeFingerprint(access):'system-unscoped';
-  return unstable_cache(()=>loadPortfolioFromCache(period,getSupabaseAdmin(),new Date(),custom,access),['supabase-portfolio-berlin-v5',period,from,to,scopeKey],{revalidate:300,tags:['supabase-portfolio']})();
+  return unstable_cache(()=>loadPortfolioFromCache(period,getSupabaseAdmin(),new Date(),custom,access),['supabase-portfolio-click-ratios-v1-berlin-v5',period,from,to,scopeKey],{revalidate:300,tags:['supabase-portfolio']})();
 }
 
 /** Startseite (Etappe 3): Portfolio plus Tagesreihe und Vorperiode – beides nur für Fenster bis 45 Tage, parallel geladen, nie blockierend. */
@@ -23,5 +23,5 @@ export async function loadHomeDashboard(period:ReportingPeriod,custom:{from?:str
 }
 export function getHomeDashboard(period:ReportingPeriod,custom?:{from?:string;to?:string},access?:AccessMetadata){
   const from=custom?.from||'',to=custom?.to||'',scopeKey=access?scopeFingerprint(access):'system-unscoped';
-  return unstable_cache(()=>loadHomeDashboard(period,custom,access),['supabase-home-portfolio-v1-berlin-v5',period,from,to,scopeKey],{revalidate:300,tags:['supabase-portfolio']})();
+  return unstable_cache(()=>loadHomeDashboard(period,custom,access),['supabase-home-portfolio-click-ratios-v1-berlin-v5',period,from,to,scopeKey],{revalidate:300,tags:['supabase-portfolio']})();
 }

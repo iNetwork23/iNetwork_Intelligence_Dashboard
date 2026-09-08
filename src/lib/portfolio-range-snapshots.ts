@@ -10,7 +10,7 @@ const metrics=['clicks','sois','first_sales','rebills','coin_spend','payout','re
 export type PortfolioRangeSnapshot={version:1|2;reportingVersion?:number;timezoneId?:number;from:string;to:string;rows:PortfolioSnapshotRow[];generation?:string};
 export type PortfolioRangeSnapshotRecord={key:string;value:PortfolioRangeSnapshot};
 export type PortfolioRangeMarkerRecord={key:string;value:{version:2;reportingVersion:number;timezoneId:number;from:string;to:string;generation:string}};
-export type PortfolioAggregateRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number};
+export type PortfolioAggregateRow={affiliate_id:string;affiliate_name:string;offer_id:string;offer_name:string;campaign_id:string;campaign_name:string;offer_url_id:string;offer_url_name:string;clicks:number;sois:number;first_sales:number;rebills:number;coin_spend:number;payout:number;revenue:number;profit:number;click_metrics_eligible?:boolean};
 
 export function buildPortfolioRangePublication(records:PortfolioRangeSnapshotRecord[],generation:string){
  return{
@@ -31,11 +31,11 @@ export function isValidPortfolioRangeSnapshot(value:unknown,from:string,to:strin
  if((snapshot.version!==1&&snapshot.version!==2)||snapshot.from!==from||snapshot.to!==to||!Array.isArray(snapshot.rows))return false;
  if(expectedGeneration&&(snapshot.version!==2||snapshot.generation!==expectedGeneration))return false;
  const strings=['a','an','o','on','c','cn','u','un','s','ss']as const,numbers=['cl','cv','fs','rb','cs','p','r','pr']as const;
- return snapshot.rows.every(row=>Boolean(row&&typeof row==='object'&&strings.every(field=>typeof row[field]==='string')&&numbers.every(field=>typeof row[field]==='number'&&Number.isFinite(row[field]))&&(row.m===undefined||row.m==='api'||row.m==='tracked')&&(row.a1===undefined||typeof row.a1==='string')&&(row.a2===undefined||typeof row.a2==='string')));
+ return snapshot.rows.every(row=>Boolean(row&&typeof row==='object'&&strings.every(field=>typeof row[field]==='string')&&numbers.every(field=>typeof row[field]==='number'&&Number.isFinite(row[field]))&&(row.m===undefined||row.m==='api'||row.m==='tracked'||row.m==='unknown')&&(row.ce===undefined||typeof row.ce==='boolean')&&(row.a1===undefined||typeof row.a1==='string')&&(row.a2===undefined||typeof row.a2==='string')));
 }
 
 export function buildPortfolioRangeSnapshotRecordFromAggregates(from:string,to:string,rows:PortfolioAggregateRow[]):PortfolioRangeSnapshotRecord{
- return{key:`portfolio_range:${from}:${to}`,value:{version:1,reportingVersion:5,timezoneId:56,from,to,rows:rows.map(row=>({a:row.affiliate_id,an:row.affiliate_name,o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:'',ss:'',cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit}))}};
+ return{key:`portfolio_range:${from}:${to}`,value:{version:1,reportingVersion:5,timezoneId:56,from,to,rows:rows.map(row=>({a:row.affiliate_id,an:row.affiliate_name,o:row.offer_id,on:row.offer_name,c:row.campaign_id,cn:row.campaign_name,u:row.offer_url_id,un:row.offer_url_name,s:'',ss:'',ce:row.click_metrics_eligible===true,cl:row.clicks,cv:row.sois,fs:row.first_sales,rb:row.rebills,cs:row.coin_spend,p:row.payout,r:row.revenue,pr:row.profit}))}};
 }
 
 function aggregateRange(rows:DailyMetricRow[],from:string,to:string){
@@ -43,7 +43,8 @@ function aggregateRange(rows:DailyMetricRow[],from:string,to:string){
  for(const row of rows){
   if(row.metric_date<from||row.metric_date>to)continue;
   const key=[row.affiliate_id,row.offer_id,row.campaign_id,row.offer_url_id].join('\u0000');
-  const current=grouped.get(key)||{...row,id:key,metric_date:to,source_id:'',sub_source:'',clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0,raw:{}};
+  const current=grouped.get(key)||{...row,id:key,metric_date:to,source_id:'',sub_source:'',clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0,raw:{click_metrics_eligible:true}};
+  current.raw.click_metrics_eligible=current.raw.click_metrics_eligible===true&&row.raw.traffic_mode==='tracked';
   for(const metric of metrics)current[metric]+=row[metric];
   grouped.set(key,current);
  }
