@@ -21,7 +21,7 @@ afterEach(async()=>{if(root)await act(async()=>root!.unmount());root=undefined;v
 
 it.each([
  ['access',()=> <AccessConsole/>,'Overview','Übersicht'],
- ['deals',()=> <DealRegisterForm initialRules={[...DEFAULT_DEAL_RULES]} initialSource="defaults" defaults={DEFAULT_DEAL_RULES}/>,'Create rule','Regel anlegen'],
+ ['deals',()=> <DealRegisterForm initialRevision="defaults:test" initialRules={[...DEFAULT_DEAL_RULES]} initialSource="defaults" defaults={DEFAULT_DEAL_RULES}/>,'Create rule','Regel anlegen'],
  ['app',()=> <AppInstallation/>,'OneSignal API','OneSignal API'],
 ] as const)('hydrates delayed %s content in English without replacing the server tree',async(_name,content,english,german)=>{
  let delayed=false,resolve!:()=>void;const ready=new Promise<void>(done=>{resolve=done});

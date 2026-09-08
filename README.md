@@ -94,7 +94,7 @@ Im Automation Builder stehen nur tatsächlich implementierte Strategien zur Verf
 
 `/source-blocks` und `/api/source-blocks` zeigen Bestand, Preview, Historie und Reconciliation. Provideränderungen verlangen einen exakten Testscope, unmittelbare Preview, Bestätigung, Provider-/Persistenz-Read-back und Rollback gemäß `docs/SOURCE-BLOCK-CONTROLLED-E2E.md`.
 
-`/settings/deals` und `/api/deals` verwalten partnerspezifische Sonderregeln für interne Nutzer mit `settings.manage`. Gespeicherte Regeln, Defaults und Ladefehler sind getrennt zu behandeln. Produktionsspeicherung, Konkurrenzschutz und Parität der Empfehlungen müssen mit einem freigegebenen Testpartner abgenommen werden; die vorhandene Oberfläche allein belegt dies nicht.
+`/settings/deals` und `/api/deals` verwalten partnerspezifische Sonderregeln für interne Nutzer mit `settings.manage`. Gespeicherte Regeln, Defaults und Ladefehler sind getrennt zu behandeln. Die Verwaltung liest das Register ungecacht und sendet beim Speichern `expectedRevision`; veraltete oder fehlende Revisionen liefern HTTP 409. Ein atomarer Vergleich in `sync_state` verhindert gleichzeitiges Überschreiben, auch beim ersten Speichern eines älteren Registers. Nach Ladefehlern oder beschädigten Daten ist Speichern gesperrt, bis erfolgreich neu geladen wurde. Bestehende Regeln werden ausdrücklich über „Bearbeiten“ geändert. Produktionsspeicherung, Konkurrenzschutz und Parität der Empfehlungen müssen mit einem freigegebenen Testpartner abgenommen werden; die vorhandene Oberfläche allein belegt dies nicht.
 
 ## Source-Preview und Fraud-Abgrenzung
 
