@@ -63,12 +63,13 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
   const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
     const unique=new Map<string,EverflowConversion>();
     const diagnostics:{pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[]}[]=[];
-    const duplicateProofs:{digest:string;withinPageOnly:boolean}[]=[];
-    let expectedTotal:number|undefined,repeatedPage=false,totalChanged=false;
+    const duplicateProofs:string[]=[];
+    let expectedTotal:number|undefined,repeatedPage=false,totalChanged=false,recoveryAllowed=true;
     // Coprime sizes move offset boundaries. Raw totals may include identical
     // provider records, but accepting those requires three complete, matching
-    // content/multiplicity traversals, including one without boundary overlap.
-    for(const pageSize of [2000,997,503]){
+    // content/multiplicity traversals without boundary overlap. One tainted
+    // traversal may be replaced by a fourth read; other contradictions reject.
+    for(const pageSize of [2000,997,503,991]){
       unique.clear();
       const pass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,crossPageDuplicateRows:0,reportedPageSizes:[] as number[]};diagnostics.push(pass);
       const fingerprints=new Set<string>();
@@ -98,15 +99,19 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         if(unique.size===expectedTotal)return Array.from(unique.values());
         if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
       }
-      if(validProof&&!totalChanged&&pass.receivedRows===expectedTotal&&pass.duplicateRows>0&&pass.changedDuplicateRows===0){
+      const eligible=validProof&&!totalChanged&&pass.receivedRows===expectedTotal&&pass.duplicateRows>0&&pass.changedDuplicateRows===0;
+      if(!eligible)recoveryAllowed=false;
+      if(eligible&&pass.crossPageDuplicateRows===0){
         const hash=createHash('sha256');
         for(const id of [...contents.keys()].sort()){const entry=contents.get(id)!;hash.update(JSON.stringify([id,entry.json,entry.count]));hash.update('\n')}
-        duplicateProofs.push({digest:hash.digest('hex'),withinPageOnly:pass.crossPageDuplicateRows===0});
+        const digest=hash.digest('hex');
+        if(duplicateProofs.some(proof=>proof!==digest))recoveryAllowed=false;
+        duplicateProofs.push(digest);
       }
-    }
-    if(!repeatedPage&&!totalChanged&&duplicateProofs.length===3&&duplicateProofs.every(proof=>proof.digest===duplicateProofs[0].digest)&&duplicateProofs.some(proof=>proof.withinPageOnly)){
-      console.warn('Everflow verified identical conversion duplicates',{from,to,declaredRows:expectedTotal,distinctRows:unique.size,identicalDuplicateRows:Number(expectedTotal)-unique.size,passes:duplicateProofs.length});
-      return Array.from(unique.values());
+      if(recoveryAllowed&&!repeatedPage&&!totalChanged&&duplicateProofs.length===3){
+        console.warn('Everflow verified identical conversion duplicates',{from,to,declaredRows:expectedTotal,distinctRows:unique.size,identicalDuplicateRows:Number(expectedTotal)-unique.size,passes:duplicateProofs.length,traversalPasses:diagnostics.length});
+        return Array.from(unique.values());
+      }
     }
     const reason=repeatedPage?'duplicate/repeated page; ':'';
     // Aggregate counters only: never include provider rows, identities or secrets.

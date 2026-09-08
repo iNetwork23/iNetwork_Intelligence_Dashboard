@@ -1,12 +1,28 @@
 import 'server-only';
+import {revalidateTag} from 'next/cache';
 import {createEverflowHistorySource} from './everflow-history';
 import {advanceFraudBackfillState,buildFraudBackfillParity,initialFraudBackfillState,invalidateFraudBackfillState,normalizeFraudBackfillState,requireFraudCoverageFrom,selectFraudBackfillWindow,type FraudBackfillEvidence,type FraudBackfillState,type FraudConversionType,type StoredFraudBackfillState} from './fraud-backfill';
-import {conversionIdentityDigest,refreshConversionRange,refreshHistoryRange} from './history-cache';
+import {conversionIdentityDigest,loadDailyReportSlices,refreshConversionRange,refreshHistoryRange,type SyncStore} from './history-cache';
 import {createSupabaseSyncStore,getSupabaseAdmin} from './supabase';
 import {berlinRangeUtcBounds} from './reporting-day';
 
 export const FRAUD_BACKFILL_KEY='fraud_conversion_backfill_berlin_v4';
 const types:FraudConversionType[]=['soi','coin_spend','first_sale','rebill'];
+const expireFraudCaches=()=>{for(const tag of ['fraud-dashboard','affiliate-source','affiliate-source-freshness','affiliate-rebills'])revalidateTag(tag,{expire:0})};
+// The job retains its whole-window parity/cursor contract. Only this Fraud
+// adapter uses smaller atomic transactions; the shared store stays atomic.
+function dailyReplacementStore(store:SyncStore):SyncStore{
+  return{...store,async replaceConversions(from,to,rows){
+    if(!store.replaceConversions)throw new Error('Fraud requires atomic conversion replacement');
+    const bounds=berlinRangeUtcBounds(from,to);
+    if(rows.some(row=>row.converted_at<bounds.from||row.converted_at>=bounds.toExclusive))throw new Error('Fraud conversions outside replacement window');
+    await loadDailyReportSlices(from,to,async day=>{
+      const dayBounds=berlinRangeUtcBounds(day,day);
+      await store.replaceConversions!(day,day,rows.filter(row=>row.converted_at>=dayBounds.from&&row.converted_at<dayBounds.toExclusive));
+      return[];
+    });
+  }};
+}
 export async function loadFraudBackfillState():Promise<FraudBackfillState|null>{const {data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',FRAUD_BACKFILL_KEY).maybeSingle();if(error)throw new Error(`Supabase Fraud-Backfill-State: ${error.message}`);return data?.value?normalizeFraudBackfillState(data.value as StoredFraudBackfillState):null}
 async function oldestActiveStopDay(){const {data,error}=await getSupabaseAdmin().from('fraud_stop_requests').select('requested_at').is('deactivated_at',null).order('requested_at').limit(1).maybeSingle();if(error)throw new Error(`Supabase Fraud-Stop-Coverage: ${error.message}`);return data?.requested_at?String(data.requested_at).slice(0,10):null}
 async function storedEvidence(from:string,to:string):Promise<FraudBackfillEvidence>{
@@ -20,9 +36,12 @@ export async function runFraudConversionSync(now=new Date()){
   if(state.phase==='rolling'&&state.lastSuccessAt&&now.getTime()-Date.parse(state.lastSuccessAt)<55*60_000)return{mode:'rolling' as const,phase:'rolling' as const,ready:Boolean(state.parityVerifiedThrough&&state.coveredThrough&&state.parityVerifiedThrough>=state.coveredThrough),readyAt:state.readyAt,skipped:true,from:null,to:null,upsertedConversions:0};
   const window=selectFraudBackfillWindow(state,now),source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),store=createSupabaseSyncStore();
   const invalidated=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:invalidateFraudBackfillState(state)},{onConflict:'key'});if(invalidated.error)throw new Error(`Supabase Fraud-Backfill-Invalidierung: ${invalidated.error.message}`);
+  try{
+  expireFraudCaches();
   const raw=await source.loadConversions(window.from,window.to),loadConversions=async()=>raw;
   const reportResult=await refreshHistoryRange({store,from:window.from,to:window.to,loadConversions,loadReports:source.loadReports});
   const reportHasActivity=reportResult.metrics.some(row=>row.sois>0||row.first_sales>0||row.rebills>0||row.coin_spend>0);
-  const result=await refreshConversionRange({store,from:window.from,to:window.to,loadConversions}),stored=await storedEvidence(window.from,window.to),parity=buildFraudBackfillParity({from:window.from,to:window.to,expected:{typeCounts:result.typeCounts,identityDigest:result.identityDigest},stored,reportHasActivity}),next=advanceFraudBackfillState(state,window,now,parity),saved=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:next},{onConflict:'key'});
+  const result=await refreshConversionRange({store:dailyReplacementStore(store),from:window.from,to:window.to,loadConversions}),stored=await storedEvidence(window.from,window.to),parity=buildFraudBackfillParity({from:window.from,to:window.to,expected:{typeCounts:result.typeCounts,identityDigest:result.identityDigest},stored,reportHasActivity}),next=advanceFraudBackfillState(state,window,now,parity),saved=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:next},{onConflict:'key'});
   if(saved.error)throw new Error(`Supabase Fraud-Backfill-Fortschritt: ${saved.error.message}`);return{...result,mode:window.mode,phase:next.phase,ready:next.phase==='rolling'&&next.parityVerifiedThrough===next.coveredThrough,readyAt:next.readyAt,skipped:false,parity,sourceMetrics:reportResult.metrics.length};
+  }finally{expireFraudCaches()}
 }
