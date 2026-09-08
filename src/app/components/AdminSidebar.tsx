@@ -3,7 +3,7 @@
 import Link from "../affiliates/InstantLink";
 import {usePathname,useSearchParams} from "next/navigation";
 import {withGlobalPeriod} from "@/lib/period-controls";
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {moveSidebarItem,moveSidebarItemByVisibleOrder,parseSidebarOrder} from "@/lib/sidebar-order";
 import ThemeToggle from "./ThemeToggle";
 import LanguageToggle from "./LanguageToggle";
@@ -60,11 +60,39 @@ function ArrowIcon({direction}:{direction:"up"|"down"}){return <svg viewBox="0 0
 export default function AdminSidebar(props:Props){
  const locale=useHydratedLocale();
  const pathname=usePathname(),searchParams=useSearchParams(),storageKey=`wlx-sidebar-order:${props.email.trim().toLowerCase()}`;
- const[collapsed,setCollapsed]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[editing,setEditing]=useState(false),[order,setOrder]=useState<string[]>(PRIMARY_ROUTES),[dragging,setDragging]=useState<string|null>(null),[announcement,setAnnouncement]=useState("");
+ const[collapsed,setCollapsed]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[mobileMode,setMobileMode]=useState(false),[editing,setEditing]=useState(false),[order,setOrder]=useState<string[]>(PRIMARY_ROUTES),[dragging,setDragging]=useState<string|null>(null),[announcement,setAnnouncement]=useState("");
+ const mobileToggleRef=useRef<HTMLButtonElement>(null),mobileCloseRef=useRef<HTMLButtonElement>(null),sidebarRef=useRef<HTMLElement>(null);
+ useEffect(()=>{
+  if(typeof window.matchMedia!=='function')return;
+  const media=window.matchMedia('(max-width:760px)'),update=()=>{setMobileMode(media.matches);if(!media.matches)setMobileOpen(false)};
+  update();media.addEventListener('change',update);return()=>media.removeEventListener('change',update);
+ },[]);
  useEffect(()=>{const saved=window.localStorage.getItem("wlx-sidebar-collapsed")==="1";setCollapsed(saved);document.documentElement.dataset.sidebarCollapsed=saved?"true":"false"},[]);
  useEffect(()=>{const raw=window.localStorage.getItem(storageKey),parsed=parseSidebarOrder(raw,PRIMARY_ROUTES);setOrder(raw&&!raw.includes('"/sources"')?placeSourcesUnderHome(parsed):parsed)},[storageKey]);
  useEffect(()=>{setMobileOpen(false)},[pathname]);
  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape"){setMobileOpen(false);setEditing(false)}};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey)},[]);
+ useEffect(()=>{
+  if(!mobileMode||!mobileOpen)return;
+  const sidebar=sidebarRef.current;if(!sidebar)return;
+  mobileCloseRef.current?.focus();
+  const focusables=()=>Array.from(sidebar.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')).filter(node=>node.tabIndex>=0&&!node.matches('.sidebarCollapse')&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden');
+  const onFocus=(event:FocusEvent)=>{if(!sidebar.contains(event.target as Node))mobileCloseRef.current?.focus()};
+  const onKey=(event:KeyboardEvent)=>{
+   if(event.key==='Escape'){event.preventDefault();setMobileOpen(false);return}
+   if(event.key!=='Tab')return;
+   const items=focusables(),first=items[0],last=items.at(-1);
+   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+  };
+  document.addEventListener('focusin',onFocus);document.addEventListener('keydown',onKey);
+  return()=>{
+   document.removeEventListener('focusin',onFocus);document.removeEventListener('keydown',onKey);
+   if(sidebar.contains(document.activeElement)){
+    if(window.matchMedia('(max-width:760px)').matches)mobileToggleRef.current?.focus();
+    else sidebar.querySelector<HTMLElement>('a[href]')?.focus();
+   }
+  };
+ },[mobileMode,mobileOpen]);
  const toggleCollapsed=()=>setCollapsed(current=>{const next=!current;window.localStorage.setItem("wlx-sidebar-collapsed",next?"1":"0");document.documentElement.dataset.sidebarCollapsed=next?"true":"false";return next});
  const items:PrimaryItem[]=[
   {href:"/",label:"Account Monitor",icon:"monitor",show:true},
@@ -89,10 +117,10 @@ export default function AdminSidebar(props:Props){
  const dropOn=(target:string)=>{if(dragging&&dragging!==target)commitOrder(moveSidebarItem(order,dragging,target),dragging);setDragging(null)};
  const toggleEditing=()=>{if(!editing&&collapsed){setCollapsed(false);window.localStorage.setItem("wlx-sidebar-collapsed","0");document.documentElement.dataset.sidebarCollapsed="false"}setEditing(current=>!current)};
  return <>
-  {localizeClientRoot(<button className="mobileSidebarToggle" type="button" aria-label="Navigation öffnen" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><span/><span/><span/></button>,locale)}
+  {localizeClientRoot(<button ref={mobileToggleRef} className="mobileSidebarToggle" type="button" aria-label="Navigation öffnen" aria-expanded={mobileOpen} aria-controls="dashboard-navigation" onClick={()=>setMobileOpen(true)}><span/><span/><span/></button>,locale)}
   {localizeClientRoot(<button className={`sidebarBackdrop ${mobileOpen?"visible":""}`} type="button" aria-label="Navigation schließen" onClick={()=>setMobileOpen(false)}/>,locale)}
-  {localizeClientRoot(<aside className={`adminSidebar ${mobileOpen?"mobileOpen":""} ${editing?"ordering":""}`} data-sidebar-collapsed={collapsed} aria-label="Hauptnavigation">
-   <div className="sidebarBrand"><span className="brandMark" data-no-translate>ME</span><div><strong>ME Media</strong><small>Performance Intelligence</small></div><button type="button" className="sidebarCollapse" aria-label={collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen"} aria-expanded={!collapsed} onClick={toggleCollapsed}>‹</button></div>
+  {localizeClientRoot(<aside ref={sidebarRef} id="dashboard-navigation" className={`adminSidebar ${mobileOpen?"mobileOpen":""} ${editing?"ordering":""}`} data-sidebar-collapsed={collapsed} aria-label="Hauptnavigation" inert={mobileMode&&!mobileOpen} role={mobileMode&&mobileOpen?'dialog':undefined} aria-modal={mobileMode&&mobileOpen?true:undefined}>
+   <div className="sidebarBrand"><span className="brandMark" data-no-translate>ME</span><div><strong>ME Media</strong><small>Performance Intelligence</small></div><button type="button" className="sidebarCollapse" aria-label={collapsed?"Seitenleiste ausklappen":"Seitenleiste einklappen"} aria-expanded={!collapsed} onClick={toggleCollapsed}>‹</button><button ref={mobileCloseRef} className="mobileSidebarClose" type="button" aria-label="Navigation schließen" onClick={()=>setMobileOpen(false)}>×</button></div>
    <div className="sidebarWorkspace"><span className="workspaceAvatar" data-no-translate>{props.email.slice(0,1).toUpperCase()}</span><div><small>Angemeldet als</small><strong data-no-translate>{props.email}</strong></div></div>
    {props.impersonating&&<div className="sidebarImpersonation"><strong>Impersonation aktiv</strong><small>Akteur {props.actorId}</small><form action="/api/auth/impersonation/exit" method="post"><button>Verlassen</button></form></div>}
    <div className="sidebarNavHeader"><span>Bereiche</span><button type="button" className={editing?"active":""} aria-pressed={editing} onClick={toggleEditing}><PencilIcon/><span>{editing?"Fertig":"Bearbeiten"}</span></button></div>

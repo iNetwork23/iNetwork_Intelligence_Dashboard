@@ -37,9 +37,9 @@ beforeEach(()=>{
 });
 afterEach(async()=>{if(root)await act(async()=>root!.unmount());root=undefined;host.remove();vi.restoreAllMocks();vi.unstubAllGlobals()});
 
-async function missingRangeError(){
+async function missingRangeError(from='2026-08-10',to='2026-09-08'){
   const q={select:()=>q,gte:()=>q,lte:()=>q,order:async()=>({data:[],error:null})};
-  try{await assertBerlinReportingRange({from:()=>q} as never,{from:'2026-08-10',to:'2026-09-08'})}catch(error){return error}
+  try{await assertBerlinReportingRange({from:()=>q} as never,{from,to})}catch(error){return error}
   throw new Error('Missing markers unexpectedly accepted');
 }
 async function mount(query:Record<string,string>={period:'30d',view:'affiliates',company:'Example'}){
@@ -93,5 +93,13 @@ describe('account period recovery after a rejected data load',()=>{
     const error=await missingRangeError();
     expect(error).toMatchObject({name:'IncompleteBerlinReportingRangeError',confirmedDays:0,totalDays:30});
     expect(String(error)).toContain('0/30 Tage bestätigt');
+  });
+  it('does not confuse a 403-day incomplete reporting range with an authorization failure',async()=>{
+    fixture.failure=await missingRangeError('2025-08-02','2026-09-08');
+    expect(String(fixture.failure)).toContain('0/403 Tage bestätigt');
+    await mount({period:'custom',from:'2025-08-02',to:'2026-09-08'});
+    expect(host.textContent).toContain('Zeitraum noch nicht vollständig verfügbar');
+    expect(host.querySelector('[data-dashboard-retry]')).not.toBeNull();
+    expect(host.textContent).not.toContain('403 · Scope');
   });
 });
