@@ -163,7 +163,7 @@ function assessUnitBase(m: UnitMetrics, context: UnitContext): UnitVerdict {
       `${m.sois} SOIs`,
       `${m.firstSales} First-Sales`,
       `${m.rebills} Rebills`,
-      `${m.profit.toFixed(2)} € Profit`,
+      `${m.profit.toFixed(2).replace('.', ',')} € Profit`,
     ],
     verdict = (action: UnitAction, severity: UnitSeverity, reason: string): UnitVerdict => ({
       action,
