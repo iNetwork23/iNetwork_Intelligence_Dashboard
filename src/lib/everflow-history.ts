@@ -72,10 +72,10 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         const reportedSize=result.paging?.page_size;
         if(Number.isSafeInteger(reportedSize)&&Number(reportedSize)>0&&!pass.reportedPageSizes.includes(Number(reportedSize))&&pass.reportedPageSizes.length<4)pass.reportedPageSizes.push(Number(reportedSize));
         const identities=rows.map(row=>row.conversion_id||JSON.stringify(row)),fingerprint=JSON.stringify(identities);
-        if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
-        fingerprints.add(fingerprint);
         for(let index=0;index<rows.length;index++){const previous=unique.get(identities[index]);if(previous){pass.duplicateRows++;if(JSON.stringify(previous)!==JSON.stringify(rows[index]))pass.changedDuplicateRows++}unique.set(identities[index],rows[index])}
         pass.uniqueRows=unique.size;
+        if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
+        fingerprints.add(fingerprint);
         if(unique.size>expectedTotal)throw new Error(`Everflow conversion pagination total_count changed below collected identities for ${from}: ${unique.size}/${expectedTotal}`);
         if(unique.size===expectedTotal)return Array.from(unique.values());
         if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
