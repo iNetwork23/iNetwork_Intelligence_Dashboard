@@ -7,5 +7,6 @@ const headers=[
  {key:'Referrer-Policy',value:'strict-origin-when-cross-origin'},
  {key:'Permissions-Policy',value:'camera=(), microphone=(), geolocation=()'},
 ];
-const nextConfig:NextConfig={output:'standalone',poweredByHeader:false,async headers(){return[{source:'/:path*',headers}]}};
+// Vercel uses its adapter output; standalone remains available for self-hosted deployments.
+const nextConfig:NextConfig={output:process.env.VERCEL==='1'?undefined:'standalone',poweredByHeader:false,async headers(){return[{source:'/:path*',headers}]}};
 export default nextConfig;

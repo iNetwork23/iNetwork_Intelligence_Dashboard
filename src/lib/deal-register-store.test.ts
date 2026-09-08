@@ -6,7 +6,9 @@ const cache=vi.hoisted(()=>({expired:[]as unknown[],keys:[]as string[][]}));
 vi.mock('next/cache',()=>({unstable_cache:(load:()=>unknown,keyParts:string[])=>{cache.keys.push(keyParts);return load},revalidateTag:(tag:string,options:unknown)=>{cache.expired.push([tag,options])}}));
 const store=new MemorySecurityStore();
 vi.mock('./access-store',()=>({securityStore:()=>store}));
-import {DealRegisterValidationError,loadDealRegister,loadDealRegisterState,readDealRegisterState,saveDealRegister} from './deal-register-store';
+import {DealRegisterValidationError,loadDealRegister,loadDealRegisterState,readDealRegisterState,readEditableDealRegister,DealRegisterConflictError,saveDealRegister as saveRevision} from './deal-register-store';
+
+const saveDealRegister=async(rules:unknown,actor:string,target=store,now=new Date())=>saveRevision(rules,actor,(await readEditableDealRegister(target)).revision,target,now);
 
 describe('deal register store (sync_state deal_register:v1, additive)',()=>{
  beforeEach(()=>{store.values.clear();cache.expired.length=0;cache.keys.length=0});
@@ -43,5 +45,33 @@ describe('deal register store (sync_state deal_register:v1, additive)',()=>{
   await expect(loadDealRegister()).resolves.toEqual(DEFAULT_DEAL_RULES);
   await expect(readDealRegisterState(broken)).rejects.toThrow('down');
   spy.mockRestore();
+ });
+});
+
+describe('deal register atomic revisions',()=>{
+ it.each(['absent','legacy','versioned'] as const)('allows only one simultaneous editor of a %s register',async(kind)=>{
+  let waiting=0,release!:()=>void,racing=false;const both=new Promise<void>(resolve=>{release=resolve});
+  class RacingStore extends MemorySecurityStore{override async get(key:string){const value=await super.get(key);if(racing&&key===DEAL_REGISTER_STORE_KEY){if(++waiting===2)release();await both}return value}}
+  const target=new RacingStore();
+  if(kind!=='absent')await target.set(DEAL_REGISTER_STORE_KEY,{version:1,...(kind==='versioned'?{revision:'revision-a'}:{}),rules:[{affiliateId:10,testQuotaSois:25,note:'',updatedAt:'old',updatedBy:'first'}]});
+  const opened=await readEditableDealRegister(target);racing=true;
+  const results=await Promise.allSettled([saveRevision([{affiliateId:10,testQuotaSois:30}],'a',opened.revision,target),saveRevision([{affiliateId:20,testQuotaSois:40}],'b',opened.revision,target)]);
+  expect(results.filter(result=>result.status==='fulfilled')).toHaveLength(1);
+  const rejected=results.find(result=>result.status==='rejected') as PromiseRejectedResult;expect(rejected.reason).toBeInstanceOf(DealRegisterConflictError);
+  const winner=results.find(result=>result.status==='fulfilled') as PromiseFulfilledResult<Awaited<ReturnType<typeof saveRevision>>>;
+  expect(await readEditableDealRegister(target)).toMatchObject({rules:winner.value.after,revision:winner.value.revision,source:'stored'});
+ });
+ it.each([{version:1},{version:1,rules:[{affiliateId:10,testQuotaSois:-5,note:'',updatedAt:'old',updatedBy:'a'}]},{version:1,rules:[{invalid:true}]}])('refuses to edit or replace a damaged register',async(raw)=>{
+  const target=new MemorySecurityStore();await target.set(DEAL_REGISTER_STORE_KEY,raw);
+  await expect(readEditableDealRegister(target)).rejects.toThrow(/ungültig/);
+  await expect(saveRevision([{affiliateId:10,testQuotaSois:25}],'a','old',target)).rejects.toThrow(/ungültig/);
+  expect(await target.get(DEAL_REGISTER_STORE_KEY)).toEqual(raw);
+ });
+ it('requires the refreshed revision for subsequent saves, including empty registers',async()=>{
+  const target=new MemorySecurityStore(),opened=await readEditableDealRegister(target);
+  const first=await saveRevision([],'a',opened.revision,target);
+  await expect(saveRevision([{affiliateId:10,testQuotaSois:25}],'b',opened.revision,target)).rejects.toBeInstanceOf(DealRegisterConflictError);
+  const second=await saveRevision([{affiliateId:10,testQuotaSois:25}],'a',first.revision,target);
+  expect(second.revision).not.toBe(first.revision);expect(second.before).toEqual({source:'stored',rules:[]});
  });
 });
