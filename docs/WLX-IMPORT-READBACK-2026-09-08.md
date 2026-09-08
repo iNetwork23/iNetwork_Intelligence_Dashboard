@@ -1,5 +1,15 @@
 # Import follow-up: September 8, 2026
 
+## Verified provider duplicates
+
+The manual production `98bc5ef` run started at 09:16:57 UTC failed closed for September 1. Its aggregate diagnostics show all three page-size passes (2,000 / 1,000 / 500) received exactly 2,074 declared rows: 2,073 distinct conversion IDs plus one identical repeated payload. No changed duplicate was observed. This establishes a raw-row versus distinct-ID discrepancy; the previous change of page sizes alone did not resolve it. No incomplete history cursor was advanced.
+
+The follow-up keeps the ordinary exact-distinct-count path and adds a strictly bounded identical-record recovery. It uses coprime page sizes 2,000 / 997 / 503. Recovery requires three fully delivered raw counts with an unchanged provider total, identical canonical content and repetition count for every conversion ID across all three traversals, no conflicting payload, no missing conversion ID, and no repeated whole page. At least one complete traversal must have all duplicates within pages, excluding recovery based solely on overlapping page boundaries. Every pass starts a fresh identity set. Customer identity is never a deduplication key. Hashes and raw fields are never logged; the success event contains only dates and aggregate counts. Missing rows, changed identities/content/multiplicity and unstable totals remain errors.
+
+Regression evidence includes the production-shaped 2,074/2,073 fixture, JSON property order, a duplicate crossing only the first traversal's boundary, boundary-only repetition, real missing rows, different same-count identity sets, changed payloads or multiplicities, conflicting duplicate payloads, absent IDs and growing totals. Independent review and an actual bounded live readback are still required before certifying production recovery. This change does not apply the separate timeout migration below.
+
+## Prior diagnostics and separately gated SQL scope
+
 Production `09ffc26` still fails closed for September 1 with 2,073 distinct conversions versus 2,074 declared. Runtime evidence: September 8, 08:17:42 UTC. Smaller pages did not resolve this live discrepancy. Aggregate-only failure diagnostics now distinguish delivered row counts, repeated identities, changed duplicate payloads and actual reported page sizes. They contain no event/customer identifiers, amounts, raw data or API keys, and do not relax acceptance or change any provider request.
 
 Fraud `/api/sync/fraud` fails on the atomic conversion replacement (08:07:18 UTC). Database readback at 09:04:37 UTC found 6,640 rows in May 12–14, all conversion indexes valid/ready, and no function-local timeout. `service_role` has no timeout override, so it inherits the authenticator's eight seconds. The function remains security definer with a fixed search path. At 09:06:27 UTC its body MD5 was `4d68797ccb3e7b90cb98fc5ab9a8564d`, ACL was `{postgres=X/postgres,service_role=X/postgres}`, owner postgres, and there were no history/metric leases.

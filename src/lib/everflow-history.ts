@@ -1,5 +1,6 @@
 import {EVERFLOW_BERLIN_TIMEZONE_ID} from './everflow-timezone';
 import 'server-only';
+import {createHash} from 'node:crypto';
 import type {EverflowConversion,ReportRow} from './history-cache';
 import {conversionReportBody,loadDailyReportSlices} from './history-cache';
 
@@ -49,37 +50,63 @@ const offerId=(row:ReportRow)=>dimensionId(row,'offer');
 async function mapBounded<T,R>(items:T[],width:number,load:(item:T)=>Promise<R>){const results:R[]=[];for(let start=0;start<items.length;start+=width){const settled=await Promise.allSettled(items.slice(start,start+width).map(load));for(const result of settled)if(result.status==='rejected')throw result.reason;results.push(...settled.map(result=>(result as PromiseFulfilledResult<R>).value))}return results}
 function createLimiter(width:number){let active=0;const queue:Array<()=>void>=[];return function limit<T>(task:()=>Promise<T>){return new Promise<T>((resolve,reject)=>{const start=()=>{active++;task().then(resolve,reject).finally(()=>{active--;queue.shift()?.()})};if(active<width)start();else queue.push(start)})}}
 
+// Provider JSON object order is immaterial; array order and every field value are not.
+function canonicalJson(value:unknown):string{
+  if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`;
+  if(value!==null&&typeof value==='object')return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonicalJson((value as Record<string,unknown>)[key])}`).join(',')}}`;
+  return JSON.stringify(value)??'null';
+}
+
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
   const limit=createLimiter(8),call=<T>(url:string,body:unknown)=>limit(()=>request<T>(url,body,apiKey,fetcher));
   const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
     const unique=new Map<string,EverflowConversion>();
-    const diagnostics:{pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;reportedPageSizes:number[]}[]=[];
-    let expectedTotal:number|undefined,repeatedPage=false;
-    // A stable tie at an offset boundary can omit the same identity on every
-    // retry. Change the boundaries while retaining the exact total-count guard.
-    for(const pageSize of [2000,1000,500]){
+    const diagnostics:{pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[]}[]=[];
+    const duplicateProofs:{digest:string;withinPageOnly:boolean}[]=[];
+    let expectedTotal:number|undefined,repeatedPage=false,totalChanged=false;
+    // Coprime sizes move offset boundaries. Raw totals may include identical
+    // provider records, but accepting those requires three complete, matching
+    // content/multiplicity traversals, including one without boundary overlap.
+    for(const pageSize of [2000,997,503]){
       unique.clear();
-      const pass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,reportedPageSizes:[] as number[]};diagnostics.push(pass);
+      const pass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,crossPageDuplicateRows:0,reportedPageSizes:[] as number[]};diagnostics.push(pass);
       const fingerprints=new Set<string>();
+      const contents=new Map<string,{json:string;count:number}>();let validProof=true;
       for(let page=1;;page++){
         const result=await call<{conversions?:EverflowConversion[];paging?:{total_count?:number;page_size?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId));
         const rows=result.conversions||[],reportedTotal=result.paging?.total_count;
         if(!Number.isSafeInteger(reportedTotal)||Number(reportedTotal)<0)throw new Error(`Everflow conversion pagination missing or invalid total_count on page ${page}`);
         if(expectedTotal!==undefined&&Number(reportedTotal)<expectedTotal)throw new Error(`Everflow conversion pagination total_count decreased for ${from}: ${expectedTotal}/${reportedTotal}`);
+        if(expectedTotal!==undefined&&Number(reportedTotal)!==expectedTotal)totalChanged=true;
         expectedTotal=Number(reportedTotal);
         pass.pages++;pass.receivedRows+=rows.length;
         const reportedSize=result.paging?.page_size;
         if(Number.isSafeInteger(reportedSize)&&Number(reportedSize)>0&&!pass.reportedPageSizes.includes(Number(reportedSize))&&pass.reportedPageSizes.length<4)pass.reportedPageSizes.push(Number(reportedSize));
-        const identities=rows.map(row=>row.conversion_id||JSON.stringify(row)),fingerprint=JSON.stringify(identities);
-        for(let index=0;index<rows.length;index++){const previous=unique.get(identities[index]);if(previous){pass.duplicateRows++;if(JSON.stringify(previous)!==JSON.stringify(rows[index]))pass.changedDuplicateRows++}unique.set(identities[index],rows[index])}
+        const identities=rows.map(row=>row.conversion_id||canonicalJson(row)),fingerprint=JSON.stringify(identities),pageIdentities=new Set<string>();
+        if(rows.length>pageSize)validProof=false;
+        for(let index=0;index<rows.length;index++){
+          const row=rows[index],id=identities[index],json=canonicalJson(row),previous=contents.get(id);
+          if(typeof row.conversion_id!=='string'||!row.conversion_id.trim())validProof=false;
+          if(previous){pass.duplicateRows++;if(previous.json!==json)pass.changedDuplicateRows++;if(!pageIdentities.has(id))pass.crossPageDuplicateRows++}
+          contents.set(id,{json,count:(previous?.count??0)+1});pageIdentities.add(id);unique.set(id,row);
+        }
         pass.uniqueRows=unique.size;
-        if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
+        if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;validProof=false;break}
         fingerprints.add(fingerprint);
         if(unique.size>expectedTotal)throw new Error(`Everflow conversion pagination total_count changed below collected identities for ${from}: ${unique.size}/${expectedTotal}`);
         if(unique.size===expectedTotal)return Array.from(unique.values());
         if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
       }
+      if(validProof&&!totalChanged&&pass.receivedRows===expectedTotal&&pass.duplicateRows>0&&pass.changedDuplicateRows===0){
+        const hash=createHash('sha256');
+        for(const id of [...contents.keys()].sort()){const entry=contents.get(id)!;hash.update(JSON.stringify([id,entry.json,entry.count]));hash.update('\n')}
+        duplicateProofs.push({digest:hash.digest('hex'),withinPageOnly:pass.crossPageDuplicateRows===0});
+      }
+    }
+    if(!repeatedPage&&!totalChanged&&duplicateProofs.length===3&&duplicateProofs.every(proof=>proof.digest===duplicateProofs[0].digest)&&duplicateProofs.some(proof=>proof.withinPageOnly)){
+      console.warn('Everflow verified identical conversion duplicates',{from,to,declaredRows:expectedTotal,distinctRows:unique.size,identicalDuplicateRows:Number(expectedTotal)-unique.size,passes:duplicateProofs.length});
+      return Array.from(unique.values());
     }
     const reason=repeatedPage?'duplicate/repeated page; ':'';
     // Aggregate counters only: never include provider rows, identities or secrets.
