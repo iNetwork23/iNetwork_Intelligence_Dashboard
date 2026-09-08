@@ -1,4 +1,4 @@
-import {assertBerlinReportingRange} from './berlin-reporting-contract';
+import {assertBerlinReportingRange,IncompleteBerlinReportingRangeError} from './berlin-reporting-contract';
 import{unstable_cache}from'next/cache';
 import{getDashboard}from'./dashboard-service';
 import{DAILY_SERIES_MAX_DAYS,loadPortfolioDailyVariantProfitFromCache,rangeDayCount,type ReportingPeriod}from'./supabase-reporting';
@@ -118,10 +118,16 @@ async function optimizationsWithTrend(period:ReportingPeriod,custom:{from:string
  // Vorfenster ist historisch: eigener Langzeit-Cache statt der 60s des Live-Portfolios,
  // und parallel zum Hauptfenster geladen statt danach.
  const previousPortfolioCached=prev?unstable_cache(()=>getDashboard('custom',prev,access),['affiliate-trend-previous-v1-berlin-v5',prev.from,prev.to,scopeFingerprint(access)],{revalidate:3600,tags:['supabase-portfolio']}):null;
- const[current,previousPortfolio]=await Promise.all([getDashboard(period,custom,access),previousPortfolioCached?previousPortfolioCached():Promise.resolve(null)]);
+ let comparisonUnavailable=false;
+ const[current,previousPortfolio]=await Promise.all([getDashboard(period,custom,access),previousPortfolioCached?previousPortfolioCached().catch((error:unknown)=>{
+  if(!(error instanceof IncompleteBerlinReportingRangeError))throw error;
+  comparisonUnavailable=true;
+  console.warn('Affiliate comparison period incomplete',error);
+  return null;
+ }):Promise.resolve(null)]);
  const analyses=analyzeAffiliateTraffic(current);
  if(!previousPortfolio)
-  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:NO_COMPARISON}))}));
+  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:comparisonUnavailable?{status:'insufficient',reason:'Vergleichszeitraum noch nicht vollständig synchronisiert'}:NO_COMPARISON}))}));
  const before=new Map(analyzeAffiliateTraffic(previousPortfolio)
   .flatMap(a=>a.variants.map(v=>[`${a.affiliateId}|${v.key}`,v.days30] as const)));
  return analyses.map(a=>({...a,variants:a.variants.map(v=>({...v,trendVerdict:variantTrend(v.days30,before.get(`${a.affiliateId}|${v.key}`))}))}));

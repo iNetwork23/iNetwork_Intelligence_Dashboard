@@ -337,6 +337,20 @@ export default function AccessConsole() {
     [auditQuery, setAuditQuery] = useState(""),
     [auditAction, setAuditAction] = useState("all");
   const createUserDialog = useRef<HTMLDialogElement>(null);
+  const confirmationDialog = useRef<HTMLDialogElement>(null);
+  const confirmationResolver = useRef<((confirmed:boolean)=>void)|null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  useEffect(() => {
+    if(confirmation) confirmationDialog.current?.showModal();
+  }, [confirmation]);
+  useEffect(() => () => { confirmationResolver.current?.(false); }, []);
+  function resolveConfirmation(confirmed:boolean) {
+    const resolve=confirmationResolver.current;
+    confirmationResolver.current=null;
+    confirmationDialog.current?.close();
+    setConfirmation("");
+    resolve?.(confirmed);
+  }
   useEffect(() => {
     createUserDialog.current?.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach(field => {
       if (field.validity.customError) {
@@ -369,7 +383,11 @@ export default function AccessConsole() {
     window.history.replaceState(null, "", url);
   }
   async function act(payload: Record<string, unknown>, critical?: string) {
-    if (critical && !window.confirm(critical)) return false;
+    if(confirmationResolver.current || pendingAction) return false;
+    if (critical && !await new Promise<boolean>(resolve => {
+      confirmationResolver.current=resolve;
+      setConfirmation(critical);
+    })) return false;
     const action = String(payload.action || "");
     setPendingAction(action);
     setMessage("");
@@ -1149,6 +1167,23 @@ export default function AccessConsole() {
           </div>
         </section>
       )}
+      <dialog
+        ref={confirmationDialog}
+        className="accessDialog"
+        aria-labelledby="access-confirm-title"
+        aria-describedby="access-confirm-description"
+        onCancel={event=>{event.preventDefault();resolveConfirmation(false)}}
+        onClose={()=>resolveConfirmation(false)}
+      >
+        <div className="dialogHeading">
+          <h2 id="access-confirm-title">Aktion bestätigen</h2>
+          <p id="access-confirm-description">{confirmation}</p>
+        </div>
+        <div className="dialogActions">
+          <button type="button" autoFocus onClick={()=>resolveConfirmation(false)}>Abbrechen</button>
+          <button type="button" className="accessPrimary" onClick={()=>resolveConfirmation(true)}>Bestätigen</button>
+        </div>
+      </dialog>
       <dialog
         ref={createUserDialog}
         className="accessDialog"
