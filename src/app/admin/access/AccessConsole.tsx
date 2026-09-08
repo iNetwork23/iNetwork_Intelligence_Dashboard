@@ -337,6 +337,13 @@ export default function AccessConsole() {
     [auditQuery, setAuditQuery] = useState(""),
     [auditAction, setAuditAction] = useState("all");
   const createUserDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    createUserDialog.current?.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach(field => {
+      if (field.validity.customError) {
+        field.setCustomValidity(translateText(passwordLengthError(field.value, 12) || '', locale));
+      }
+    });
+  }, [locale]);
   const load = useCallback(async () => {
     setLoadError(false);
     try {
