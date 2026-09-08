@@ -69,3 +69,15 @@ it('recovers when the browser cannot focus the freshly revealed drawer until the
  await act(async()=>close.click());expect(frames.size).toBe(0);
  expect(document.activeElement).toBe(host.querySelector('.mobileSidebarToggle'));
 });
+
+it('enters the fully visible drawer if focus was blocked throughout the opening animation',async()=>{
+ await mount();const close=host.querySelector<HTMLButtonElement>('.mobileSidebarClose')!,aside=host.querySelector('aside')!;
+ vi.spyOn(close,'focus').mockImplementationOnce(()=>{}).mockImplementationOnce(()=>{});
+ await open();await act(async()=>{for(const callback of frames.values())callback(16);frames.clear()});
+ expect(document.activeElement).not.toBe(close);
+ const finish=()=>{const event=new Event('transitionend',{bubbles:true});Object.defineProperty(event,'propertyName',{value:'transform'});aside.dispatchEvent(event)};
+ await act(async()=>finish());expect(document.activeElement).toBe(close);
+ const link=aside.querySelector<HTMLAnchorElement>('a')!;await act(async()=>link.focus());
+ await act(async()=>finish());expect(document.activeElement).toBe(link);
+ await act(async()=>close.click());await act(async()=>finish());expect(document.activeElement).toBe(host.querySelector('.mobileSidebarToggle'));
+});
