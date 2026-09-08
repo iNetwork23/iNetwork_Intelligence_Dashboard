@@ -23,7 +23,7 @@ function dailyReplacementStore(store:SyncStore):SyncStore{
     });
   }};
 }
-export async function loadFraudBackfillState():Promise<FraudBackfillState|null>{const {data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',FRAUD_BACKFILL_KEY).maybeSingle();if(error)throw new Error(`Supabase Fraud-Backfill-State: ${error.message}`);return data?.value?normalizeFraudBackfillState(data.value as StoredFraudBackfillState):null}
+export async function loadFraudBackfillState():Promise<FraudBackfillState|null>{const {data,error}=await getSupabaseAdmin().from('sync_state').select('value').eq('key',FRAUD_BACKFILL_KEY).abortSignal(new AbortController().signal).maybeSingle();if(error)throw new Error(`Supabase Fraud-Backfill-State: ${error.message}`);return data?.value?normalizeFraudBackfillState(data.value as StoredFraudBackfillState):null}
 async function oldestActiveStopDay(){const {data,error}=await getSupabaseAdmin().from('fraud_stop_requests').select('requested_at').is('deactivated_at',null).order('requested_at').limit(1).maybeSingle();if(error)throw new Error(`Supabase Fraud-Stop-Coverage: ${error.message}`);return data?.requested_at?String(data.requested_at).slice(0,10):null}
 async function storedEvidence(from:string,to:string):Promise<FraudBackfillEvidence>{
   const client=getSupabaseAdmin(),bounds=berlinRangeUtcBounds(from,to),rows:{id:string;type:FraudConversionType}[]=[];

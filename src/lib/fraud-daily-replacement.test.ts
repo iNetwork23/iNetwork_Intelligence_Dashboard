@@ -1,16 +1,16 @@
 import {beforeEach,expect,it,vi} from 'vitest';
-import {runFraudConversionSync} from './fraud-backfill-service';
+import {runFraudConversionSync,loadFraudBackfillState} from './fraud-backfill-service';
 import {initialFraudBackfillState,type FraudBackfillState} from './fraud-backfill';
 import {berlinRangeUtcBounds} from './reporting-day';
 import type {ConversionCacheRow,EverflowConversion} from './history-cache';
 
-const fixture=vi.hoisted(()=>({checkpoint:null as FraudBackfillState|null,raw:[] as EverflowConversion[],rows:new Map<string,ConversionCacheRow>(),writes:[] as FraudBackfillState[],replacements:[] as {from:string;to:string;ids:string[]}[],reads:[] as {from:string;to:string}[],tags:[] as string[],failDay:'',corrupt:false,active:0,peak:0}));
+const fixture=vi.hoisted(()=>({checkpoint:null as FraudBackfillState|null,raw:[] as EverflowConversion[],rows:new Map<string,ConversionCacheRow>(),writes:[] as FraudBackfillState[],replacements:[] as {from:string;to:string;ids:string[]}[],reads:[] as {from:string;to:string}[],tags:[] as string[],failDay:'',corrupt:false,active:0,peak:0,signals:[] as AbortSignal[]}));
 vi.mock('next/cache',()=>({revalidateTag:(tag:string)=>{fixture.tags.push(tag)}}));
 vi.mock('./everflow-history',()=>({createEverflowHistorySource:()=>({loadConversions:async()=>fixture.raw,loadReports:async()=>({base:[],events:[]})})}));
 vi.mock('./supabase',()=>({
  getSupabaseAdmin:()=>({from:(table:string)=>{
   let from='',to='';
-  const chain={select:()=>chain,eq:()=>chain,is:()=>chain,order:()=>chain,limit:()=>chain,
+  const chain={abortSignal:(signal:AbortSignal)=>{fixture.signals.push(signal);return chain},select:()=>chain,eq:()=>chain,is:()=>chain,order:()=>chain,limit:()=>chain,
    gte:(_field:string,value:string)=>{from=value;return chain},lt:(_field:string,value:string)=>{to=value;return chain},
    maybeSingle:async()=>({data:table==='sync_state'?{value:fixture.checkpoint}:null,error:null}),
    upsert:async(record:{value:FraudBackfillState})=>{fixture.checkpoint=structuredClone(record.value);fixture.writes.push(structuredClone(record.value));return{error:null}},
@@ -35,7 +35,7 @@ vi.mock('./supabase',()=>({
 
 const now=new Date('2026-09-08T12:00Z');
 const raw=(id:string,time:string):EverflowConversion=>({conversion_id:id,transaction_id:`lead-${id}`,conversion_unix_timestamp:Date.parse(time)/1000,is_event:false,event:'SOI',status:'approved',payout:1,revenue:2,source_id:'s',relationship:{affiliate:{network_affiliate_id:1},offer:{network_offer_id:2},campaign:{network_campaign_id:3},offer_url:{network_offer_url_id:4}}});
-beforeEach(()=>{fixture.checkpoint=initialFraudBackfillState(now);fixture.raw=['12','13','14'].map(day=>raw(`may-${day}`,`2026-05-${day}T12:00Z`));fixture.rows.clear();fixture.writes=[];fixture.replacements=[];fixture.reads=[];fixture.tags=[];fixture.failDay='';fixture.corrupt=false;fixture.active=0;fixture.peak=0});
+beforeEach(()=>{fixture.checkpoint=initialFraudBackfillState(now);fixture.raw=['12','13','14'].map(day=>raw(`may-${day}`,`2026-05-${day}T12:00Z`));fixture.rows.clear();fixture.writes=[];fixture.replacements=[];fixture.reads=[];fixture.tags=[];fixture.failDay='';fixture.corrupt=false;fixture.active=0;fixture.peak=0;fixture.signals=[]});
 
 it('fits three sequential daily transactions while retaining one complete readback and cursor advance',async()=>{
  const result=await runFraudConversionSync(now);
@@ -81,4 +81,9 @@ it.each([
  fixture.raw=[raw('before',new Date(Date.parse(boundary)-1000).toISOString()),raw('after',boundary)];
  const result=await runFraudConversionSync(now);
  expect(fixture.replacements).toHaveLength(3);expect(fixture.replacements[0].ids).toEqual([]);expect(fixture.replacements[1].ids).toEqual(['before']);expect(fixture.replacements[2].ids).toEqual(['after']);expect(result).toMatchObject({parity:{verified:true}});expect(result.ready).toBe(true);
+});
+
+it('gives successive checkpoint reads distinct abort signals to bypass request memoization',async()=>{
+ await loadFraudBackfillState();await loadFraudBackfillState();
+ expect(fixture.signals).toHaveLength(2);expect(new Set(fixture.signals).size).toBe(2);expect(fixture.signals.every(signal=>signal instanceof AbortSignal)).toBe(true);
 });
