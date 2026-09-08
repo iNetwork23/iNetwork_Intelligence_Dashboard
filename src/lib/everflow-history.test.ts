@@ -179,6 +179,23 @@ describe('Everflow fraud source dimensions',()=>{
     expect(new Set(result.map(row=>row.conversion_id))).toEqual(new Set(current.map(row=>row.conversion_id)));
   });
 
+  it('reports bounded aggregate duplicate diagnostics without provider identities or fields',async()=>{
+    const original={conversion_id:'private-conversion-id',transaction_id:'private-customer-id',adv4:'private@example.test',event:'secret-event-name',payout:1};
+    const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size'));return json({conversions:[original,original,{...original,payout:2}],paging:{total_count:3,page_size:size}})});
+    let error:unknown;try{await createEverflowHistorySource('private-api-key',fetcher).loadConversions('2026-09-01','2026-09-01')}catch(value){error=value}
+    const message=String(error);expect(message).toContain('1/3');
+    const diagnostics=JSON.parse(message.split('diagnostics=')[1]);
+    expect(diagnostics).toEqual([2000,1000,500].map(pageSize=>({pageSize,pages:1,receivedRows:3,uniqueRows:1,duplicateRows:2,changedDuplicateRows:1,reportedPageSizes:[pageSize]})));
+    for(const secret of ['private-conversion-id','private-customer-id','private@example.test','secret-event-name','private-api-key'])expect(message).not.toContain(secret);
+  });
+
+  it('does not copy malformed provider paging metadata into diagnostics',async()=>{
+    const fetcher=vi.fn<typeof fetch>(async()=>json({conversions:[],paging:{total_count:1,page_size:'private-secret'}}));
+    let error:unknown;try{await createEverflowHistorySource('key',fetcher).loadConversions('2026-09-01','2026-09-01')}catch(value){error=value}
+    expect(String(error)).not.toContain('private-secret');
+    expect(JSON.parse(String(error).split('diagnostics=')[1]).every((pass:{reportedPageSizes:number[]})=>pass.reportedPageSizes.length===0)).toBe(true);
+  });
+
   it('retries a transient Everflow Big Query rate limit before failing the slice',async()=>{
     let attempts=0;
     const fetcher=vi.fn<typeof fetch>(async()=>{attempts++;return attempts===1

@@ -54,29 +54,36 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
   const limit=createLimiter(8),call=<T>(url:string,body:unknown)=>limit(()=>request<T>(url,body,apiKey,fetcher));
   const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
     const unique=new Map<string,EverflowConversion>();
+    const diagnostics:{pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;reportedPageSizes:number[]}[]=[];
     let expectedTotal:number|undefined,repeatedPage=false;
     // A stable tie at an offset boundary can omit the same identity on every
     // retry. Change the boundaries while retaining the exact total-count guard.
     for(const pageSize of [2000,1000,500]){
       unique.clear();
+      const pass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,reportedPageSizes:[] as number[]};diagnostics.push(pass);
       const fingerprints=new Set<string>();
       for(let page=1;;page++){
-        const result=await call<{conversions?:EverflowConversion[];paging?:{total_count?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId));
+        const result=await call<{conversions?:EverflowConversion[];paging?:{total_count?:number;page_size?:number}}>(`${BASE}/networks/reporting/conversions?page=${page}&page_size=${pageSize}`,conversionReportBody(from,to,affiliateId));
         const rows=result.conversions||[],reportedTotal=result.paging?.total_count;
         if(!Number.isSafeInteger(reportedTotal)||Number(reportedTotal)<0)throw new Error(`Everflow conversion pagination missing or invalid total_count on page ${page}`);
         if(expectedTotal!==undefined&&Number(reportedTotal)<expectedTotal)throw new Error(`Everflow conversion pagination total_count decreased for ${from}: ${expectedTotal}/${reportedTotal}`);
         expectedTotal=Number(reportedTotal);
+        pass.pages++;pass.receivedRows+=rows.length;
+        const reportedSize=result.paging?.page_size;
+        if(Number.isSafeInteger(reportedSize)&&Number(reportedSize)>0&&!pass.reportedPageSizes.includes(Number(reportedSize))&&pass.reportedPageSizes.length<4)pass.reportedPageSizes.push(Number(reportedSize));
         const identities=rows.map(row=>row.conversion_id||JSON.stringify(row)),fingerprint=JSON.stringify(identities);
         if(rows.length&&fingerprints.has(fingerprint)){repeatedPage=true;break}
         fingerprints.add(fingerprint);
-        for(let index=0;index<rows.length;index++)unique.set(identities[index],rows[index]);
+        for(let index=0;index<rows.length;index++){const previous=unique.get(identities[index]);if(previous){pass.duplicateRows++;if(JSON.stringify(previous)!==JSON.stringify(rows[index]))pass.changedDuplicateRows++}unique.set(identities[index],rows[index])}
+        pass.uniqueRows=unique.size;
         if(unique.size>expectedTotal)throw new Error(`Everflow conversion pagination total_count changed below collected identities for ${from}: ${unique.size}/${expectedTotal}`);
         if(unique.size===expectedTotal)return Array.from(unique.values());
         if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
       }
     }
     const reason=repeatedPage?'duplicate/repeated page; ':'';
-    throw new Error(`Everflow conversion pagination ${reason}total_count unvollständig for ${from}: ${unique.size}/${expectedTotal??'unknown'}`);
+    // Aggregate counters only: never include provider rows, identities or secrets.
+    throw new Error(`Everflow conversion pagination ${reason}total_count unvollständig for ${from}: ${unique.size}/${expectedTotal??'unknown'}; diagnostics=${JSON.stringify(diagnostics)}`);
   };
   const loadConversions=async(from:string,to:string,affiliateId?:string)=>{
     if(from===to)return loadConversionSlice(from,to,affiliateId);
