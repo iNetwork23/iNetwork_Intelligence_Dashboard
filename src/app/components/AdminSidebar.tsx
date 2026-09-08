@@ -73,7 +73,7 @@ export default function AdminSidebar(props:Props){
  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape"){setMobileOpen(false);setEditing(false)}};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey)},[]);
  useEffect(()=>{
   if(!mobileMode||!mobileOpen)return;
-  const sidebar=sidebarRef.current;if(!sidebar)return;
+  const sidebar=sidebarRef.current,toggle=mobileToggleRef.current;if(!sidebar)return;
   mobileCloseRef.current?.focus();
   const focusables=()=>Array.from(sidebar.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')).filter(node=>node.tabIndex>=0&&!node.matches('.sidebarCollapse')&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden');
   const onFocus=(event:FocusEvent)=>{if(!sidebar.contains(event.target as Node))mobileCloseRef.current?.focus()};
@@ -88,7 +88,7 @@ export default function AdminSidebar(props:Props){
   return()=>{
    document.removeEventListener('focusin',onFocus);document.removeEventListener('keydown',onKey);
    if(sidebar.contains(document.activeElement)){
-    if(window.matchMedia('(max-width:760px)').matches)mobileToggleRef.current?.focus();
+    if(window.matchMedia('(max-width:760px)').matches)toggle?.focus();
     else sidebar.querySelector<HTMLElement>('a[href]')?.focus();
    }
   };
