@@ -1,4 +1,5 @@
 import type { SecurityStore } from "./security";
+import {passwordLengthError} from './password-policy';
 
 export type ProvisionedUserInput = {
   username: string;
@@ -47,8 +48,8 @@ export function parseProvisionedUser(input: Record<string, unknown>): Provisione
   if (!USERNAME.test(username))
     throw new Error("Benutzername muss 3–40 Zeichen lang sein und darf nur Buchstaben, Zahlen, Punkt, Minus und Unterstrich enthalten.");
   if (!EMAIL.test(email) || email.length > 254) throw new Error("E-Mail-Adresse ist ungültig.");
-  if (password.length < 12 || password.length > 128)
-    throw new Error("Passwort muss zwischen 12 und 128 Zeichen lang sein.");
+  const passwordError=passwordLengthError(password,12);
+  if(passwordError)throw new Error(passwordError);
   return { username, email, password };
 }
 

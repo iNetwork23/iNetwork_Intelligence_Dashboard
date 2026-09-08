@@ -1,5 +1,8 @@
 "use client";
 import LocalizedRoot from '../../components/LocalizedRoot';
+import {useHydratedLocale} from '../../components/LanguageProvider';
+import {translateText} from '@/lib/i18n';
+import {passwordLengthError} from '@/lib/password-policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   actionResultMessage,
@@ -322,6 +325,7 @@ function ScopePreview({
 }
 
 export default function AccessConsole() {
+  const locale=useHydratedLocale();
   const [data, setData] = useState<Data | null>(null),
     [message, setMessage] = useState(""),
     [loadError, setLoadError] = useState(false),
@@ -333,6 +337,13 @@ export default function AccessConsole() {
     [auditQuery, setAuditQuery] = useState(""),
     [auditAction, setAuditAction] = useState("all");
   const createUserDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    createUserDialog.current?.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach(field => {
+      if (field.validity.customError) {
+        field.setCustomValidity(translateText(passwordLengthError(field.value, 12) || '', locale));
+      }
+    });
+  }, [locale]);
   const load = useCallback(async () => {
     setLoadError(false);
     try {
@@ -1166,6 +1177,13 @@ export default function AccessConsole() {
               setMessage("Die beiden Passwörter stimmen nicht überein.");
               return;
             }
+            const passwordError=passwordLengthError(password,12);
+            if(passwordError){
+              const field=form.elements.namedItem('password') as HTMLInputElement;
+              field.setCustomValidity(translateText(passwordError,locale));
+              field.reportValidity();
+              return;
+            }
             const ok = await act({
               action: "create_user",
               username: fd.get("username"),
@@ -1221,6 +1239,7 @@ export default function AccessConsole() {
               autoComplete="new-password"
               minLength={12}
               maxLength={128}
+              onInput={event=>event.currentTarget.setCustomValidity(translateText(passwordLengthError(event.currentTarget.value,12)||'',locale))}
               required
             />
           </label>
@@ -1233,6 +1252,7 @@ export default function AccessConsole() {
               autoComplete="new-password"
               minLength={12}
               maxLength={128}
+              onInput={event=>event.currentTarget.setCustomValidity(translateText(passwordLengthError(event.currentTarget.value,12)||'',locale))}
               required
             />
           </label>
