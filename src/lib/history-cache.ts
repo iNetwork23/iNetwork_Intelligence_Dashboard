@@ -115,14 +115,16 @@ export type SyncStore={
   setState:(state:SyncState)=>Promise<void>;
 };
 
-export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string,options?:{includeEvents?:boolean})=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
+export async function refreshHistoryRange(input:{store:SyncStore;from:string;to:string;includeConversions?:boolean;persistConversions?:boolean;loadConversions:(from:string,to:string)=>Promise<EverflowConversion[]>;loadReports:(from:string,to:string,options?:{includeEvents?:boolean})=>Promise<{base:ReportRow[];events:ReportRow[]}>}){
   let rawConversions:EverflowConversion[],reports:{base:ReportRow[];events:ReportRow[]};
   if(input.includeConversions===false){rawConversions=[];reports=await input.loadReports(input.from,input.to,{includeEvents:true})}else{const[conversionResult,reportResult]=await Promise.allSettled([input.loadConversions(input.from,input.to),input.loadReports(input.from,input.to)]);if(conversionResult.status==='rejected')throw conversionResult.reason;if(reportResult.status==='rejected')throw reportResult.reason;rawConversions=conversionResult.value;reports=reportResult.value}
   const mapped=rawConversions.map(conversionToCacheRow).filter((row):row is ConversionCacheRow=>row!==null),conversions=Array.from(new Map(mapped.map(row=>[row.id,row])).values()),metrics=metricRows(reports.base,reports.events,input.includeConversions===false?undefined:rawConversions);
   const bounds=berlinRangeUtcBounds(input.from,input.to);
   if(conversions.some(row=>row.converted_at<bounds.from||row.converted_at>=bounds.toExclusive)||metrics.some(row=>row.metric_date<input.from||row.metric_date>input.to))throw new Error('Providerdaten außerhalb des Berlin-Berichtszeitraums');
   if(metrics.some(row=>['id','affiliate_id','offer_id','campaign_id','offer_url_id'].some(field=>!String(row[field as keyof DailyMetricRow]??'').trim())))throw new Error('Unvollständige Metrikdimensionen im Berlin-Berichtszeitraum');
-  await input.store.upsertConversions(conversions);
+  // Fraud has already atomically replaced these exact conversions. It still
+  // needs their attribution when rebuilding metrics, but not a second write.
+  if(input.persistConversions!==false)await input.store.upsertConversions(conversions);
   if(input.store.replaceMetrics){for(let from=input.from;from<=input.to;from=shift(from,3)){const to=shift(from,2)<input.to?shift(from,2):input.to;await input.store.replaceMetrics(from,to,metrics.filter(row=>row.metric_date>=from&&row.metric_date<=to))}}
   else await input.store.upsertMetrics(metrics);
   return{conversions,metrics};
