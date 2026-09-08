@@ -70,6 +70,7 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     // content/multiplicity traversals without boundary overlap. One tainted
     // traversal may be replaced by a fourth read; other contradictions reject.
     for(const pageSize of [2000,997,503,991]){
+      if(pageSize===991&&(!recoveryAllowed||repeatedPage||totalChanged||duplicateProofs.length!==2))break;
       unique.clear();
       const pass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,crossPageDuplicateRows:0,reportedPageSizes:[] as number[]};diagnostics.push(pass);
       const fingerprints=new Set<string>();

@@ -111,8 +111,8 @@ describe('Everflow fraud source dimensions',()=>{
     const page=Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`,transaction_id:`lead-${index}`,conversion_unix_timestamp:1784743200,is_event:false,event:'SOI'}));
     const fetcher=vi.fn<typeof fetch>(async()=>json({conversions:page,paging:{total_count:4000}}));
     await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-07-01','2026-07-01')).rejects.toThrow('duplicate');
-    expect(fetcher).toHaveBeenCalledTimes(8);
-    expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual([2000,997,503,991].map(size=>[
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual([2000,997,503].map(size=>[
       `https://api.eflow.team/v1/networks/reporting/conversions?page=1&page_size=${size}`,
       `https://api.eflow.team/v1/networks/reporting/conversions?page=2&page_size=${size}`,
     ]).flat());
@@ -190,6 +190,12 @@ describe('Everflow fraud source dimensions',()=>{
     }finally{warn.mockRestore()}
   });
 
+  it('does not add a fourth traversal after genuinely short feeds',async()=>{
+    const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size'));return json({conversions:size===991?Array.from({length:2073},(_,i)=>({conversion_id:`row-${i}`})):[{conversion_id:'row-0'}],paging:{total_count:2073,page_size:size}})});
+    await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-09-02','2026-09-02')).rejects.toThrow('total_count');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it.each(['boundary-overlap','only-cross-page-duplicates','changed-identity-set','changed-content','changed-multiplicity','conflicting-duplicate','missing-identity','short-raw-count','growing-total'])('rejects duplicate recovery with %s',async scenario=>{
     const all=Array.from({length:2073},(_,index)=>({conversion_id:`row-${index}`,payout:1}));
     const base=[...all.slice(0,30),all[29],...all.slice(30)];
@@ -214,7 +220,7 @@ describe('Everflow fraud source dimensions',()=>{
     const all=Array.from({length:2074},(_,index)=>({conversion_id:`row-${index}`})),available=all.filter(row=>row.conversion_id!=='row-2000');
     const fetcher=vi.fn<typeof fetch>(async url=>{const params=new URL(String(url)).searchParams,page=Number(params.get('page')),size=Number(params.get('page_size'));return json({conversions:available.slice((page-1)*size,page*size),paging:{total_count:all.length,page_size:size,page}})});
     await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-08-31','2026-08-31')).rejects.toThrow('2026-08-31: 2073/2074');
-    expect([...new Set(fetcher.mock.calls.map(call=>new URL(String(call[0])).searchParams.get('page_size')))]).toEqual(['2000','997','503','991']);
+    expect([...new Set(fetcher.mock.calls.map(call=>new URL(String(call[0])).searchParams.get('page_size')))]).toEqual(['2000','997','503']);
   });
 
   it('does not certify stale rows when the provider total shrinks below the collected identities',async()=>{
@@ -243,7 +249,7 @@ describe('Everflow fraud source dimensions',()=>{
     let error:unknown;try{await createEverflowHistorySource('private-api-key',fetcher).loadConversions('2026-09-01','2026-09-01')}catch(value){error=value}
     const message=String(error);expect(message).toContain('1/3');
     const diagnostics=JSON.parse(message.split('diagnostics=')[1]);
-    expect(diagnostics).toEqual([2000,997,503,991].map(pageSize=>({pageSize,pages:1,receivedRows:3,uniqueRows:1,duplicateRows:2,changedDuplicateRows:1,crossPageDuplicateRows:0,reportedPageSizes:[pageSize]})));
+    expect(diagnostics).toEqual([2000,997,503].map(pageSize=>({pageSize,pages:1,receivedRows:3,uniqueRows:1,duplicateRows:2,changedDuplicateRows:1,crossPageDuplicateRows:0,reportedPageSizes:[pageSize]})));
     for(const secret of ['private-conversion-id','private-customer-id','private@example.test','secret-event-name','private-api-key'])expect(message).not.toContain(secret);
   });
 
@@ -258,7 +264,7 @@ describe('Everflow fraud source dimensions',()=>{
     const fetcher=vi.fn<typeof fetch>(async url=>{const params=new URL(String(url)).searchParams,size=Number(params.get('page_size')),page=Number(params.get('page'));return json({conversions:Array.from({length:size},(_,i)=>({conversion_id:`private-${i}`,payout:page})),paging:{total_count:4000,page_size:size}})});
     let error:unknown;try{await createEverflowHistorySource('key',fetcher).loadConversions('2026-09-01','2026-09-01')}catch(value){error=value}
     expect(String(error)).toContain('duplicate/repeated page');
-    expect(JSON.parse(String(error).split('diagnostics=')[1])).toEqual([2000,997,503,991].map(pageSize=>({pageSize,pages:2,receivedRows:2*pageSize,uniqueRows:pageSize,duplicateRows:pageSize,changedDuplicateRows:pageSize,crossPageDuplicateRows:pageSize,reportedPageSizes:[pageSize]})));
+    expect(JSON.parse(String(error).split('diagnostics=')[1])).toEqual([2000,997,503].map(pageSize=>({pageSize,pages:2,receivedRows:2*pageSize,uniqueRows:pageSize,duplicateRows:pageSize,changedDuplicateRows:pageSize,crossPageDuplicateRows:pageSize,reportedPageSizes:[pageSize]})));
   });
 
   it('retries a transient Everflow Big Query rate limit before failing the slice',async()=>{
