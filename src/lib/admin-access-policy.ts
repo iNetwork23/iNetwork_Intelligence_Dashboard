@@ -7,6 +7,12 @@ const object=(value:unknown):value is Record<string,unknown>=>Boolean(value)&&ty
 
 export const buildRoleOptions=(roles:CustomRoleDefinition[]):RoleOption[]=>roles.map(({id,name,baseRole})=>({id,name,baseRole}));
 
+// Supabase merges app metadata; null explicitly deletes a previous assignment.
+// Keep these deletion markers at the provider boundary, outside RBAC parsing.
+export function accessMetadataPatch(metadata:Record<string,unknown>){
+ return {...metadata,custom_role:metadata.custom_role??null,customRoleId:null};
+}
+
 const baseRoleCatalog:StandardRole[]=['super_admin','admin','employee','partner','read_only'];
 export function customRoleBaseRoles(actor:AccessMetadata):StandardRole[]{
  return baseRoleCatalog.filter(baseRole=>{try{assertMayDelegatePermissions(actor,parseAccessMetadata({role:baseRole}));return true}catch{return false}});
