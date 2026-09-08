@@ -24,6 +24,10 @@ Der aktuelle Audit meldete drei Paketbefunde: Next.js und Vitest/@vitest/mocker.
 
 Primärquellen: [Next.js GHSA-p293-qw3h-jr36](https://github.com/vercel/next.js/security/advisories/GHSA-p293-qw3h-jr36) beschreibt den Windows-spezifischen RCE-Fall; daraus wird keine Ausnutzbarkeit der Vercel-Linux-Laufzeit abgeleitet. [Vitest GHSA-82fw-gwwq-j7x9](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9) betrifft Dateilesen über erreichbare Entwicklungsserver und nennt 4.1.11 als korrigiert.
 
+## Vercel-Build nach Framework-Update
+
+Der erste Preview-Build (dpl_8qmiGATFVmx5RmBMYxdasmGEu36b) reproduzierte nach vollständiger Kompilierung einen Next-16.3-Adapterfehler: `ENOENT .next/next-server.js.nft.json` beim Standalone-Abschluss. Lokal ohne Adapter war der Build erfolgreich. `output: standalone` wird deshalb ausschließlich außerhalb von `VERCEL=1` erzeugt; Vercel verwendet seinen eigenen Adapter. Self-Hosting bleibt erhalten. Primärnachweis: Buildlog sowie [Next.js #96646](https://github.com/vercel/next.js/issues/96646). Der anschließende echte Vercel-Build prüft den korrigierten Pfad.
+
 ## Grenzen und Rückweg
 
 Der Mac ist gesperrt; native Produktionsabnahme und der bereits vorbereitete SQL-Readback sind offen. Der genaue Deal-Testpartner-Scope für Geschäftsänderungen ist weiterhin nicht freigegeben. Kein Live-Register-/Provider-Schreibtest und kein zusätzlicher unabhängiger Review werden behauptet. WLX-009 bleibt bis zu seinen vollständigen Akzeptanznachweisen offen.
