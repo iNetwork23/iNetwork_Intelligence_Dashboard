@@ -31,9 +31,16 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
   const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}}),{minimumVersion:5}),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`),snapshotRows:ReportRow[]=[];
   // A snapshot can contain thousands of rows. Decode one bounded response before
   // requesting the next; an explicit signal also avoids retained Next GET clones.
-  for(let start=0;start<keys.length;start+=8){
-    const result=await getSupabaseAdmin().from('sync_state').select('value').in('key',keys.slice(start,start+8)).abortSignal(new AbortController().signal);
-    if(result.error)throw new Error(`Supabase source snapshots: ${result.error.message}`);
+  let batchSize=8;
+  for(let start=0;start<keys.length;){
+    const batch=keys.slice(start,start+batchSize);
+    const result=await getSupabaseAdmin().from('sync_state').select('value').in('key',batch).abortSignal(new AbortController().signal);
+    if(result.error){
+      // Large affiliate snapshots can exceed the query budget even at eight
+      // days. Retry only that immutable read with fewer keys, down to one day.
+      if(/statement timeout/i.test(result.error.message)&&batch.length>1){batchSize=Math.max(1,Math.floor(batch.length/2));continue}
+      throw new Error(`Supabase source snapshots: ${result.error.message}`);
+    }
     for(const item of result.data||[]){
       const value=item.value as{date?:string;affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]}|null;
       // A missing affiliate-day record can be legitimate. A returned but malformed
@@ -42,6 +49,7 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
       const decoded=value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));
       snapshotRows.push(...mapAffiliateSourceRows(decoded,value.date));
     }
+    start+=batch.length;
   }
   return snapshotRows;
 }
