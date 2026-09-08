@@ -2,6 +2,8 @@ import {describe,expect,it,vi} from 'vitest';
 import {backgroundPortfolioPeriods,loadPortfolioFromCache,publishPortfolioRangeRecords,reportingRange} from './supabase-reporting';
 import{buildPortfolioRangeSnapshotRecordFromAggregates}from'./portfolio-range-snapshots';
 import{readFileSync}from'node:fs';import{join}from'node:path';
+import {hasComparableClicks} from './portfolio';
+import {parseAccessMetadata} from './rbac';
 
 
 function verifiedClient(range:{from:string;to:string},rows:Record<string,unknown>[]=[]){
@@ -43,12 +45,45 @@ describe('Supabase reporting periods',()=>{
 });
 
 describe('portfolio cache adapter',()=>{
+  it.each([
+    [{m:'tracked'},true],
+    [{m:'api'},false],
+    [{m:'unknown'},false],
+    [{},false],
+    [{m:'api',ce:true},false],
+  ])('uses daily snapshot provenance without inventing eligibility: %j',async(provenance,eligible)=>{
+    const snapshot={a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'0',un:'LP',s:'',ss:'',cl:9,cv:637,fs:2,rb:3,cs:4,p:30,r:80,pr:50,...provenance};
+    const db={rpc:vi.fn(),from:()=>{
+      let keys:string[]|undefined;
+      const q={select:()=>q,eq:()=>q,gte:()=>q,lte:()=>q,order:()=>q,
+        in:(_column:string,next:string[])=>{keys=next;return q},
+        maybeSingle:async()=>({data:null,error:null}),
+        then:(resolve:(value:unknown)=>unknown)=>resolve({data:keys?[{value:{rows:[snapshot]}}]:[{value:{date:'2026-09-08',version:5,timezoneId:56,generation:'day-generation'}}],error:null})};
+      return q;
+    }};
+    const p=await loadPortfolioFromCache('today',db as never,new Date('2026-09-08T12:00Z'));
+    expect(p.totals).toMatchObject({clicks:9,sois:637,profit:50,firstSales:2});
+    expect(hasComparableClicks(p.totals)).toBe(eligible);
+  });
+  it('retains raw traffic-mode eligibility across database aggregation and applies scope before account totals',async()=>{
+    const common={affiliate_id:'6',affiliate_name:'Partner',offer_id:'57',offer_name:'Uninformative name',campaign_id:'0',campaign_name:'Direct',offer_url_id:'2774',offer_url_name:'LP',clicks:100,sois:10,first_sales:2,rebills:3,coin_spend:4,payout:30,revenue:80,profit:50};
+    const rows=[{...common,traffic_mode:'tracked'},{...common,traffic_mode:'api',clicks:9,sois:637},{...common,affiliate_id:'foreign',traffic_mode:'tracked',profit:999}];
+    const range={from:'2026-04-24',to:'2026-07-22'};
+    const access=parseAccessMetadata({role:'employee',scopes:{affiliate:['6']}});
+    const mixed=await loadPortfolioFromCache('90d',verifiedClient(range,rows) as never,new Date('2026-07-22T12:00:00Z'),undefined,access);
+    expect(mixed.paths).toHaveLength(1);
+    expect(mixed.totals).toMatchObject({clicks:109,sois:647,profit:100,firstSales:4});
+    expect(hasComparableClicks(mixed.totals)).toBe(false);
+    const tracked=await loadPortfolioFromCache('90d',verifiedClient(range,[rows[0]]) as never,new Date('2026-07-22T12:00:00Z'));
+    expect(hasComparableClicks(tracked.totals)).toBe(true);
+  });
   it('loads only the immutable snapshot selected by the active range marker',async()=>{
     const keys:string[]=[],from=vi.fn(()=>({select:vi.fn(()=>({eq:vi.fn((_column:string,key:string)=>({maybeSingle:vi.fn().mockImplementation(async()=>{keys.push(key);if(key==='portfolio_range_generation:2026-06-23:2026-07-22')return{data:{value:{version:2,reportingVersion:5,timezoneId:56,from:'2026-06-23',to:'2026-07-22',generation:'gen-1'}},error:null};if(key==='portfolio_range:2026-06-23:2026-07-22:gen-1')return{data:{value:{version:2,reportingVersion:5,timezoneId:56,from:'2026-06-23',to:'2026-07-22',generation:'gen-1',rows:[{a:'6',an:'Partner',o:'57',on:'Offer',c:'0',cn:'Direct',u:'2774',un:'LP',s:'',ss:'',cl:100,cv:10,fs:2,rb:3,cs:4,p:30,r:80,pr:50}]}},error:null};return{data:null,error:null}})}))}))}));
     const proof=verifiedClient({from:'2026-06-23',to:'2026-07-22'});const verifiedFrom=()=>({select:()=>({...from().select(),gte:()=>proof.from('sync_state').select()})});
     const result=await loadPortfolioFromCache('30d',{from:verifiedFrom,rpc:vi.fn()} as never,new Date('2026-07-22T12:00:00Z'));
     expect(keys).toEqual(['portfolio_range_generation:2026-06-23:2026-07-22','portfolio_range:2026-06-23:2026-07-22:gen-1']);
     expect(result.totals).toMatchObject({clicks:100,sois:10,firstSales:2,rebills:3,coinSpend:4,revenue:80,payout:30,profit:50});
+    expect(hasComparableClicks(result.totals)).toBe(false); // Legacy range has no traffic provenance.
   });
   it('does not switch active markers when immutable snapshot writes fail',async()=>{
     const upsert=vi.fn().mockResolvedValueOnce({error:{message:'snapshot failed'}}),client={from:vi.fn(()=>({upsert}))};

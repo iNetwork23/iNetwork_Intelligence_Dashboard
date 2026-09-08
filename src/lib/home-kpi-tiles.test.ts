@@ -6,7 +6,7 @@ import{maturityGateText}from'./verdict-vocabulary';
 import type{Metrics}from'./portfolio';
 import type{PortfolioDailyPoint}from'./supabase-reporting';
 const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
-const metrics=(x:Partial<Metrics>={}):Metrics=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,payout:0,revenue:0,profit:0,profitEpc:0,...x});
+const metrics=(x:Partial<Metrics>={}):Metrics=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,payout:0,revenue:0,profit:0,profitEpc:0,clickMetricsEligible:true,...x});
 const day=(date:string,x:Partial<PortfolioDailyPoint>={}):PortfolioDailyPoint=>({date,clicks:0,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0,...x});
 const base={dayCount:7,dailyLimitDays:45,finance:true,periodQuery:'period=7d'};
 

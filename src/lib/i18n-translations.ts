@@ -1,5 +1,8 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Nur für eindeutig klickbasierten Traffic mit Klicks verfügbar.": "Only available for verified click-based traffic with recorded clicks.",
+  "CVR und Profit-EPC werden nur für eindeutig klickbasierten Traffic mit Klicks angezeigt.": "CVR and profit EPC are only shown for verified click-based traffic with recorded clicks.",
+  "CVR wird nur für eindeutig klickbasierten Traffic mit Klicks angezeigt.": "CVR is only shown for verified click-based traffic with recorded clicks.",
   "Passwort muss mindestens 12 Zeichen lang sein.": "Password must contain at least 12 characters.",
   "Passwort muss mindestens 14 Zeichen lang sein.": "Password must contain at least 14 characters.",
   "Passwort zu lang. Maximal 72 UTF-8-Bytes; Umlaute und andere Sonderzeichen können mehrere Bytes belegen.": "Password is too long. Maximum 72 UTF-8 bytes; accented letters and other special characters may use several bytes.",
