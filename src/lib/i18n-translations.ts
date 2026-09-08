@@ -1,5 +1,8 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Passwort muss mindestens 12 Zeichen lang sein.": "Password must contain at least 12 characters.",
+  "Passwort muss mindestens 14 Zeichen lang sein.": "Password must contain at least 14 characters.",
+  "Passwort zu lang. Maximal 72 UTF-8-Bytes; Umlaute und andere Sonderzeichen können mehrere Bytes belegen.": "Password is too long. Maximum 72 UTF-8 bytes; accented letters and other special characters may use several bytes.",
   "Zeitraum noch nicht vollständig verfügbar": "Selected period is not fully available yet",
   "Unvollständige Daten": "Incomplete data",
   "Ausgewählter Zeitraum": "Selected period",
