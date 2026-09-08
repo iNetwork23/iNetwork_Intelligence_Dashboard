@@ -28,7 +28,7 @@ export function reportingRange(period:ReportingPeriod,now=new Date(),custom?:{fr
   }
   const days=period==='today'?1:period==='7d'?7:period==='30d'?30:period==='90d'?90:365;
   const from=shift(today,-(days-1));
-  return{from,to:today,label:from===today?display(today):`${from.slice(8,10)}.–${display(today)}`};
+  return{from,to:today,label:from===today?display(today):`${display(from)}–${display(today)}`};
 }
 
 const columns=(row:MetricRpcRow)=>[
