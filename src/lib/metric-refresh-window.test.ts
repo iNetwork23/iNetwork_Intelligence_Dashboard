@@ -17,6 +17,17 @@ describe('metric replacement window contract',()=>{
   await expect(refreshHistoryRange({store,from:'2026-07-01',to:'2026-07-01',loadConversions:async()=>[seed('2026-07-02')],loadReports:async()=>({base:[],events:[]})})).rejects.toThrow('Berlin');
   expect(store.upsertConversions).not.toHaveBeenCalled();expect(store.replaceMetrics).not.toHaveBeenCalled();
  });
+ it('preserves conversion attribution and metrics when atomic replacement already persisted the rows',async()=>{
+  const store=makeStore(),normalStore=makeStore(),rows=[{...seed('2026-07-01'),revenue:9,payout:2},{...seed('2026-07-02'),event:'Sale',is_event:true,revenue:12,payout:3}];
+  const input={from:'2026-07-01',to:'2026-07-03',loadConversions:async()=>rows,loadReports:async()=>({base:[],events:[]})};
+  const normal=await refreshHistoryRange({...input,store:normalStore});
+  const alreadyStored=await refreshHistoryRange({...input,store,persistConversions:false});
+  expect(alreadyStored).toEqual(normal);
+  expect(store.upsertConversions).not.toHaveBeenCalled();
+  expect(store.replaceMetrics.mock.calls).toEqual(normalStore.replaceMetrics.mock.calls);
+  expect(alreadyStored.metrics.reduce((sum,row)=>sum+row.sois,0)).toBe(1);
+  expect(alreadyStored.metrics.reduce((sum,row)=>sum+row.first_sales,0)).toBe(1);
+ });
  it('stops on a failed replacement and never advances the history state',async()=>{
   const store=makeStore();store.replaceMetrics.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('database unavailable'));
   await expect(refreshHistoryRange({store,from:'2026-07-01',to:'2026-07-07',loadConversions:async()=>[],loadReports:async()=>({base:[],events:[]})})).rejects.toThrow('database unavailable');

@@ -39,9 +39,10 @@ export async function runFraudConversionSync(now=new Date()){
   try{
   expireFraudCaches();
   const raw=await source.loadConversions(window.from,window.to),loadConversions=async()=>raw;
-  const reportResult=await refreshHistoryRange({store,from:window.from,to:window.to,loadConversions,loadReports:source.loadReports});
+  const result=await refreshConversionRange({store:dailyReplacementStore(store),from:window.from,to:window.to,loadConversions});
+  const reportResult=await refreshHistoryRange({store,from:window.from,to:window.to,persistConversions:false,loadConversions,loadReports:source.loadReports});
   const reportHasActivity=reportResult.metrics.some(row=>row.sois>0||row.first_sales>0||row.rebills>0||row.coin_spend>0);
-  const result=await refreshConversionRange({store:dailyReplacementStore(store),from:window.from,to:window.to,loadConversions}),stored=await storedEvidence(window.from,window.to),parity=buildFraudBackfillParity({from:window.from,to:window.to,expected:{typeCounts:result.typeCounts,identityDigest:result.identityDigest},stored,reportHasActivity}),next=advanceFraudBackfillState(state,window,now,parity),saved=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:next},{onConflict:'key'});
+  const stored=await storedEvidence(window.from,window.to),parity=buildFraudBackfillParity({from:window.from,to:window.to,expected:{typeCounts:result.typeCounts,identityDigest:result.identityDigest},stored,reportHasActivity}),next=advanceFraudBackfillState(state,window,now,parity),saved=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:next},{onConflict:'key'});
   if(saved.error)throw new Error(`Supabase Fraud-Backfill-Fortschritt: ${saved.error.message}`);return{...result,mode:window.mode,phase:next.phase,ready:next.phase==='rolling'&&next.parityVerifiedThrough===next.coveredThrough,readyAt:next.readyAt,skipped:false,parity,sourceMetrics:reportResult.metrics.length};
   }finally{expireFraudCaches()}
 }

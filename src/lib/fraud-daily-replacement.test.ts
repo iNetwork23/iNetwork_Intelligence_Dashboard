@@ -4,7 +4,7 @@ import {initialFraudBackfillState,type FraudBackfillState} from './fraud-backfil
 import {berlinRangeUtcBounds} from './reporting-day';
 import type {ConversionCacheRow,EverflowConversion} from './history-cache';
 
-const fixture=vi.hoisted(()=>({checkpoint:null as FraudBackfillState|null,raw:[] as EverflowConversion[],rows:new Map<string,ConversionCacheRow>(),writes:[] as FraudBackfillState[],replacements:[] as {from:string;to:string;ids:string[]}[],reads:[] as {from:string;to:string}[],tags:[] as string[],failDay:'',corrupt:false,active:0,peak:0,signals:[] as AbortSignal[]}));
+const fixture=vi.hoisted(()=>({checkpoint:null as FraudBackfillState|null,raw:[] as EverflowConversion[],rows:new Map<string,ConversionCacheRow>(),writes:[] as FraudBackfillState[],replacements:[] as {from:string;to:string;ids:string[]}[],reads:[] as {from:string;to:string}[],tags:[] as string[],failDay:'',failMetrics:false,corrupt:false,active:0,peak:0,signals:[] as AbortSignal[]}));
 vi.mock('next/cache',()=>({revalidateTag:(tag:string)=>{fixture.tags.push(tag)}}));
 vi.mock('./everflow-history',()=>({createEverflowHistorySource:()=>({loadConversions:async()=>fixture.raw,loadReports:async()=>({base:[],events:[]})})}));
 vi.mock('./supabase',()=>({
@@ -17,8 +17,8 @@ vi.mock('./supabase',()=>({
    range:async(start:number,end:number)=>{fixture.reads.push({from,to});const rows=[...fixture.rows.values()].filter(row=>row.converted_at>=from&&row.converted_at<to).sort((a,b)=>a.converted_at.localeCompare(b.converted_at)||a.id.localeCompare(b.id));return{data:rows.slice(start,end+1),error:null}},
   };return chain;
  }}),
- createSupabaseSyncStore:()=>({getState:async()=>null,setState:async()=>{},upsertMetrics:async()=>{},replaceMetrics:async()=>{},
-  upsertConversions:async(rows:ConversionCacheRow[])=>{for(const row of rows)fixture.rows.set(row.id,row)},
+ createSupabaseSyncStore:()=>({getState:async()=>null,setState:async()=>{},upsertMetrics:async()=>{},replaceMetrics:async()=>{if(fixture.failMetrics)throw new Error('metric replacement failed')},
+  upsertConversions:async()=>{throw new Error('Redundant conversion upsert exceeds statement timeout')},
   replaceConversions:async(from:string,to:string,rows:ConversionCacheRow[])=>{
    fixture.replacements.push({from,to,ids:rows.map(row=>row.id)});fixture.active++;fixture.peak=Math.max(fixture.peak,fixture.active);
    try{
@@ -35,7 +35,7 @@ vi.mock('./supabase',()=>({
 
 const now=new Date('2026-09-08T12:00Z');
 const raw=(id:string,time:string):EverflowConversion=>({conversion_id:id,transaction_id:`lead-${id}`,conversion_unix_timestamp:Date.parse(time)/1000,is_event:false,event:'SOI',status:'approved',payout:1,revenue:2,source_id:'s',relationship:{affiliate:{network_affiliate_id:1},offer:{network_offer_id:2},campaign:{network_campaign_id:3},offer_url:{network_offer_url_id:4}}});
-beforeEach(()=>{fixture.checkpoint=initialFraudBackfillState(now);fixture.raw=['12','13','14'].map(day=>raw(`may-${day}`,`2026-05-${day}T12:00Z`));fixture.rows.clear();fixture.writes=[];fixture.replacements=[];fixture.reads=[];fixture.tags=[];fixture.failDay='';fixture.corrupt=false;fixture.active=0;fixture.peak=0;fixture.signals=[]});
+beforeEach(()=>{fixture.checkpoint=initialFraudBackfillState(now);fixture.raw=['12','13','14'].map(day=>raw(`may-${day}`,`2026-05-${day}T12:00Z`));fixture.rows.clear();fixture.writes=[];fixture.replacements=[];fixture.reads=[];fixture.tags=[];fixture.failDay='';fixture.failMetrics=false;fixture.corrupt=false;fixture.active=0;fixture.peak=0;fixture.signals=[]});
 
 it('fits three sequential daily transactions while retaining one complete readback and cursor advance',async()=>{
  const result=await runFraudConversionSync(now);
@@ -64,6 +64,16 @@ it('rejects matching counts with a wrong identity in an earlier replaced day',as
  await expect(runFraudConversionSync(now)).rejects.toThrow('Parity');
  expect(fixture.reads).toHaveLength(1);expect(fixture.writes).toHaveLength(1);expect(fixture.checkpoint?.nextFrom).toBe('2026-05-12');expect(fixture.checkpoint?.parityVerifiedThrough).toBeNull();
  expect(fixture.tags.filter(tag=>tag==='fraud-dashboard')).toHaveLength(2);
+});
+
+it('keeps the checkpoint invalid when reporting fails after replacement and safely retries the same window',async()=>{
+ fixture.failMetrics=true;
+ await expect(runFraudConversionSync(now)).rejects.toThrow('metric replacement failed');
+ expect(fixture.replacements).toHaveLength(3);expect(fixture.rows.size).toBe(3);
+ expect(fixture.checkpoint).toMatchObject({nextFrom:'2026-05-12',readyAt:null,parityVerifiedThrough:null,lastParity:null});
+ fixture.failMetrics=false;fixture.replacements=[];
+ expect(await runFraudConversionSync(now)).toMatchObject({parity:{verified:true}});
+ expect(fixture.rows.size).toBe(3);expect(fixture.checkpoint?.nextFrom).toBe('2026-05-15');
 });
 
 it('atomically replaces an empty provider day so stale canonical rows are removed',async()=>{
