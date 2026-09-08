@@ -2,6 +2,13 @@ import type {SupabaseClient} from '@supabase/supabase-js';
 import {EVERFLOW_BERLIN_TIMEZONE_ID} from './everflow-timezone';
 
 export const BERLIN_REPORTING_VERSION=5;
+/** Distinguish incomplete coverage from an unavailable database without exposing backend errors. */
+export class IncompleteBerlinReportingRangeError extends Error{
+ constructor(readonly confirmedDays:number,readonly totalDays:number){
+  super(`Berlin-Tagesdaten müssen neu synchronisiert werden (${confirmedDays}/${totalDays} Tage bestätigt)`);
+  this.name='IncompleteBerlinReportingRangeError';
+ }
+}
 export type BerlinDayMarker={version:number;timezoneId:number;date:string;generation:string};
 const validDay=(day:unknown):day is string=>typeof day==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(day)&&Number.isFinite(Date.parse(`${day}T12:00Z`))&&new Date(`${day}T12:00Z`).toISOString().slice(0,10)===day;
 export function isBerlinDayMarker(value:unknown):value is BerlinDayMarker{
@@ -22,6 +29,6 @@ export async function assertBerlinReportingRange(client:{from?:SupabaseClient['f
  const result=await client.from('sync_state').select('value').gte('key',`${prefix}${from}`).lte('key',`${prefix}${to}`).order('key');
  if(result.error)throw new Error(`Berlin-Tagesnachweise nicht lesbar: ${result.error.message}`);
  const markers=new Map<string,BerlinDayMarker>();for(const row of result.data||[])if(isBerlinDayMarker(row.value))markers.set(row.value.date,row.value);
- if(!days.every(day=>markers.has(day)))throw new Error(`Berlin-Tagesdaten müssen neu synchronisiert werden (${days.filter(day=>markers.has(day)).length}/${days.length} Tage bestätigt)`);
+ if(!days.every(day=>markers.has(day)))throw new IncompleteBerlinReportingRangeError(days.filter(day=>markers.has(day)).length,days.length);
  return markers;
 }

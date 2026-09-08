@@ -1,5 +1,11 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Zeitraum noch nicht vollständig verfügbar": "Selected period is not fully available yet",
+  "Unvollständige Daten": "Incomplete data",
+  "Ausgewählter Zeitraum": "Selected period",
+  "Für diesen Zeitraum sind noch nicht alle Tagesdaten bestätigt. Wählen Sie einen anderen Zeitraum oder versuchen Sie es später erneut.": "Not all daily data has been verified for this period. Select another period or try again later.",
+  "Die Datenquelle ist vorübergehend nicht verfügbar. Sie können den Zeitraum ändern oder die Auswahl erneut laden.": "The data source is temporarily unavailable. You can change the period or reload your selection.",
+  "Ausgewählten Zeitraum erneut laden": "Reload selected period",
   "Sprache": "Language",
   "Darstellung": "Appearance",
   "Hell": "Light",
