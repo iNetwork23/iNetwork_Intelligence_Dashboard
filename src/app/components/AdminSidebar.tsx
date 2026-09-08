@@ -75,6 +75,8 @@ export default function AdminSidebar(props:Props){
   if(!mobileMode||!mobileOpen)return;
   const sidebar=sidebarRef.current,toggle=mobileToggleRef.current;if(!sidebar)return;
   mobileCloseRef.current?.focus();
+  // WebKit can still treat the just-revealed inert subtree as unfocusable until the next frame.
+  const focusFrame=window.requestAnimationFrame(()=>{if(!sidebar.contains(document.activeElement))mobileCloseRef.current?.focus()});
   const focusables=()=>Array.from(sidebar.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')).filter(node=>node.tabIndex>=0&&!node.matches('.sidebarCollapse')&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden');
   const onFocus=(event:FocusEvent)=>{if(!sidebar.contains(event.target as Node))mobileCloseRef.current?.focus()};
   const onKey=(event:KeyboardEvent)=>{
@@ -86,6 +88,7 @@ export default function AdminSidebar(props:Props){
   };
   document.addEventListener('focusin',onFocus);document.addEventListener('keydown',onKey);
   return()=>{
+   window.cancelAnimationFrame(focusFrame);
    document.removeEventListener('focusin',onFocus);document.removeEventListener('keydown',onKey);
    if(sidebar.contains(document.activeElement)){
     if(window.matchMedia('(max-width:760px)').matches)toggle?.focus();

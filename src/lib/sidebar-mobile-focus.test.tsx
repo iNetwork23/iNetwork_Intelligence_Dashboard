@@ -9,8 +9,12 @@ import LanguageProvider from '../app/components/LanguageProvider';
 vi.mock('next/navigation',()=>({usePathname:()=>'/',useSearchParams:()=>new URLSearchParams('period=7d')}));
 vi.mock('next/link',()=>({default:(props:React.ComponentProps<'a'>&{prefetch?:boolean})=>{const{prefetch,...rest}=props;void prefetch;return <a {...rest}/>}}));
 let root:Root|undefined,host:HTMLDivElement;
+let frames:Map<number,FrameRequestCallback>,frameId:number;
 let change:()=>void,media:{matches:boolean;addEventListener:ReturnType<typeof vi.fn>;removeEventListener:ReturnType<typeof vi.fn>};
 beforeEach(()=>{
+ frames=new Map();frameId=0;
+ vi.stubGlobal('requestAnimationFrame',vi.fn((callback:FrameRequestCallback)=>{frames.set(++frameId,callback);return frameId}));
+ vi.stubGlobal('cancelAnimationFrame',vi.fn((id:number)=>frames.delete(id)));
  vi.stubGlobal('React',React);vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
  vi.stubGlobal('localStorage',{getItem:()=>null,setItem:vi.fn()});
  media={matches:true,addEventListener:vi.fn((_event:string,listener:()=>void)=>{change=listener}),removeEventListener:vi.fn()};
@@ -51,4 +55,17 @@ it('closes by button and keeps desktop navigation available after a breakpoint c
  const aside=host.querySelector('aside')!;
  expect(aside.hasAttribute('inert')).toBe(false);expect(aside.hasAttribute('aria-modal')).toBe(false);
  expect(aside.classList.contains('mobileOpen')).toBe(false);
+});
+
+it('recovers when the browser cannot focus the freshly revealed drawer until the next frame',async()=>{
+ await mount();
+ const close=host.querySelector<HTMLButtonElement>('.mobileSidebarClose')!;
+ vi.spyOn(close,'focus').mockImplementationOnce(()=>{});
+ await open();expect(document.activeElement).not.toBe(close);
+ await act(async()=>{for(const callback of frames.values())callback(16);frames.clear()});
+ expect(document.activeElement).toBe(close);
+ await act(async()=>close.click());await open();
+ expect(frames.size).toBe(1);
+ await act(async()=>close.click());expect(frames.size).toBe(0);
+ expect(document.activeElement).toBe(host.querySelector('.mobileSidebarToggle'));
 });
