@@ -20,16 +20,18 @@ export function translateText(value:string,locale:DashboardLocale){
 function germanNumberToEnglish(value:string){const [whole,fraction]=value.split(',');return`${whole.replaceAll('.',',')}${fraction===undefined?'':`.${fraction}`}`}
 function englishNumberToGerman(value:string){const [whole,fraction]=value.split('.');return`${whole.replaceAll(',','.')}${fraction===undefined?'':`,${fraction}`}`}
 export function localizeDisplayText(value:string,locale:DashboardLocale){
- if(locale==='en')return value
-  .replace(/\b(\d{2})\.(\d{2})\.(\d{4})\b/g,'$1/$2/$3')
-  .replace(/(\d+(?:\.\d{3})*(?:,\d+)?)\s*€/g,(_,number:string)=>`€${germanNumberToEnglish(number)}`)
-  .replace(/(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*%/g,(_,number:string)=>`${germanNumberToEnglish(number)}%`)
-  .replace(/\b\d{1,3}(?:\.\d{3})+\b/g,number=>number.replaceAll('.',','));
- return value
-  .replace(/\b(\d{2})\/(\d{2})\/(\d{4})\b/g,'$1.$2.$3')
-  .replace(/€(\d+(?:,\d{3})*(?:\.\d+)?)/g,(_,number:string)=>`${englishNumberToGerman(number)} €`)
-  .replace(/(\d{1,3}(?:,\d{3})*(?:\.\d+)?)%/g,(_,number:string)=>`${englishNumberToGerman(number)} %`)
-  .replace(/\b\d{1,3}(?:,\d{3})+\b/g,number=>number.replaceAll(',','.'));
+ // Translate complete tokens once: a converted €3.000 must not then be
+ // mistaken for a German thousands group and changed into €3,000.
+ const tokens=/(?<![\d.,])(\d+(?:\.\d{3})*(?:,\d+)?)\s*€|€(\d+(?:,\d{3})*(?:\.\d+)?)|\b(\d{2}\.\d{2}\.\d{4})\b|\b(\d{2}\/\d{2}\/\d{4})\b|(?<![\d.,])(\d+(?:\.\d{3})*(?:,\d+)?)\s+%|(?<![\d.,])(\d+(?:,\d{3})*(?:\.\d+)?)%|\b(?:\d{1,3}(?:[.,]\d{3})+)\b/g;
+ return value.replace(tokens,(token,deMoney:string|undefined,enMoney:string|undefined,deDate:string|undefined,enDate:string|undefined,dePercent:string|undefined,enPercent:string|undefined)=>{
+  if(deMoney!==undefined)return locale==='en'?`€${germanNumberToEnglish(deMoney)}`:token;
+  if(enMoney!==undefined)return locale==='de'?`${englishNumberToGerman(enMoney)} €`:token;
+  if(deDate!==undefined)return locale==='en'?token.replaceAll('.','/'):token;
+  if(enDate!==undefined)return locale==='de'?token.replaceAll('/','.'):token;
+  if(dePercent!==undefined)return locale==='en'?`${germanNumberToEnglish(dePercent)}%`:token;
+  if(enPercent!==undefined)return locale==='de'?`${englishNumberToGerman(enPercent)} %`:token;
+  return locale==='en'?token.replaceAll('.',','):token.replaceAll(',','.');
+ });
 }
 
 export function persistLocale(locale:DashboardLocale,root:{lang:string;dataset:DOMStringMap},storage:{setItem:(key:string,value:string)=>unknown}){

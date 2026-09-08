@@ -1,5 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {LOCALE_COOKIE,LOCALE_STORAGE_KEY,localeBootScript,localizeDisplayText,normalizeLocale,translateText,translations} from './i18n';
+import {assessUnit} from './decision-engine';
 
 describe('dashboard internationalization',()=>{
  it('uses German as the safe default and accepts only supported locales',()=>{
@@ -41,5 +42,21 @@ describe('dashboard internationalization',()=>{
   expect(localizeDisplayText('Δ Median +€56954.22 (+10113%)','de')).toBe('Δ Median +56954,22 € (+10113 %)');
   expect(localizeDisplayText('-123456789,10 €','en')).toBe('-€123456789.10');
   expect(localizeDisplayText('-€123456789.10','de')).toBe('-123456789,10 €');
+ });
+ it('preserves three-decimal efficiency values without interpreting them as thousands',()=>{
+  const de='-3,00 € Profit · -3,000 € Profit je SOI · 2.500 SOIs';
+  const en='-€3.00 Profit · -€3.000 Profit je SOI · 2,500 SOIs';
+  expect(localizeDisplayText(de,'en')).toBe(en);
+  expect(localizeDisplayText(en,'de')).toBe(de);
+  expect(localizeDisplayText('-3,000 €','de')).toBe('-3,000 €');
+  expect(localizeDisplayText('-€3.000','en')).toBe('-€3.000');
+  expect(localizeDisplayText('1.234,567 €','en')).toBe('€1,234.567');
+  expect(localizeDisplayText('€1,234.567','de')).toBe('1.234,567 €');
+ });
+ it('renders actual decision evidence as a complete monetary token in either language',()=>{
+  const evidence=assessUnit({clicks:0,sois:1,firstSales:0,rebills:0,profit:-3},{api:true}).evidence.join(' · ');
+  expect(evidence).toContain('-3,00 € Profit');
+  expect(localizeDisplayText(evidence,'en')).toContain('-€3.00 Profit');
+  expect(localizeDisplayText(evidence,'en')).not.toContain('-3.€00');
  });
 });
