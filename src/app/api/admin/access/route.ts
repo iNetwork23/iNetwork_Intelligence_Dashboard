@@ -6,7 +6,7 @@ import { currentUser, resolveCurrentUserUncached } from '@/lib/session';
 import { ALL_PERMISSIONS, assertMayDelegatePermissions, assertMayManageUser, assertMayRemoveSuperAdmin, can, mayImpersonate, parseAccessMetadata, resolveStoredAccessFromStore, resolveStoredAccessMetadata, STANDARD_ROLES, stripFinance, type AccessMetadata, type Permission, type StandardRole } from '@/lib/rbac';
 import { canonicalOrigin, checkCsrf, createOpaqueSession, COOKIE_NAME, parseBoundedJson, revokeUserSessions, securityHeaders, withSecurityLock } from '@/lib/security';
 import { hasMfa, resetMfa } from '@/lib/mfa';
-import { assertRoleIsUnassigned, buildRoleOptions, customRoleBaseRoles, type CustomRoleDefinition } from '@/lib/admin-access-policy';
+import { accessMetadataPatch, assertRoleIsUnassigned, buildRoleOptions, customRoleBaseRoles, type CustomRoleDefinition } from '@/lib/admin-access-policy';
 import { DuplicateProvisioningIdentityError, parseProvisionedUser, provisionDirectUser, ProvisioningUncertainError } from '@/lib/user-provisioning';
 import { getDashboard } from '@/lib/dashboard-service';
 import { parseScopePreviewInput, previewScopeEntities } from '@/lib/scope-preview';
@@ -328,7 +328,7 @@ export async function POST(request: Request) {
           willRemainActiveSuperAdmin: requested.role === 'super_admin' && requested.status === 'active',
         });
         const updated = await supabase.auth.admin.updateUserById(targetId, {
-          app_metadata: requestedRaw,
+          app_metadata: accessMetadataPatch(requestedRaw),
         });
         if (updated.error) throw new Error('update');
         await revokeUserSessions(securityStore(), targetId);
