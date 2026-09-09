@@ -10,6 +10,11 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+) aktiv$/,'$1 active',/^(\d+) active$/,'$1 aktiv'],
+ [/^Setting #(\d+) · Payout 0 · Postback aus$/,'Setting #$1 · Payout 0 · Postback off',/^Setting #(\d+) · Payout 0 · Postback off$/,'Setting #$1 · Payout 0 · Postback aus'],
+ [/^Gesperrt seit (\d{2}\.\d{2}\.\d{4})$/,'Blocked since $1',/^Blocked since (\d{2}[./]\d{2}[./]\d{4})$/,'Gesperrt seit $1'],
+ [/^· (\d+) ohne Bilanz \(vor Etappe 4 gesperrt\)$/,'· $1 without a balance (blocked before balances were recorded)',/^· (\d+) without a balance \(blocked before balances were recorded\)$/,'· $1 ohne Bilanz (vor Etappe 4 gesperrt)'],
+ [/^vermieden (.+?) · entgangen (.+?) · (\d+) Sperren$/,'avoided $1 · forgone $2 · $3 blocks',/^avoided (.+?) · forgone (.+?) · (\d+) blocks$/,'vermieden $1 · entgangen $2 · $3 Sperren'],
  [/^Dieses Gerät ist registriert \((\d+) insgesamt\)\.$/,'This device is registered ($1 total).',/^This device is registered \((\d+) total\)\.$/,'Dieses Gerät ist registriert ($1 insgesamt).'],
  [/^Dieses Gerät ist nicht registriert \((\d+) insgesamt\)\.$/,'This device is not registered ($1 total).',/^This device is not registered \((\d+) total\)\.$/,'Dieses Gerät ist nicht registriert ($1 insgesamt).'],
  [/^(\d+) aktive Sperren$/,'$1 active blocks',/^(\d+) active blocks$/,'$1 aktive Sperren'],
