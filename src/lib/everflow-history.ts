@@ -57,12 +57,14 @@ function canonicalJson(value:unknown):string{
   return JSON.stringify(value)??'null';
 }
 
+type ConversionPaginationPass={pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[];invalidIdentityRows:number;oversizedPages:number;proofStatus:'unavailable'|'ineligible'|'boundary-overlap'|'first'|'matching'|'mismatch'};
+
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
   const limit=createLimiter(8),call=<T>(url:string,body:unknown)=>limit(()=>request<T>(url,body,apiKey,fetcher));
   const loadConversionSlice=async(from:string,to:string,affiliateId?:string)=>{
     const unique=new Map<string,EverflowConversion>();
-    const diagnostics:{pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[]}[]=[];
+    const diagnostics:ConversionPaginationPass[]=[];
     const duplicateProofs:string[]=[];
     let expectedTotal:number|undefined,repeatedPage=false,totalChanged=false,recoveryAllowed=true;
     // Coprime sizes move offset boundaries. Raw totals may include identical
@@ -72,7 +74,7 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     for(const pageSize of [2000,997,503,991]){
       if(pageSize===991&&(!recoveryAllowed||repeatedPage||totalChanged||duplicateProofs.length!==2))break;
       unique.clear();
-      const pass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,crossPageDuplicateRows:0,reportedPageSizes:[] as number[]};diagnostics.push(pass);
+      const pass:ConversionPaginationPass={pageSize,pages:0,receivedRows:0,uniqueRows:0,duplicateRows:0,changedDuplicateRows:0,crossPageDuplicateRows:0,reportedPageSizes:[],invalidIdentityRows:0,oversizedPages:0,proofStatus:'unavailable'};diagnostics.push(pass);
       const fingerprints=new Set<string>();
       const contents=new Map<string,{json:string;count:number}>();let validProof=true;
       for(let page=1;;page++){
@@ -86,10 +88,10 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         const reportedSize=result.paging?.page_size;
         if(Number.isSafeInteger(reportedSize)&&Number(reportedSize)>0&&!pass.reportedPageSizes.includes(Number(reportedSize))&&pass.reportedPageSizes.length<4)pass.reportedPageSizes.push(Number(reportedSize));
         const identities=rows.map(row=>row.conversion_id||canonicalJson(row)),fingerprint=JSON.stringify(identities),pageIdentities=new Set<string>();
-        if(rows.length>pageSize)validProof=false;
+        if(rows.length>pageSize){pass.oversizedPages++;validProof=false;}
         for(let index=0;index<rows.length;index++){
           const row=rows[index],id=identities[index],json=canonicalJson(row),previous=contents.get(id);
-          if(typeof row.conversion_id!=='string'||!row.conversion_id.trim())validProof=false;
+          if(typeof row.conversion_id!=='string'||!row.conversion_id.trim()){pass.invalidIdentityRows++;validProof=false;}
           if(previous){pass.duplicateRows++;if(previous.json!==json)pass.changedDuplicateRows++;if(!pageIdentities.has(id))pass.crossPageDuplicateRows++}
           contents.set(id,{json,count:(previous?.count??0)+1});pageIdentities.add(id);unique.set(id,row);
         }
@@ -101,11 +103,13 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         if(rows.length===0||rows.length<pageSize||page*pageSize>=expectedTotal)break;
       }
       const eligible=validProof&&!totalChanged&&pass.receivedRows===expectedTotal&&pass.duplicateRows>0&&pass.changedDuplicateRows===0;
+      pass.proofStatus=eligible?'boundary-overlap':'ineligible';
       if(!eligible)recoveryAllowed=false;
       if(eligible&&pass.crossPageDuplicateRows===0){
         const hash=createHash('sha256');
         for(const id of [...contents.keys()].sort()){const entry=contents.get(id)!;hash.update(JSON.stringify([id,entry.json,entry.count]));hash.update('\n')}
         const digest=hash.digest('hex');
+        pass.proofStatus=duplicateProofs.length===0?'first':duplicateProofs.every(proof=>proof===digest)?'matching':'mismatch';
         if(duplicateProofs.some(proof=>proof!==digest))recoveryAllowed=false;
         duplicateProofs.push(digest);
       }

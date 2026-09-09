@@ -249,7 +249,7 @@ describe('Everflow fraud source dimensions',()=>{
     let error:unknown;try{await createEverflowHistorySource('private-api-key',fetcher).loadConversions('2026-09-01','2026-09-01')}catch(value){error=value}
     const message=String(error);expect(message).toContain('1/3');
     const diagnostics=JSON.parse(message.split('diagnostics=')[1]);
-    expect(diagnostics).toEqual([2000,997,503].map(pageSize=>({pageSize,pages:1,receivedRows:3,uniqueRows:1,duplicateRows:2,changedDuplicateRows:1,crossPageDuplicateRows:0,reportedPageSizes:[pageSize]})));
+    expect(diagnostics).toEqual([2000,997,503].map(pageSize=>({pageSize,pages:1,receivedRows:3,uniqueRows:1,duplicateRows:2,changedDuplicateRows:1,crossPageDuplicateRows:0,reportedPageSizes:[pageSize],invalidIdentityRows:0,oversizedPages:0,proofStatus:'ineligible'})));
     for(const secret of ['private-conversion-id','private-customer-id','private@example.test','secret-event-name','private-api-key'])expect(message).not.toContain(secret);
   });
 
@@ -264,7 +264,7 @@ describe('Everflow fraud source dimensions',()=>{
     const fetcher=vi.fn<typeof fetch>(async url=>{const params=new URL(String(url)).searchParams,size=Number(params.get('page_size')),page=Number(params.get('page'));return json({conversions:Array.from({length:size},(_,i)=>({conversion_id:`private-${i}`,payout:page})),paging:{total_count:4000,page_size:size}})});
     let error:unknown;try{await createEverflowHistorySource('key',fetcher).loadConversions('2026-09-01','2026-09-01')}catch(value){error=value}
     expect(String(error)).toContain('duplicate/repeated page');
-    expect(JSON.parse(String(error).split('diagnostics=')[1])).toEqual([2000,997,503].map(pageSize=>({pageSize,pages:2,receivedRows:2*pageSize,uniqueRows:pageSize,duplicateRows:pageSize,changedDuplicateRows:pageSize,crossPageDuplicateRows:pageSize,reportedPageSizes:[pageSize]})));
+    expect(JSON.parse(String(error).split('diagnostics=')[1])).toEqual([2000,997,503].map(pageSize=>({pageSize,pages:2,receivedRows:2*pageSize,uniqueRows:pageSize,duplicateRows:pageSize,changedDuplicateRows:pageSize,crossPageDuplicateRows:pageSize,reportedPageSizes:[pageSize],invalidIdentityRows:0,oversizedPages:0,proofStatus:'ineligible'})));
   });
 
   it('retries a transient Everflow Big Query rate limit before failing the slice',async()=>{
@@ -315,4 +315,18 @@ describe('Everflow fraud source dimensions',()=>{
     const fetcher=vi.fn<typeof fetch>(async()=>{call++;return json(call===1?{conversions:Array.from({length:2000},(_,index)=>({conversion_id:`row-${index}`})),paging:{total_count:2001}}:{conversions:[{conversion_id:'row-2000'}],paging})});
     await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-07-01','2026-07-01')).rejects.toThrow('total_count');
   });
+});
+
+
+describe('conversion duplicate proof rejection diagnostics',()=>{
+ it.each(['changed-content','missing-identity'])('explains %s without exposing provider data or accepting the rows',async scenario=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size'));const shared={transaction_id:'secret-customer',payout:1,...(scenario==='missing-identity'?{}:{conversion_id:'secret-id'})};return json({conversions:[shared,shared,{conversion_id:'another-secret-id',payout:scenario==='changed-content'?size:1}],paging:{total_count:3,page_size:size}})});
+  let failure:unknown;try{await createEverflowHistorySource('secret-api-key',fetcher).loadConversions('2026-04-13','2026-04-13')}catch(error){failure=error}
+  expect(failure).toBeInstanceOf(Error);const message=String(failure),diagnostics=JSON.parse(message.split('diagnostics=')[1]);
+  expect(diagnostics.map((pass:{invalidIdentityRows:number})=>pass.invalidIdentityRows)).toEqual(scenario==='missing-identity'?[2,2,2]:[0,0,0]);
+  expect(diagnostics.map((pass:{proofStatus:string})=>pass.proofStatus)).toEqual(scenario==='missing-identity'?['ineligible','ineligible','ineligible']:['first','mismatch','mismatch']);
+  expect(diagnostics.every((pass:{oversizedPages:number})=>pass.oversizedPages===0)).toBe(true);
+  for(const secret of ['secret-customer','secret-id','another-secret-id','secret-api-key'])expect(message).not.toContain(secret);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+ });
 });
