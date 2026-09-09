@@ -6,6 +6,8 @@ Die Hintergrundberechnung behandelt ausschließlich `IncompleteBerlinReportingRa
 
 Die Route liefert bei fehlenden Portfolio-Zeiträumen HTTP 503 mit `portfolioComplete:false`, `incompleteRanges`, veröffentlichten `snapshots` und den einzelnen `sourceCandidates`-Ergebnissen. Vollständige Portfolio-Coverage liefert weiterhin 200. Source-Ergebnisse sind separat auszuweisen; `portfolioComplete` behauptet keinen vollständigen Source-Import. Sperrfreigabe erfolgt weiterhin im `finally`.
 
-Validierung: Regression zunächst mit zwei erwarteten Fehlern reproduziert; nach Korrektur 33 gezielte Tests, gesamtes Repository 221 Dateien / 1.785 Tests bestanden. Typecheck, Next-Build und Diffcheck bestanden. Lint: null Fehler, zwei bereits bekannte Warnungen. Vollständiger npm-Audit: null Schwachstellen. Keine SQL-, Cron-, Provider-, Rechte- oder Geschäftsregeländerung.
+Der aktuelle Audit hat zusätzlich zwei hohe Abhängigkeitsbefunde offengelegt. `sharp` einschließlich Override wurde auf 0.35.4 und der `js-yaml`-Override auf 4.3.2 aktualisiert. Dies sind die vom jeweiligen Maintainer veröffentlichten Korrekturen: [sharp](https://github.com/lovell/sharp/security/advisories/GHSA-rgj7-g3m4-5g8c), [js-yaml](https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh).
+
+Validierung: Regression zunächst mit zwei erwarteten Fehlern reproduziert; nach Korrektur 33 gezielte Tests, gesamtes Repository einschließlich Abhängigkeitsupdates 221 Dateien / 1.785 Tests bestanden. Typecheck, Next-Build und Diffcheck bestanden. Lint: null Fehler, zwei bereits bekannte Warnungen. Vollständiger und Produktions-Audit: jeweils null Schwachstellen. Keine SQL-, Cron-, Provider-, Rechte- oder Geschäftsregeländerung.
 
 Produktive Veröffentlichung und Datenbank-Read-back werden separat im datierten Arbeitsnachweis dokumentiert. Ein erfolgreicher technischer Check schließt die noch offenen fachlichen WLX-Abnahmen nicht ab.
