@@ -30,7 +30,18 @@ export function requireFraudCoverageFrom(state:FraudBackfillState,requiredFrom:s
   const windowTo=berlinDay(now);
   return{...state,phase:'backfill',windowFrom:requiredFrom,windowTo:windowTo>state.windowTo?windowTo:state.windowTo,nextFrom:requiredFrom,coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null,lastParity:null,readyAt:null};
 }
-export function invalidateFraudBackfillState(state:FraudBackfillState):FraudBackfillState{return{...state,readyAt:null,parityVerifiedThrough:null,lastParity:null}}
+export function invalidateFraudBackfillState(state:FraudBackfillState,window?:FraudBackfillWindow):FraudBackfillState{
+  const invalidated={...state,readyAt:null,parityVerifiedThrough:null,lastParity:null};
+  // Save the repair cursor before any write. Otherwise a failed rolling refresh
+  // looks like an unverified legacy cutover and resets the entire history.
+  if(window?.mode==='rolling'&&state.phase==='rolling'&&strongParity(state.lastParity)&&
+    state.coveredFrom===state.windowFrom&&state.coveredThrough&&state.parityVerifiedThrough===state.coveredThrough&&state.lastParity?.to===state.coveredThrough&&
+    validDay(window.from)&&validDay(window.to)&&window.from<=window.to&&window.to<=shift(window.from,2)&&
+    window.from>=state.windowFrom&&window.from<=shift(state.coveredThrough,1)&&window.to>=state.coveredThrough){
+    return{...invalidated,phase:'backfill',windowTo:window.to,nextFrom:window.from,coveredFrom:null,coveredThrough:null};
+  }
+  return invalidated;
+}
 // Metric replacement accepts at most three inclusive Berlin days, including backfill and catch-up.
 export function selectFraudBackfillWindow(state:FraudBackfillState,now=new Date()):FraudBackfillWindow{
   if(state.version!==4)throw new Error('Unbekannte Fraud-Backfill-Version');

@@ -40,7 +40,7 @@ export async function runFraudConversionSync(now=new Date()){
   const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),store=createSupabaseSyncStore();
   const started=Date.now(),progress=(stage:string,rows?:number)=>console.info('Fraud backfill progress',{from:window.from,to:window.to,stage,elapsedMs:Date.now()-started,...(rows===undefined?{}:{rows})});
   progress('started');
-  const invalidated=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:invalidateFraudBackfillState(state)},{onConflict:'key'});if(invalidated.error)throw new Error(`Supabase Fraud-Backfill-Invalidierung: ${invalidated.error.message}`);
+  const invalidated=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:invalidateFraudBackfillState(state,window)},{onConflict:'key'});if(invalidated.error)throw new Error(`Supabase Fraud-Backfill-Invalidierung: ${invalidated.error.message}`);
   try{
   expireFraudCaches();
   const raw=await source.loadConversions(window.from,window.to),loadConversions=async()=>raw;
