@@ -12,7 +12,7 @@ import type {FraudBackfillState} from './fraud-backfill';
 import {scopeFingerprint,type AccessMetadata} from './rbac';
 import {canAccessFraud,FRAUD_ACCESS_HINT} from './fraud-access';
 import {getSupabaseAdmin} from './supabase';
-import {berlinRangeUtcBounds} from './reporting-day';
+import {berlinDayUtcBounds,berlinRangeUtcBounds} from './reporting-day';
 
 const auditedBaselines:Record<string,number>={'8':.0448,'50':.0306,'57':.0813};
 const validDay=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(`${value}T12:00:00Z`));
@@ -41,13 +41,36 @@ async function loadAccountSourceRows(range:{from:string;to:string}){
 }
 
 type ConversionCacheRecord=Parameters<typeof fraudConversionFromCacheRecord>[0];
-async function loadConversions(from:string,to:string):Promise<FraudConversionInput[]>{
-  const client=getSupabaseAdmin(),bounds=berlinRangeUtcBounds(from,to),select='id,type,converted_at,click_at,affiliate_id,affiliate_name,offer_id,offer_name,campaign_id,campaign_name,offer_url_id,offer_url_name,traffic_mode,source_id,sub_source,source_dimension,sub_source_dimension,lead_id,status,is_scrub,error_code,payout,revenue',rows:ConversionCacheRecord[]=[];
-  for(let start=0;;start+=4000){
-    const pages=await Promise.all([0,1,2,3].map(index=>client.from('conversions').select(select).gte('converted_at',bounds.from).lt('converted_at',bounds.toExclusive).order('converted_at').order('id').abortSignal(new AbortController().signal).range(start+index*1000,start+index*1000+999)));
-    let count=0;for(const page of pages){if(page.error)throw new Error(`Supabase Fraud-Conversions: ${page.error.message}`);count+=(page.data||[]).length;rows.push(...(page.data||[]) as unknown as ConversionCacheRecord[])}if(count<4000)break;
+export async function loadFraudConversionsFromCache(from:string,to:string):Promise<FraudConversionInput[]>{
+  berlinRangeUtcBounds(from,to);
+  const client=getSupabaseAdmin(),select='id,type,converted_at,click_at,affiliate_id,affiliate_name,offer_id,offer_name,campaign_id,campaign_name,offer_url_id,offer_url_name,traffic_mode,source_id,sub_source,source_dimension,sub_source_dimension,lead_id,status,is_scrub,error_code,payout,revenue',rows:FraudConversionInput[]=[];
+  const literal=(value:string)=>`"${value.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`;
+  let pageSize=1000,pagesRead=0;
+  // The existing timestamp index can choose a bitmap scan plus sort. Restrict
+  // each scan to one Berlin day, including the 23/25-hour DST transition days.
+  for(let day=from;day<=to;day=new Date(Date.parse(`${day}T12:00:00Z`)+86_400_000).toISOString().slice(0,10)){
+  const bounds=berlinDayUtcBounds(day);let cursor:{converted_at:string;id:string}|undefined;
+  for(;;){
+    // Seek from the last timestamp/ID; large OFFSETs repeatedly scan old rows.
+    // Keep all statuses: Fraud also needs rejected/scrubbed events and errors.
+    let query=client.from('conversions').select(select).gte('converted_at',cursor?.converted_at||bounds.from).lt('converted_at',bounds.toExclusive);
+    if(cursor)query=query.or(`converted_at.gt.${literal(cursor.converted_at)},and(converted_at.eq.${literal(cursor.converted_at)},id.gt.${literal(cursor.id)})`);
+    const page=await query.order('converted_at').order('id').limit(pageSize).abortSignal(new AbortController().signal);
+    if(page.error){
+      if(/statement timeout/i.test(page.error.message)&&pageSize>125){pageSize=Math.max(125,Math.floor(pageSize/2));continue}
+      throw new Error(`Supabase Fraud-Conversions: ${page.error.message} (pages read: ${pagesRead}, page size: ${pageSize})`);
+    }
+    pagesRead++;
+    const batch=(page.data||[]) as unknown as ConversionCacheRecord[];
+    for(const row of batch)rows.push(fraudConversionFromCacheRecord(row));
+    if(batch.length<pageSize)break;
+    const last=batch[batch.length-1];
+    if(typeof last.converted_at!=='string'||!Number.isFinite(Date.parse(last.converted_at))||typeof last.id!=='string'||!last.id||(last.converted_at===cursor?.converted_at&&last.id===cursor.id))throw new Error('Supabase Fraud-Conversions: invalid or unchanged pagination cursor');
+    // Preserve PostgreSQL microseconds, including ties crossing page boundaries.
+    cursor={converted_at:last.converted_at,id:last.id};
   }
-  return rows.map(fraudConversionFromCacheRecord);
+  }
+  return rows;
 }
 
 type StopRow={id:string;affiliate_id:string;source:string|null;sub_source:string|null;source_dimension:FraudStopRequest['sourceDimension'];sub_source_dimension:FraudStopRequest['subSourceDimension'];offer_id:string|null;scope:'offer'|'all_offers';requested_at:string;grace_hours:number;channel:string};
@@ -63,7 +86,7 @@ function joinCoverage(conversions:FraudConversionInput[]){
 const checkpointGeneration=(state:FraudBackfillState|null)=>createHash('sha256').update(JSON.stringify(state)).digest('hex');
 
 const dashboardCache=(range:{from:string;to:string},accessFingerprint:string,filters:FraudDashboardFilters,markers:SourceBlockMarkerIndex|undefined,backfill:FraudBackfillState|null)=>unstable_cache(async()=>{
-  const[sourceData,stops]=await Promise.all([loadAccountSourceRows(range),loadStops()]),cutover=fraudCutoverCoverage(backfill,range,stops.map(stop=>stop.requestedAt.slice(0,10))),requiredFrom=cutover.requiredFrom,cutoverReady=cutover.ready,conversionFrom=requiredFrom,conversions=cutoverReady?await loadConversions(conversionFrom,range.to):[],analysisConversions=conversionsForFraudRange(conversions,range),baselines={...auditedBaselines,...deriveCoinBaselines(analysisConversions)},rawEvaluations=iterateFraudEvaluations(sourceData.metrics,{conversions:analysisConversions,baselines}),stopCompliance=cutoverReady?evaluateStopCompliance(stops,conversions):[],expectedDays=calendarDays(range.from,range.to),sourceComplete=sourceData.markers.length===expectedDays,view=selectFraudDashboardView(rawEvaluations,sourceComplete,filters,markers);
+  const[sourceData,stops]=await Promise.all([loadAccountSourceRows(range),loadStops()]),cutover=fraudCutoverCoverage(backfill,range,stops.map(stop=>stop.requestedAt.slice(0,10))),requiredFrom=cutover.requiredFrom,cutoverReady=cutover.ready,conversionFrom=requiredFrom,conversions=cutoverReady?await loadFraudConversionsFromCache(conversionFrom,range.to):[],analysisConversions=conversionsForFraudRange(conversions,range),baselines={...auditedBaselines,...deriveCoinBaselines(analysisConversions)},rawEvaluations=iterateFraudEvaluations(sourceData.metrics,{conversions:analysisConversions,baselines}),stopCompliance=cutoverReady?evaluateStopCompliance(stops,conversions):[],expectedDays=calendarDays(range.from,range.to),sourceComplete=sourceData.markers.length===expectedDays,view=selectFraudDashboardView(rawEvaluations,sourceComplete,filters,markers);
   sourceData.metrics.clear();
   return{range,generatedAt:new Date().toISOString(),mode:'shadow' as const,writeEnabled:false,writesPerformed:0,evaluations:view.evaluations,filteredSources:view.filteredSources,activeStops:stops,stopCompliance,baselines,coverage:{cutoverReady,backfillPhase:backfill?.phase||'not_started',backfillReadyAt:backfill?.readyAt||null,coveredFrom:backfill?.coveredFrom||null,coveredThrough:backfill?.coveredThrough||null,sourceDaysAvailable:sourceData.markers.length,sourceDaysExpected:expectedDays,sourceComplete,conversionJoin:cutoverReady?joinCoverage(analysisConversions):null},totals:{...view.totals,stopViolations:cutoverReady?stopCompliance.filter(row=>row.status==='verstoß').length:null}};
 },['fraud-dashboard-v7-berlin-v5',range.from,range.to,accessFingerprint,JSON.stringify(filters),createHash('sha256').update(JSON.stringify(markers??null)).digest('hex'),checkpointGeneration(backfill)],{revalidate:300,tags:['fraud-dashboard','affiliate-source']})();

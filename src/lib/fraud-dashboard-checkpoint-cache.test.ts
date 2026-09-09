@@ -6,7 +6,7 @@ const fixture=vi.hoisted(()=>({checkpoint:null as FraudBackfillState|null,cache:
 vi.mock('next/cache',()=>({unstable_cache:(fn:()=>Promise<unknown>,key:string[])=>async()=>{const id=JSON.stringify(key);if(!fixture.cache.has(id))fixture.cache.set(id,fn());return fixture.cache.get(id)}}));
 vi.mock('./fraud-backfill-service',()=>({loadFraudBackfillState:async()=>{fixture.reads++;if(fixture.readError)throw new Error('checkpoint unavailable');return structuredClone(fixture.checkpoint)}}));
 vi.mock('./supabase',()=>({getSupabaseAdmin:()=>({from:()=>{
- const chain={select:()=>chain,gte:()=>chain,lte:()=>chain,lt:()=>chain,order:()=>chain,is:()=>chain,abortSignal:()=>chain,
+ const chain={select:()=>chain,gte:()=>chain,lte:()=>chain,lt:()=>chain,order:()=>chain,is:()=>chain,limit:()=>chain,abortSignal:()=>chain,
  range:async()=>({data:[],error:null}),then:(done:(value:unknown)=>unknown)=>{const change=fixture.duringDataRead;fixture.duringDataRead=null;change?.();return Promise.resolve(done({data:[],error:null}))}};return chain;
 }})}));
 const access={role:'super_admin' as const,status:'active' as const,version:1,grants:[],denials:[],scopes:{affiliate:[],offer:[],campaign:[],account:[],source:[],sub_source:[]}},range={from:'2026-09-07',to:'2026-09-08'};
