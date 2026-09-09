@@ -10,6 +10,11 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Dry Run: Entscheidung Halten \(([a-z_]+)\) · (\d+) Writes$/,'Dry run: Decision hold ($1) · $2 writes',/^Dry run: Decision hold \(([a-z_]+)\) · (\d+) writes$/,'Dry Run: Entscheidung Halten ($1) · $2 Writes'],
+ [/^Halten \(([a-z_]+)\)$/,'Hold ($1)',/^Hold \(([a-z_]+)\)$/,'Halten ($1)'],
+ [/^(\d+(?:[.,]\d+)?) Tage$/,'$1 days',/^(\d+(?:[.,]\d+)?) days$/,'$1 Tage'],
+ [/^(\d+) aktiv$/,'$1 active',/^(\d+) active$/,'$1 aktiv'],
+ [/^(\d+) Min\.$/,'$1 min',/^(\d+) min$/,'$1 Min.'],
  [/^Rollup vom ([\d.,/: ]+) · Zugewiesener Bereich$/,'Rollup from $1 · Assigned scope',/^Rollup from ([\d.,/: ]+) · Assigned scope$/,'Rollup vom $1 · Zugewiesener Bereich'],
  [/^Rollup vom ([\d.,/: ]+) · (\d+) von (\d+) Partnern$/,'Rollup from $1 · $2 of $3 partners',/^Rollup from ([\d.,/: ]+) · (\d+) of (\d+) partners$/,'Rollup vom $1 · $2 von $3 Partnern'],
  [/^Auswahl für LP #(\d+)$/,'Selection for LP #$1',/^Selection for LP #(\d+)$/,'Auswahl für LP #$1'],

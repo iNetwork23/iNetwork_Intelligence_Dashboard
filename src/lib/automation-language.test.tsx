@@ -4,12 +4,25 @@ import {createRoot,type Root} from 'react-dom/client';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import LanguageProvider,{useLanguage} from '../app/components/LanguageProvider';
 import AutomationDashboard from '../app/automation/AutomationDashboard';
+import OptimizationFlow from '../app/components/OptimizationFlow';
+import LocalizedMain from '../app/components/LocalizedMain';
 vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams()}));
 let root:Root|undefined;
 const payload={generatedAt:'2026-09-09T19:00:00Z',canRunLive:true,configurations:[{id:'fixture',version:5,name:'Entwurf speichern',affiliateId:436,campaignId:146,testMode:'single_offer',strategy:'equal_slots',status:'hold',writeEnabled:false,offers:[],slots:[{offerUrlId:2749,offerUrlName:'Neue Automation konfigurieren',weight:100}],thresholds:{targetSois:50,minClicks:500,maturityHours:336},schedule:{intervalMinutes:120},runs:[],updatedAt:'2026-09-09T19:00:00Z',lastIncident:{at:'2026-09-09T19:00:00Z',message:'Berlin-Tagesdaten müssen neu synchronisiert werden (6/14 Tage bestätigt)',providerMutated:false,compensation:'not_needed'}}],campaigns:[{campaignId:2,affiliateId:6,name:'Entwurf speichern',affiliate:'Neue Automation konfigurieren',mode:'none',lastStatus:'error',lastRunAt:'2026-09-09T19:00:00Z',nextRunAt:'2026-09-09T20:00:00Z',enabled:false,latest:{verified:true,action:'none',summary:'Entwurf speichern'}}]};
 beforeEach(()=>{vi.stubGlobal('React',React);vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);vi.stubGlobal('localStorage',{getItem:()=>null,setItem:vi.fn()});document.body.replaceChildren();document.documentElement.dataset.locale='en';vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>payload}))});
 afterEach(async()=>{if(root)await act(async()=>root!.unmount());root=undefined;vi.unstubAllGlobals()});
 function Switch(){const{setLocale}=useLanguage();return <button id="de" onClick={()=>setLocale('de')}>DE</button>}
+it('localizes optimization navigation across Link boundaries without changing the routes or selected step',async()=>{
+ const host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ await act(async()=>root!.render(<LanguageProvider><Switch/><LocalizedMain><OptimizationFlow active="automation"/></LocalizedMain></LanguageProvider>));
+ expect(host.querySelector('nav')?.getAttribute('aria-label')).toBe('Joint optimization process');
+ expect(host.querySelector('a small')?.textContent).toBe('Where to act?');
+ expect([...host.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['/affiliates','/affiliates?mode=smartlinks','/automation']);
+ expect(host.querySelector('a[aria-current="step"]')?.textContent).toContain('Auto rotation & evidence');
+ await act(async()=>host.querySelector<HTMLButtonElement>('#de')!.click());
+ expect(host.querySelector('a small')?.textContent).toBe('Wo handeln?');expect(host.querySelector('a[aria-current="step"]')?.getAttribute('href')).toBe('/automation');
+ expect(fetch).not.toHaveBeenCalled();
+});
 it('localizes loaded controls and hold state while preserving names and legacy audit text',async()=>{
  const host=document.createElement('div');document.body.append(host);root=createRoot(host);
  await act(async()=>root!.render(<LanguageProvider><Switch/><AutomationDashboard/></LanguageProvider>));
