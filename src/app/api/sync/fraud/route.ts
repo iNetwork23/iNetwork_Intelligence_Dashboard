@@ -14,7 +14,7 @@ export async function GET(request:NextRequest){
  try{
   const release=await acquireHistorySyncLock();
   try{const fraud=await runFraudConversionSync();revalidateTag('affiliate-source',{expire:0});revalidateTag('affiliate-source-freshness',{expire:0});revalidateTag('fraud-dashboard',{expire:0});return NextResponse.json({operation:'scheduled-fraud-conversion-backfill',...fraud})}
-  finally{try{revalidateTag('affiliate-rebills',{expire:0})}finally{await release()}}
+  finally{try{revalidateTag('data-status',{expire:0})}finally{try{revalidateTag('affiliate-rebills',{expire:0})}finally{await release()}}}
  }
  catch(error){console.error('Everflow fraud sync failed',error);return NextResponse.json({error:'Fraud-Sync fehlgeschlagen'},{status:500})}
 }
