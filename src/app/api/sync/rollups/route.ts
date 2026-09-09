@@ -2,28 +2,33 @@ import{NextRequest,NextResponse}from'next/server';
 import{revalidateTag}from'next/cache';
 import{acquireHistorySyncLock,getSupabaseAdmin}from'@/lib/supabase';
 import{refreshLongPortfolioRangeSnapshots,reportingRange}from'@/lib/supabase-reporting';
-import{memoizedConversionsLoader,publishSourceCandidates}from'@/lib/source-candidates';
+import{publishSourceCandidatesBatch}from'@/lib/source-candidates';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 export const maxDuration=240;
 
 const authorized=(request:NextRequest)=>Boolean(process.env.CRON_SECRET&&request.headers.get('authorization')===`Bearer ${process.env.CRON_SECRET}`);
-/** Quell-Kandidaten laufen nach den Portfolio-Rollups im Restbudget der Route (maxDuration 240): 30 Tage zuerst (Leitstand-Standard, D5); das Restbudget bis 180 s Gesamtlaufzeit wird gleichmäßig auf die verbleibenden Zeiträume verteilt, mindestens 15 s je Zeitraum; 60 s bleiben als Reserve für laufende Partner-Loads und den Upsert. */
+/** Both source ranges share one affiliate read pass within the remaining 180-second budget; the route retains its existing 240-second limit. */
 export const CANDIDATE_TOTAL_BUDGET_MS=180_000;
 export const sourceCandidateBudgetMs=(elapsedMs:number,rangesLeft=1)=>Math.max(15_000,Math.floor(Math.max(0,CANDIDATE_TOTAL_BUDGET_MS-elapsedMs)/Math.max(1,rangesLeft)));
 const CANDIDATE_PERIODS=['30d','7d']as const;
 type CandidateResult={rows:number;coverageComplete:boolean}|{error:string};
 async function publishSourceCandidateRanges(started:number){
  const sourceCandidates:Record<'7d'|'30d',CandidateResult>={'7d':{error:'nicht gestartet'},'30d':{error:'nicht gestartet'}};
- // Kleine Conversion-Ergebnisse zwischen Zeiträumen wiederverwenden; große Ergebnisse vollständig laden und danach freigeben. Reife-Kurzfassung nur im ersten Zeitraum persistieren; Memo nach dem letzten Zeitraum freigeben.
- const memo=memoizedConversionsLoader(),conversionsFor=memo.conversionsFor;
- for(const[index,period]of CANDIDATE_PERIODS.entries()){
-  const rangeStarted=Date.now();
-  try{const range=reportingRange(period);sourceCandidates[period]=await publishSourceCandidates({from:range.from!,to:range.to},{timeBudgetMs:sourceCandidateBudgetMs(rangeStarted-started,CANDIDATE_PERIODS.length-index),conversionsFor,persistMaturity:index===0});console.info(`Source candidates ${period}: ${JSON.stringify(sourceCandidates[period])} in ${Date.now()-rangeStarted} ms (route elapsed ${Date.now()-started} ms)`)}
-  catch(error){console.error(`Source candidates ${period} failed`,error);sourceCandidates[period]={error:error instanceof Error?error.message:'Quell-Kandidaten konnten nicht berechnet werden'}}
+ const rangeStarted=Date.now();
+ try{
+  const ranges=CANDIDATE_PERIODS.map(period=>{const range=reportingRange(period);return{from:range.from!,to:range.to}});
+  const results=await publishSourceCandidatesBatch(ranges,{timeBudgetMs:sourceCandidateBudgetMs(rangeStarted-started),persistMaturity:true});
+  for(const[index,period]of CANDIDATE_PERIODS.entries()){
+   sourceCandidates[period]=results[index];
+   if('error'in results[index])console.error(`Source candidates ${period} failed`,results[index]);
+   else console.info(`Source candidates ${period}: ${JSON.stringify(results[index])} in shared pass ${Date.now()-rangeStarted} ms (route elapsed ${Date.now()-started} ms)`);
+  }
+ }catch(error){
+  console.error('Shared source candidate pass failed',error);
+  for(const period of CANDIDATE_PERIODS)sourceCandidates[period]={error:error instanceof Error?error.message:'Quell-Kandidaten konnten nicht berechnet werden'};
  }
- memo.clear();
  try{revalidateTag('source-candidates',{expire:0});revalidateTag('lead-maturity',{expire:0})}catch(error){console.error('Source candidates revalidate failed',error)}
  return sourceCandidates;
 }

@@ -195,7 +195,7 @@ describe('rangeCoversTrend',()=>{
   const{rangeCoversTrend}=await import('./source-candidates');
   expect(rangeCoversTrend({from:'2026-08-22',to:'2026-09-04'})).toBe(true);
   expect(rangeCoversTrend({from:'2026-08-29',to:'2026-09-04'})).toBe(false);
-  expect(read('src/lib/source-candidates.ts')).toContain('rangeCoversTrend(range)?sourceTrendsFromRows(raw,range.to):undefined');
+  expect(read('src/lib/source-candidates.ts')).toContain('rangeCoversTrend(range)?sourceTrendsFromRows(rows,range.to):undefined');
  });
 });
 describe('memoizedConversionsLoader',()=>{
@@ -293,20 +293,10 @@ describe('loadSourceCandidates',()=>{
 
 describe('rollups route hook',()=>{
  beforeEach(()=>{process.env.CRON_SECRET='secret';refreshLongPortfolioRangeSnapshots.mockResolvedValue({snapshots:[{key:'portfolio_range:x',rows:1}],incompleteRanges:[]})});
- it('publishes both ranges after the portfolio rollups inside their own try/catch',()=>{
+ it('shares the candidate pass while retaining the existing route and total budgets',()=>{
   const route=read('src/app/api/sync/rollups/route.ts');
-  expect(route).toContain('maxDuration=240');
-  expect(route).toContain("const CANDIDATE_PERIODS=['30d','7d']as const");
-  expect(route).toContain('for(const[index,period]of CANDIDATE_PERIODS.entries())');
-  expect(route).toContain('sourceCandidateBudgetMs(rangeStarted-started,CANDIDATE_PERIODS.length-index)');
-  expect(route).toContain('console.info(`Source candidates ${period}:');
-  expect(route).toMatch(/try\{const range=reportingRange\(period\);sourceCandidates\[period\]=await publishSourceCandidates\(/);
-  expect(route).toContain('catch(error){console.error(`Source candidates ${period} failed`,error)');
-  expect(route).toContain('sourceCandidates:await publishSourceCandidateRanges(started)');
-  expect(route.indexOf('refreshLongPortfolioRangeSnapshots(getSupabaseAdmin())')).toBeLessThan(route.indexOf('publishSourceCandidateRanges(started)'));
-  expect(route).toContain('Math.max(15_000,Math.floor(Math.max(0,CANDIDATE_TOTAL_BUDGET_MS-elapsedMs)/Math.max(1,rangesLeft)))');
-  expect(route).toContain('CANDIDATE_TOTAL_BUDGET_MS=180_000');
-  expect(route).toContain('conversionsFor,persistMaturity:index===0');
+  expect(route).toContain('maxDuration=240');expect(route).toContain('CANDIDATE_TOTAL_BUDGET_MS=180_000');
+  expect(route).toContain('publishSourceCandidatesBatch(ranges,');expect(route).toContain('sourceCandidateBudgetMs(rangeStarted-started)');
   expect(route).toContain("revalidateTag('lead-maturity',{expire:0})");
  });
  it('keeps the total runtime inside the route budget',async()=>{
@@ -342,4 +332,55 @@ describe('rollups route hook',()=>{
   const response=await GET(new NextRequest('http://localhost/api/sync/rollups',{headers:{authorization:'Bearer secret'}}));
   expect(response.status).toBe(500);expect(loadPortfolioFromCache).not.toHaveBeenCalled();expect(upsert).not.toHaveBeenCalled();expect(release).toHaveBeenCalledTimes(1);
  });
+});
+
+describe('shared range preparation',()=>{
+ const short={from:'2026-08-29',to:'2026-09-04'};
+ it('matches the separate complete snapshots while reading each affiliate only once',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-04T12:00:00Z'));
+  loadPortfolioFromCache.mockImplementation(async(_p:unknown,_db:unknown,_at:unknown,r:{from:string})=>portfolio(r.from===short.from?['376']:['376','412']));
+  const old=rRow('376','old','N/A',{cv:4,profit:-7});old.columns[0]={column_type:'date',id:'2026-08-10',label:'2026-08-10'};
+  const data=[old,rRow('376','recent','N/A',{cv:3,profit:-4}),rRow('376','api','N/A',{cv:2,profit:-3},'api'),rRow('412','long-only','N/A',{cv:2,profit:-2})];
+  loadRows.mockImplementation(async(r:{from:string;to:string},id:string)=>data.filter(row=>row.columns.find(c=>c.column_type==='affiliate')?.id===id&&row.columns[0].id>=r.from&&row.columns[0].id<=r.to));
+  const service=await import('./source-candidates'),expected=[await service.buildSourceCandidatesSnapshot(range),await service.buildSourceCandidatesSnapshot(short)];
+  loadRows.mockClear();loadIndex.mockClear();loadConversions.mockClear();loadFreshness.mockClear();
+  const result=await service.buildSourceCandidatesSnapshots([range,short]);
+  expect(result).toEqual(expected);
+  expect(loadRows).toHaveBeenCalledTimes(2);expect(loadIndex).toHaveBeenCalledTimes(2);expect(loadConversions).toHaveBeenCalledTimes(2);expect(loadFreshness).toHaveBeenCalledTimes(1);
+  expect(loadRows.mock.calls.map(([r,id])=>[r,id])).toEqual([[range,'376'],[range,'412']]);
+ });
+ it('isolates a missing portfolio to its own range',async()=>{
+  loadPortfolioFromCache.mockImplementation(async(_p:unknown,_db:unknown,_at:unknown,r:{from:string})=>{if(r.from===short.from)throw new Error('short portfolio missing');return portfolio(['376'])});
+  loadRows.mockResolvedValue([rRow('376','source','N/A',{cv:2,profit:-3})]);
+  const{buildSourceCandidatesSnapshots}=await import('./source-candidates');
+  const result=await buildSourceCandidatesSnapshots([range,short]);
+  expect(result[0]).toMatchObject({coverageComplete:true,affiliatesProcessed:1});expect(result[1]).toEqual({error:'short portfolio missing'});expect(loadRows).toHaveBeenCalledTimes(1);
+ });
+ it('reports a shared affiliate read failure only in ranges containing that affiliate',async()=>{
+  loadPortfolioFromCache.mockImplementation(async(_p:unknown,_db:unknown,_at:unknown,r:{from:string})=>portfolio(r.from===short.from?['376']:['376','412']));
+  loadRows.mockImplementation(async(_r:unknown,id:string)=>{if(id==='412')throw new Error('read failed');return[rRow('376','source','N/A',{cv:2,profit:-3})]});
+  const{buildSourceCandidatesSnapshots}=await import('./source-candidates');
+  const result=await buildSourceCandidatesSnapshots([range,short]);
+  expect(result[0]).toMatchObject({coverageComplete:false,affiliates:2,affiliatesProcessed:1});expect(result[1]).toMatchObject({coverageComplete:true,affiliates:1,affiliatesProcessed:1});
+ });
+ it('does not silently filter undated snapshots into a supposedly complete short range',async()=>{
+  loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));const invalid=rRow('376','source','N/A',{cv:2,profit:-3});invalid.columns=invalid.columns.filter(c=>c.column_type!=='date');loadRows.mockResolvedValue([invalid]);
+  const{buildSourceCandidatesSnapshots}=await import('./source-candidates');
+  const result=await buildSourceCandidatesSnapshots([range,short]);
+  expect(result).toEqual([expect.objectContaining({coverageComplete:false,affiliatesProcessed:0,rows:[]}),expect.objectContaining({coverageComplete:false,affiliatesProcessed:0,rows:[]})]);
+ });
+});
+
+it('cancels completed load deadlines so their resolved results are not retained by timers',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-04T12:00:00Z'));
+ loadPortfolioFromCache.mockResolvedValue(portfolio(['376','412']));loadRows.mockResolvedValue([]);
+ const{buildSourceCandidatesSnapshots}=await import('./source-candidates');
+ await buildSourceCandidatesSnapshots([range,{from:'2026-08-29',to:'2026-09-04'}]);
+ expect(vi.getTimerCount()).toBe(0);
+});
+it('keeps a successfully published range when the other range upsert fails',async()=>{
+ loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','source','N/A',{cv:2,profit:-3})]);
+ upsert.mockResolvedValueOnce({error:null}).mockResolvedValueOnce({error:{message:'short write failed'}});
+ const{publishSourceCandidatesBatch}=await import('./source-candidates');
+ expect(await publishSourceCandidatesBatch([range,{from:'2026-08-29',to:'2026-09-04'}])).toEqual([{rows:1,coverageComplete:true},{error:'Supabase source candidates: short write failed'}]);
 });

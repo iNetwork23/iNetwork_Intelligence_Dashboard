@@ -55,34 +55,84 @@ export function evaluateSourceCandidates(rows:SourceBreakdownRow[],labels:Labels
 /** Accountweit mit Systemzugriff (ohne Partner-Scope): Affiliates aus dem Portfolio des Zeitraums, je Affiliate bestehende Cache-Leser; Fehler je Affiliate überspringen, Zeitbudget einhalten. */
 /** Ein Partner-Load darf das Restbudget nur um diese Reserve überziehen; danach zählt er als übersprungen (coverageComplete=false). */
 export const AFFILIATE_LOAD_GRACE_MS=15_000;
-const rejectAfter=(ms:number,message:string)=>new Promise<never>((_,reject)=>setTimeout(()=>reject(new Error(message)),Math.max(1_000,ms)).unref?.());
-export async function buildSourceCandidatesSnapshot(range:{from:string;to:string},options?:SourceCandidateBuildOptions):Promise<SourceCandidatesSnapshot>{
- const now=options?.now||new Date(),budget=options?.timeBudgetMs??DEFAULT_CANDIDATE_TIME_BUDGET_MS,started=Date.now(),exhausted=()=>Date.now()-started>=budget,remaining=()=>budget-(Date.now()-started),conversionsFor=options?.conversionsFor??((affiliateId:string,at:Date)=>loadAffiliateConversionsFromCache(affiliateId,90,at));
+async function withinCandidateBudget<T>(work:Promise<T>,ms:number,message:string):Promise<T>{
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ const deadline=new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error(message)),Math.max(1_000,ms));timer.unref?.()});
+ try{return await Promise.race([work,deadline])}finally{if(timer)clearTimeout(timer)}
+}
+export type SourceCandidateBuildResult=SourceCandidatesSnapshot|{error:string};
+/** Prepare all selected ranges one affiliate at a time. Raw history, annual
+ * activity and conversions are released before the next affiliate is loaded. */
+export async function buildSourceCandidatesSnapshots(ranges:Array<{from:string;to:string}>,options?:SourceCandidateBuildOptions):Promise<SourceCandidateBuildResult[]>{
+ if(!ranges.length)return[];
+ const now=options?.now||new Date(),budget=options?.timeBudgetMs??DEFAULT_CANDIDATE_TIME_BUDGET_MS,started=Date.now(),exhausted=()=>Date.now()-started>=budget,remaining=()=>budget-(Date.now()-started),conversionsFor=options?.conversionsFor??((id:string,at:Date)=>loadAffiliateConversionsFromCache(id,90,at));
  const yearly=resolveSourcePeriod({sourcePeriod:'12m'},now),activityRange={from:yearly.from,to:yearly.to};
- const[portfolio,freshness]=await Promise.all([loadPortfolioFromCache('custom',getSupabaseAdmin(),now,range),loadSourceSnapshotFreshness(activityRange)]);
- const coverage=resolveActivityCoverage(activityRange.from,freshness),affiliates=[...portfolio.affiliates].sort((a,b)=>b.sois-a.sois||b.clicks-a.clicks||a.id.localeCompare(b.id)),rows:SourceCandidate[]=[];
- let processed=0,failed=0,maturityUnavailable=0,cursor=0;
- /** Reife-Index (D3) aus den Conversions des Partners; Fehler → „keine Daten“ (fail-closed, gezählt), der Partner wird trotzdem bewertet. */
- const loadMaturity=async(affiliateId:string):Promise<{index:LeadMaturityIndex;unavailable:boolean}>=>{try{const conversions=await conversionsFor(affiliateId,now);return{index:buildLeadMaturityIndex(conversions,analyzeLeadLatency(conversions,now),range,now),unavailable:false}}catch(error){console.error(`Source candidates: lead maturity unavailable for affiliate ${affiliateId}`,error);return{index:noLeadMaturityIndex(range,now),unavailable:true}}};
+ const[portfolios,freshness]=await Promise.all([Promise.allSettled(ranges.map(range=>loadPortfolioFromCache('custom',getSupabaseAdmin(),now,range))),loadSourceSnapshotFreshness(activityRange)]);
+ const coverage=resolveActivityCoverage(activityRange.from,freshness);
+ const contexts=portfolios.flatMap((result,index)=>result.status==='fulfilled'?[{index,range:ranges[index],affiliates:[...result.value.affiliates].sort((a,b)=>b.sois-a.sois||b.clicks-a.clicks||a.id.localeCompare(b.id)),rows:[] as SourceCandidate[],processed:0,failed:0,maturityUnavailable:0}]:[]);
+ const affiliates=new Map<string,{id:string;name:string}>();
+ for(const context of contexts)for(const affiliate of context.affiliates)if(!affiliates.has(affiliate.id))affiliates.set(affiliate.id,affiliate);
+ const membership=contexts.map(context=>new Set(context.affiliates.map(affiliate=>affiliate.id)));
+ const prepareMaturity=async(affiliateId:string)=>{try{const rows=await conversionsFor(affiliateId,now);return{rows,analysis:analyzeLeadLatency(rows,now),unavailable:false}}catch(error){console.error(`Source candidates: lead maturity unavailable for affiliate ${affiliateId}`,error);return{rows:[] as ConversionRow[],analysis:null,unavailable:true}}};
  const persistMaturity=async(affiliateId:string,index:LeadMaturityIndex)=>{if(!options?.persistMaturity||index.confidence==='keine Daten')return;try{const{error}=await getSupabaseAdmin().from('sync_state').upsert({key:leadMaturitySummaryKey(affiliateId),value:summarizeLeadMaturity(index,affiliateId)},{onConflict:'key'});if(error)throw new Error(error.message)}catch(error){console.error(`Source candidates: lead maturity summary not persisted for affiliate ${affiliateId}`,error)}};
- const worker=async()=>{while(cursor<affiliates.length&&!exhausted()){const affiliate=affiliates[cursor++];
-  try{const[raw,index,maturity]=await Promise.race([Promise.all([loadAffiliateSourceRowsRangeFromCache(range,affiliate.id),loadAffiliateActivityIndex(affiliate.id,activityRange),loadMaturity(affiliate.id)]),rejectAfter(remaining()+(options?.loadGraceMs??AFFILIATE_LOAD_GRACE_MS),`Zeitbudget für Partner ${affiliate.id} überschritten`)]),evaluated=attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows([],[],raw),index,coverage),maturity.index);rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(raw,affiliate.name),rangeCoversTrend(range)?sourceTrendsFromRows(raw,range.to):undefined));processed++;if(maturity.unavailable)maturityUnavailable++;else await persistMaturity(affiliate.id,maturity.index)}
-  catch(error){failed++;console.error(`Source candidates skipped affiliate ${affiliate.id}`,error)}}};
- await Promise.all(Array.from({length:Math.min(CANDIDATE_CONCURRENCY,Math.max(1,affiliates.length))},worker));
- rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
- const capped=capSourceCandidates(rows.filter(row=>row.action!=='SKALIEREN').concat([...rows.filter(row=>row.action==='SKALIEREN')].sort((a,b)=>b.profit-a.profit)));
- capped.rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
- return{version:1,range:{from:range.from,to:range.to},generatedAt:new Date().toISOString(),affiliates:affiliates.length,affiliatesProcessed:processed,coverageComplete:processed===affiliates.length&&failed===0,rows:capped.rows,...(capped.truncated?{rowsTruncated:true}:{}),...(maturityUnavailable?{maturityUnavailable}:{})};
+ for(const affiliate of affiliates.values()){
+  if(exhausted())break;
+  const selected=contexts.filter((_context,index)=>membership[index].has(affiliate.id));
+  const readRange={from:selected.map(context=>context.range.from).sort()[0],to:selected.map(context=>context.range.to).sort().at(-1)!};
+  try{
+   const[raw,index,maturity]=await withinCandidateBudget(Promise.all([loadAffiliateSourceRowsRangeFromCache(readRange,affiliate.id),loadAffiliateActivityIndex(affiliate.id,activityRange),prepareMaturity(affiliate.id)]),remaining()+(options?.loadGraceMs??AFFILIATE_LOAD_GRACE_MS),`Zeitbudget für Partner ${affiliate.id} überschritten`);
+   const needsDates=selected.some(context=>context.range.from!==readRange.from||context.range.to!==readRange.to);
+   const dates=needsDates?raw.map(row=>row.columns.find(column=>column.column_type==='date')?.id):[];
+   if(needsDates&&dates.some(date=>!date||!/^\d{4}-\d{2}-\d{2}$/.test(date)))throw new Error('Source candidates: snapshot date missing or invalid');
+   for(const context of selected){
+    const range=context.range,rows=range.from===readRange.from&&range.to===readRange.to?raw:raw.filter((_row,i)=>dates[i]!>=range.from&&dates[i]!<=range.to);
+    const maturityIndex=maturity.analysis?buildLeadMaturityIndex(maturity.rows,maturity.analysis,range,now):noLeadMaturityIndex(range,now);
+    const evaluated=attachSourceMaturity(attachSourceActivityFromIndex(mergeSourceWindows([],[],rows),index,coverage),maturityIndex);
+    context.rows.push(...evaluateSourceCandidates(evaluated,collectSourceLabels(rows,affiliate.name),rangeCoversTrend(range)?sourceTrendsFromRows(rows,range.to):undefined));
+    context.processed++;
+    if(maturity.unavailable)context.maturityUnavailable++;
+    else if(context.index===0)await persistMaturity(affiliate.id,maturityIndex);
+   }
+  }catch(error){for(const context of selected)context.failed++;console.error(`Source candidates skipped affiliate ${affiliate.id}`,error)}
+ }
+ return ranges.map((range,index)=>{
+  const context=contexts.find(item=>item.index===index);
+  if(!context){const result=portfolios[index];return{error:result.status==='rejected'?(result.reason instanceof Error?result.reason.message:String(result.reason)):'Portfolio unavailable'}}
+  const rows=context.rows;rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
+  const capped=capSourceCandidates(rows.filter(row=>row.action!=='SKALIEREN').concat([...rows.filter(row=>row.action==='SKALIEREN')].sort((a,b)=>b.profit-a.profit)));
+  capped.rows.sort((a,b)=>a.profit-b.profit||a.affiliateId.localeCompare(b.affiliateId)||a.offerUrlId.localeCompare(b.offerUrlId));
+  return{version:1 as const,range:{from:range.from,to:range.to},generatedAt:new Date().toISOString(),affiliates:context.affiliates.length,affiliatesProcessed:context.processed,coverageComplete:context.processed===context.affiliates.length&&context.failed===0,rows:capped.rows,...(capped.truncated?{rowsTruncated:true}:{}),...(context.maturityUnavailable?{maturityUnavailable:context.maturityUnavailable}:{})};
+ });
+}
+export async function buildSourceCandidatesSnapshot(range:{from:string;to:string},options?:SourceCandidateBuildOptions):Promise<SourceCandidatesSnapshot>{
+ const result=(await buildSourceCandidatesSnapshots([range],options))[0];
+ if('error'in result)throw new Error(result.error);
+ return result;
 }
 /** build + upsert sync_state {key:sourceCandidatesKey(range),value:snapshot}. */
 /** Ein unvollständiger Lauf (Zeitbudget) überschreibt einen vollständigen Snapshot erst, wenn dieser älter als 6 h ist; der Leitstand zeigt das Rollup-Alter ohnehin an. */
 export const INCOMPLETE_OVERWRITE_AFTER_MS=6*60*60_000;
-export async function publishSourceCandidates(range:{from:string;to:string},options?:SourceCandidateBuildOptions):Promise<{rows:number;coverageComplete:boolean;kept?:boolean;maturityUnavailable?:number}>{
- const snapshot=await buildSourceCandidatesSnapshot(range,options);
+type SourceCandidatePublication={rows:number;coverageComplete:boolean;kept?:boolean;maturityUnavailable?:number};
+async function publishBuiltSourceCandidates(snapshot:SourceCandidatesSnapshot):Promise<SourceCandidatePublication>{
+ const range=snapshot.range;
  if(!snapshot.coverageComplete){const previous=await readStoredSnapshot(range).catch(()=>null);if(previous?.coverageComplete&&Date.parse(snapshot.generatedAt)-Date.parse(previous.generatedAt)<INCOMPLETE_OVERWRITE_AFTER_MS)return{rows:previous.rows.length,coverageComplete:true,kept:true}}
  const{error}=await getSupabaseAdmin().from('sync_state').upsert({key:sourceCandidatesKey(range),value:snapshot},{onConflict:'key'});
  if(error)throw new Error(`Supabase source candidates: ${error.message}`);
  return{rows:snapshot.rows.length,coverageComplete:snapshot.coverageComplete,...(snapshot.maturityUnavailable?{maturityUnavailable:snapshot.maturityUnavailable}:{})};
+}
+export async function publishSourceCandidates(range:{from:string;to:string},options?:SourceCandidateBuildOptions):Promise<SourceCandidatePublication>{
+ return publishBuiltSourceCandidates(await buildSourceCandidatesSnapshot(range,options));
+}
+/** Persist ranges independently after their shared read pass. One missing
+ * portfolio or failed upsert does not hide another successfully prepared range. */
+export async function publishSourceCandidatesBatch(ranges:Array<{from:string;to:string}>,options?:SourceCandidateBuildOptions):Promise<Array<SourceCandidatePublication|{error:string}>>{
+ const snapshots=await buildSourceCandidatesSnapshots(ranges,options),results:Array<SourceCandidatePublication|{error:string}>=[];
+ for(const snapshot of snapshots){
+  if('error'in snapshot){results.push(snapshot);continue}
+  try{results.push(await publishBuiltSourceCandidates(snapshot))}
+  catch(error){results.push({error:error instanceof Error?error.message:String(error)})}
+ }
+ return results;
 }
 export const isValidSourceCandidatesSnapshot=(value:unknown,range:{from:string;to:string}):value is SourceCandidatesSnapshot=>{const s=value as SourceCandidatesSnapshot|undefined;return Boolean(s&&s.version===1&&s.range?.from===range.from&&s.range?.to===range.to&&Array.isArray(s.rows)&&typeof s.generatedAt==='string')};
 const scopedRow=(row:SourceCandidate)=>({row,affiliate_id:row.affiliateId,offer_id:row.offerId,campaign_id:'0',source_id:row.mainValue??'',sub_source:row.subValue??''});
