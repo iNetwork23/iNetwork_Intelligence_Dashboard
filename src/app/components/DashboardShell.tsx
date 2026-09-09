@@ -18,7 +18,7 @@ export default async function DashboardShell({children}:{children:React.ReactNod
  /** Leitstand-Zähler (Sidebar-Badges): nur interne Rollen mit dashboard.view, einmal je Request, gebündelt gecacht; Fehler → keine Zähler (D7: Partner nie). */
  const mayLeitstand=user.access.role!=='partner'&&can(user.access,'dashboard.view');
  let counters:LeitstandCounters|null=null;
- if(mayLeitstand){try{counters=await loadLeitstandCounters()}catch(error){console.error('Leitstand-Zähler nicht ladbar',error)}}
+ if(mayLeitstand){try{counters=await loadLeitstandCounters(user.access)}catch(error){console.error('Leitstand-Zähler nicht ladbar',error)}}
  return <><OneSignalIdentity enabled={oneSignalEnabled} appId={oneSignalAppId} safariWebId={oneSignalSafariWebId} externalId={user.impersonating?'':user.id}/><DashboardShellFrame sidebar={<AdminSidebar
    email={user.email}
    role={user.access.role}

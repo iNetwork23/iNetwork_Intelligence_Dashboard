@@ -169,6 +169,15 @@ describe('Leitstand access',()=>{
 });
 
 describe('Leitstand loaders',()=>{
+ it('scopes sidebar counts and their cache key to the actual reader',async()=>{
+  const{loadLeitstandCounters,loadLeitstand}=await import('./leitstand');
+  const scoped=parseAccessMetadata({role:'employee',status:'active',scopes:{affiliate:['376']}}),foreign=candidate({affiliateId:'999',mainValue:'foreign'});
+  loadSourceCandidates.mockResolvedValue(snapshot({rows:[rows.bad]}));loadBlockIndex.mockResolvedValue(index([[foreign,'active']]));
+  expect(await loadLeitstandCounters(scoped,new Date('2026-09-04T12:00:00Z'))).toEqual({openKill:1,activeBlocks:0,incidents:0});
+  expect(loadSourceCandidates).toHaveBeenCalledWith(expect.anything(),scoped);
+  expect(cacheSpy.mock.calls[0][0].join('|')).toContain('affiliate:376');
+  expect((await loadLeitstand(scoped)).model?.counters.activeBlocks).toBe(0);
+ });
  it('loads snapshot and block index for the 30-day reporting range and never throws',async()=>{
   const{loadLeitstand}=await import('./leitstand');
   loadSourceCandidates.mockResolvedValue(snapshot());loadBlockIndex.mockResolvedValue(index([[rows.worst,'active']]));
@@ -189,10 +198,10 @@ describe('Leitstand loaders',()=>{
  it('bundles the shell counters in one cache entry tagged for candidates and blocks',async()=>{
   const{loadLeitstandCounters}=await import('./leitstand');
   loadSourceCandidates.mockResolvedValue(snapshot());loadBlockIndex.mockResolvedValue(index([[rows.worst,'active'],[rows.bad,'error']]));
-  const counters=await loadLeitstandCounters(new Date('2026-09-04T12:00:00Z'));
+  const counters=await loadLeitstandCounters(access('admin'),new Date('2026-09-04T12:00:00Z'));
   expect(counters).toEqual({openKill:3,activeBlocks:1,incidents:1});
   expect(cacheSpy).toHaveBeenCalledTimes(1);
-  expect(cacheSpy.mock.calls[0][0]).toEqual(['leitstand-counters-v1-berlin-v5','2026-08-06','2026-09-04']);
+  expect(cacheSpy.mock.calls[0][0]).toEqual(['leitstand-counters-v2-scoped','2026-08-06','2026-09-04',expect.stringContaining('scopes-v2|admin')]);
   const options=cacheSpy.mock.calls[0][1] as{revalidate:number;tags:string[]};
   expect(options.revalidate).toBeGreaterThanOrEqual(60);expect(options.revalidate).toBeLessThanOrEqual(120);
   expect(options.tags.sort()).toEqual(['source-blocks','source-candidates']);
@@ -201,7 +210,7 @@ describe('Leitstand loaders',()=>{
  it('yields empty counters while the rollup is pending',async()=>{
   const{loadLeitstandCounters}=await import('./leitstand');
   loadSourceCandidates.mockResolvedValue(null);loadBlockIndex.mockResolvedValue(index([[rows.worst,'active']]));
-  expect(await loadLeitstandCounters()).toEqual({openKill:0,activeBlocks:1,incidents:0});
+  expect(await loadLeitstandCounters(access('admin'))).toEqual({openKill:0,activeBlocks:1,incidents:0});
  });
 });
 
@@ -218,7 +227,7 @@ describe('Leitstand navigation markers',()=>{
   expect(shell).toContain('maySources={mayLeitstand}');
   expect(shell).toContain('sourcesBadge={counters?.openKill??null}');
   expect(shell).toContain('sourceBlocksBadge={counters?.activeBlocks??null}');
-  expect(shell).toMatch(/try\{counters=await loadLeitstandCounters\(\)\}catch/);
+  expect(shell).toMatch(/try\{counters=await loadLeitstandCounters\(user.access\)\}catch/);
  });
  it('keeps the mobile control view single-column and compact',()=>{
   const css=read('src/app/globals.css');

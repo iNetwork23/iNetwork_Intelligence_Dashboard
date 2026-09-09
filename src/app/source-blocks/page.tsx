@@ -1,5 +1,6 @@
 import{redirect}from'next/navigation';
 import{currentUser}from'@/lib/session';
+import{scopeSourceBlocks,sourceBlockInScope}from'@/lib/source-block-scope';
 import{can}from'@/lib/rbac';
 import{securityStore}from'@/lib/access-store';
 import{listSourceBlocks}from'@/lib/source-block-service';
@@ -39,7 +40,8 @@ export default async function SourceBlocksPage({searchParams}:{searchParams:Prom
  const finance=can(user.access,'finance.view'),filters=await searchParams,store=securityStore();
  const status=(STATUSES as readonly string[]).includes(filters.status||'')?filters.status!:'all',category=isSourceBlockReasonCategory(filters.category)?filters.category:filters.category==='none'?'none':'all',search=(filters.q||'').trim().slice(0,100),limit=Math.min(2000,Math.max(PAGE_SIZE,Math.floor(Number(filters.limit)||PAGE_SIZE)));
  const dataStatus=await getDataStatus().catch(()=>null);
- const[blocks,effects,markers]=await Promise.all([listSourceBlocks(store),loadBlockEffects(effectsRange()).catch(error=>{console.error('Block effects failed',error);return null}),loadReconcileMarkers(store).catch(error=>{console.error('Reconcile markers failed',error);return new Map<string,SourceBlockReconcileMarker>()})]);
+ const[allBlocks,allEffects,allMarkers]=await Promise.all([listSourceBlocks(store),loadBlockEffects(effectsRange()).catch(error=>{console.error('Block effects failed',error);return null}),loadReconcileMarkers(store).catch(error=>{console.error('Reconcile markers failed',error);return new Map<string,SourceBlockReconcileMarker>()})]);
+ const blocks=scopeSourceBlocks(allBlocks,user.access),effects=allEffects?.filter(effect=>sourceBlockInScope(effect.record,user.access))??null,ids=new Set(blocks.map(block=>block.id)),markers=new Map([...allMarkers].filter(([id])=>ids.has(id)));
  const effectById=new Map<string,BlockEffect>((effects||[]).map(effect=>[effect.record.id,effect])),needle=search.toLowerCase();
  const matches=(block:SourceBlockRecord)=>(status==='all'||block.status===status)&&(category==='all'||(category==='none'?!block.reasonCategory:block.reasonCategory===category))&&(!needle||[block.affiliateName,String(block.affiliateId),block.offerName,String(block.offerId),block.mainValue||'',block.subValue||''].some(value=>value.toLowerCase().includes(needle)));
  const rows=blocks.filter(matches),visible=rows.slice(0,limit),activeCount=rows.filter(block=>block.status==='active').length,totals=rows.reduce((sum,block)=>{const effect=effectById.get(block.id);if(!effect)return sum;const balance=effect.balance;return{sois:sum.sois+effect.soisSince,payout:sum.payout+effect.payoutSince,savedPayout:sum.savedPayout+(balance?.savedPayout??0),lostRevenue:sum.lostRevenue+(balance?.lostRevenue??0),net:sum.net+(balance?.net??0),withBalance:sum.withBalance+(balance?1:0),withoutBalance:sum.withoutBalance+(balance?0:1),clicks:sum.clicks+(balance?effect.record.metricsAtBlock?.clicks??0:0),refSois:sum.refSois+(balance?effect.record.metricsAtBlock?.sois??0:0)}},{sois:0,payout:0,savedPayout:0,lostRevenue:0,net:0,withBalance:0,withoutBalance:0,clicks:0,refSois:0});

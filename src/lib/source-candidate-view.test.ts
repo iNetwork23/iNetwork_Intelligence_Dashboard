@@ -3,12 +3,20 @@ import{BULK_BLOCK_LIMIT,firstSaleRate,isSourceCandidateAction,isSourceCandidateB
 import{sourceCandidateBlockKey,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
 import type{SourceCandidate}from'./source-candidates';
 import type{SourceBlockRecord}from'./source-blocks';
+import{parseAccessMetadata}from'./rbac';
 
 const candidate=(over:Partial<SourceCandidate>={}):SourceCandidate=>({affiliateId:'436',affiliate:'Partner A',offerId:'12',offer:'Offer Zwölf',offerUrlId:'7',offerUrl:'Default',trafficMode:'tracked',level:'main_source',mainValue:'fb',subValue:null,action:'AUSSCHALTEN',severity:'critical',reason:'50 SOIs ohne Sale',clicks:900,sois:60,firstSales:0,rebills:0,revenue:10,payout:120,profit:-110,lastLeadDate:'2026-09-03',leadStatus:'Heute aktiv',...over});
 const record=(over:Partial<SourceBlockRecord>={}):SourceBlockRecord=>({id:'blk-1',status:'active',affiliateId:436,affiliateName:'Partner A',offerId:12,offerName:'Offer Zwölf',originCampaignId:null,trafficMode:'tracked',level:'main_source',mainField:'source_id',mainValue:'fb',subField:'sub1',subValue:null,variables:[],reason:'',effectiveAt:'2026-09-01T10:00:00.000Z',createdAt:'2026-09-01T10:00:00.000Z',createdBy:'u1',updatedAt:'2026-09-01T10:00:00.000Z',updatedBy:'u1',everflowSettingId:5,lastVerifiedAt:null,error:null,...over});
 const rows=(...items:SourceCandidate[])=>prepareSourceCandidateRows(items,new Map(),{finance:true});
 
 describe('prepareSourceCandidateRows',()=>{
+ it('retains a parent block status while withholding its wider record details from a scoped descendant',()=>{
+  const parent=candidate(),child=candidate({level:'sub_source',subValue:'allowed'}),index=new Map([[sourceCandidateBlockKey(parent),record({status:'error',error:'foreign detail'})]]),access=parseAccessMetadata({role:'employee',scopes:{affiliate:['436'],sub_source:['allowed']}});
+  const[row]=prepareSourceCandidateRows([child],index,{finance:false,access});
+  expect(row.block).toEqual({id:null,status:'error',effectiveAt:'2026-09-01T10:00:00.000Z',error:null});
+  expect(row.payout).toBeNull();expect(row.profit).toBeNull();
+  expect(prepareSourceCandidateRows([parent],index,{finance:false,access})[0].blockable).toBe(false);
+ });
  it('adds the shared key, DOM id and the active block state from the block index',()=>{
   const base=candidate(),index=new Map([[sourceCandidateBlockKey(base),record()]]);
   const[row]=prepareSourceCandidateRows([base],index,{finance:true});

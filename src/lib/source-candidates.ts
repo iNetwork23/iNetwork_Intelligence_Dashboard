@@ -9,13 +9,13 @@ import type{VerdictGate}from'./decision-engine';
 import{resolveActivityCoverage}from'./snapshot-generation';
 import{resolveSourcePeriod}from'./source-period';
 import{aggregateSourceRows,attachSourceActivityFromIndex,attachSourceMaturity,groupSources,leadActivityStatus,mergeSourceWindows,type SourceBreakdownRow,type TrafficLeaf}from'./source-breakdown';
-import{filterPartnerRows,isScopeRestricted,type AccessMetadata}from'./rbac';
+import{filterPartnerRows,isScopeRestricted,assertScopesSupported,type AccessMetadata}from'./rbac';
 import type{ReportRow}from'./portfolio';
 
 /** Accountweite Quell-Kandidaten (Blätter mit Handlungsbedarf) für den Leitstand – im Rollups-Cron je Zeitraum vorberechnet. */
 export type SourceCandidate={affiliateId:string;affiliate:string;offerId:string;offer:string;offerUrlId:string;offerUrl:string;trafficMode:'tracked'|'api';level:'main_source'|'sub_source';mainValue:string|null;subValue:string|null;action:'SKALIEREN'|'BEOBACHTEN'|'AUSSCHALTEN';severity:'positive'|'neutral'|'warning'|'critical';reason:string;clicks:number;sois:number;firstSales:number;rebills:number;revenue:number;payout:number;profit:number;lastLeadDate:string|null;leadStatus:string|null;/** „Trauen oder nicht, und warum“ (Etappe 3); ältere Snapshots tragen kein gate. */gate?:VerdictGate;/** Letzte 7 Tage gegen die 7 Tage davor (aus den Tageszeilen des Rollups); ältere Snapshots tragen keinen trend. */trend?:SourceCandidateTrend};
 export type SourceCandidateTrend={days:7;current:{sois:number;clicks:number;profit:number};previous:{sois:number;clicks:number;profit:number};profitDelta:number;soisDelta:number;clicksDelta:number};
-export type SourceCandidatesSnapshot={version:1;range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;rows:SourceCandidate[];rowsTruncated?:boolean;/** Partner, deren Reife (Conversions) nicht ladbar war – ihre Ausschalt-Kandidaten stehen fail-closed auf BEOBACHTEN. */maturityUnavailable?:number};
+export type SourceCandidatesSnapshot={version:1;range:{from:string;to:string};generatedAt:string;affiliates:number;affiliatesProcessed:number;coverageComplete:boolean;rows:SourceCandidate[];rowsTruncated?:boolean;scopeRestricted?:boolean;/** Partner, deren Reife (Conversions) nicht ladbar war – ihre Ausschalt-Kandidaten stehen fail-closed auf BEOBACHTEN. */maturityUnavailable?:number};
 export type SourceCandidateBuildOptions={now?:Date;timeBudgetMs?:number;/** Conversions je Partner (Memo über mehrere Zeiträume eines Cron-Laufs); Default loadAffiliateConversionsFromCache. */conversionsFor?:(affiliateId:string,now:Date)=>Promise<ConversionRow[]>;/** Reife-Kurzfassung je Partner persistieren (lead_maturity:berlin-v5:{affiliateId}) – einmal je Cron-Lauf. */persistMaturity?:boolean;/** Reserve, um die ein laufender Partner-Load das Budget überziehen darf (Default AFFILIATE_LOAD_GRACE_MS). */loadGraceMs?:number};
 /** D10: Deckel je Aktion (Verluste zuerst), damit Snapshot, Cache-Eintrag und RSC-Payload begrenzt bleiben. */
 export const CANDIDATE_ROW_LIMITS:Record<SourceCandidate['action'],number>={AUSSCHALTEN:800,BEOBACHTEN:400,SKALIEREN:300};
@@ -150,9 +150,10 @@ const loadSnapshot=(range:{from:string;to:string})=>unstable_cache(()=>readStore
 /** Liest den vorberechneten Key (120 s Cache); fehlt er → null (fail-closed). Partner sehen nur Zeilen im eigenen Scope. */
 export async function loadSourceCandidates(range:{from:string;to:string},access:AccessMetadata):Promise<SourceCandidatesSnapshot|null>{
  if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
+ assertScopesSupported(access,['affiliate','offer','source','sub_source']);
  const snapshot=await loadSnapshot(range);
  if(!snapshot)return null;
- return isScopeRestricted(access)?{...snapshot,rows:scopeSourceCandidates(snapshot.rows,access)}:snapshot;
+ return isScopeRestricted(access)?{...snapshot,scopeRestricted:true,affiliates:0,affiliatesProcessed:0,maturityUnavailable:snapshot.maturityUnavailable?1:0,rows:scopeSourceCandidates(snapshot.rows,access)}:snapshot;
 }
 
 /** Small conversion results can be reused across ranges; large histories must

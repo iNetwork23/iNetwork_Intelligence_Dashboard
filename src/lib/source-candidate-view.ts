@@ -1,3 +1,5 @@
+import{sourceBlockInScope}from'./source-block-scope';
+import type{AccessMetadata}from'./rbac';
 import{formatDelta}from'./verdict-vocabulary';
 import{KILL_MATURITY_SOIS,type VerdictGate}from'./decision-engine';
 import{isBlockableCandidate,sourceCandidateBlockKeys,sourceCandidateDomId,sourceCandidateKey}from'./source-candidate-link';
@@ -10,7 +12,7 @@ export type SourceCandidateModeFilter='all'|SourceCandidate['trafficMode'];
 export type SourceCandidateBlockFilter='all'|'open'|'blocked';
 export type SourceCandidateSort='profit'|'payout'|'sois'|'clicks';
 export type SourceCandidateFilters={action:SourceCandidateActionFilter;mode:SourceCandidateModeFilter;q:string;blocked:SourceCandidateBlockFilter};
-export type SourceCandidateBlockState={id:string;status:'active'|'pending'|'error';effectiveAt:string;error:string|null};
+export type SourceCandidateBlockState={id:string|null;status:'active'|'pending'|'error';effectiveAt:string;error:string|null};
 /** Trend für den Client: ohne finance.view ohne Profitwerte (Geld darf nicht in den RSC-Payload). */
 export type SourceCandidateTrendView={days:7;current:{sois:number;clicks:number;profit:number|null};previous:{sois:number;clicks:number;profit:number|null};soisDelta:number;clicksDelta:number;profitDelta:number|null};
 export type SourceCandidateRow=Omit<SourceCandidate,'revenue'|'payout'|'profit'|'trend'>&{key:string;domId:string;revenue:number|null;payout:number|null;profit:number|null;block:SourceCandidateBlockState|null;blockable:boolean;trend?:SourceCandidateTrendView};
@@ -29,10 +31,10 @@ export const maturityLabel=(m:{sois:number;clicks:number;gate?:VerdictGate|null}
 export const firstSaleRate=(m:{sois:number;firstSales:number})=>m.sois>0?`${(m.firstSales/m.sois*100).toFixed(1).replace('.',',')} %`:'–';
 const blockState=(record:SourceBlockRecord|undefined):SourceCandidateBlockState|null=>record&&record.status!=='inactive'?{id:record.id,status:record.status,effectiveAt:record.effectiveAt,error:record.error??null}:null;
 /** Sperrzustand der Zeile: eigene Ebene zuerst, dann die Hauptquelle (eine Hauptquellen-Sperre deckt Unterquellen ab). */
-export function resolveCandidateBlock(row:Pick<SourceCandidate,'affiliateId'|'offerId'|'offerUrlId'|'trafficMode'|'level'|'mainValue'|'subValue'>,index:Map<string,SourceBlockRecord>):SourceCandidateBlockState|null{for(const key of sourceCandidateBlockKeys(row)){const state=blockState(index.get(key));if(state)return state}return null}
+export function resolveCandidateBlock(row:Pick<SourceCandidate,'affiliateId'|'offerId'|'offerUrlId'|'trafficMode'|'level'|'mainValue'|'subValue'>,index:Map<string,SourceBlockRecord>,access?:AccessMetadata):SourceCandidateBlockState|null{for(const key of sourceCandidateBlockKeys(row)){const record=index.get(key),state=blockState(record);if(state)return access&&record&&!sourceBlockInScope(record,access)?{...state,id:null,error:null}:state}return null}
 /** Zeilen für den Client: gemeinsamer Schlüssel/DOM-Id, aktiver Sperr-Record aus loadBlockIndex, Geldwerte nur mit finance.view. */
-export function prepareSourceCandidateRows(rows:SourceCandidate[],index:Map<string,SourceBlockRecord>,options:{finance:boolean}):SourceCandidateRow[]{
- return rows.map(row=>({...row,key:sourceCandidateKey(row),domId:sourceCandidateDomId(row),revenue:options.finance?row.revenue:null,payout:options.finance?row.payout:null,profit:options.finance?row.profit:null,block:resolveCandidateBlock(row,index),blockable:isBlockableCandidate(row),trend:projectCandidateTrend(row.trend,options.finance)}));
+export function prepareSourceCandidateRows(rows:SourceCandidate[],index:Map<string,SourceBlockRecord>,options:{finance:boolean;access?:AccessMetadata}):SourceCandidateRow[]{
+ return rows.map(row=>({...row,key:sourceCandidateKey(row),domId:sourceCandidateDomId(row),revenue:options.finance?row.revenue:null,payout:options.finance?row.payout:null,profit:options.finance?row.profit:null,block:resolveCandidateBlock(row,index,options.access),blockable:isBlockableCandidate(row)&&(!options.access||sourceBlockInScope({...row,affiliateId:Number(row.affiliateId),offerId:Number(row.offerId)},options.access)),trend:projectCandidateTrend(row.trend,options.finance)}));
 }
 const haystack=(row:SourceCandidateRow)=>[row.affiliate,`#${row.affiliateId}`,row.affiliateId,row.offer,`#${row.offerId}`,row.offerId,row.offerUrl,row.mainValue??'',row.subValue??''].join(' ').toLowerCase();
 export const matchesSourceCandidateFilters=(row:SourceCandidateRow,filters:SourceCandidateFilters)=>{
