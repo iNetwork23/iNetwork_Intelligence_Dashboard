@@ -10,6 +10,8 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Rollup vom ([\d.,/: ]+) · Zugewiesener Bereich$/,'Rollup from $1 · Assigned scope',/^Rollup from ([\d.,/: ]+) · Assigned scope$/,'Rollup vom $1 · Zugewiesener Bereich'],
+ [/^Rollup vom ([\d.,/: ]+) · (\d+) von (\d+) Partnern$/,'Rollup from $1 · $2 of $3 partners',/^Rollup from ([\d.,/: ]+) · (\d+) of (\d+) partners$/,'Rollup vom $1 · $2 von $3 Partnern'],
  [/^Auswahl für LP #(\d+)$/,'Selection for LP #$1',/^Selection for LP #(\d+)$/,'Auswahl für LP #$1'],
  [/^Familien-ID für LP #(\d+)$/,'Family ID for LP #$1',/^Family ID for LP #(\d+)$/,'Familien-ID für LP #$1'],
  [/^Familienname für LP #(\d+)$/,'Family name for LP #$1',/^Family name for LP #(\d+)$/,'Familienname für LP #$1'],
