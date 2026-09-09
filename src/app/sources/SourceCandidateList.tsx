@@ -9,7 +9,7 @@ import{toneClass}from'@/lib/verdict-trust';
 import{BULK_BLOCK_LIMIT,buildSourceCandidateQuery,firstSaleRate,maturityLabel,resolveCandidateBlock,selectSourceCandidates,SOURCE_CANDIDATE_PAGE_SIZE,toggleBulkSelection,trendLabel,verdictLabel,type SourceCandidateBlockState,type SourceCandidateFilters,type SourceCandidateRow,type SourceCandidateSort}from'@/lib/source-candidate-view';
 import SourceBlockButton from'../affiliates/SourceBlockButton';
 import{useHydratedLocale}from'../components/LanguageProvider';
-import{localizeClientRoot}from'../components/LocalizedLinkContent';
+import{localizeClientRoot,localizeLinkText}from'../components/LocalizedLinkContent';
 import InstantLink from'../affiliates/InstantLink';
 import SourceBulkBlockDialog,{blockStateFromRecord}from'./SourceBulkBlockDialog';
 type Props={rows:SourceCandidateRow[];range:SourceCandidateRange;openKey:string|null;initialFilters:SourceCandidateFilters;initialSort:SourceCandidateSort;mayBlock:boolean;finance:boolean;blockStatusUnknown?:boolean};
@@ -17,7 +17,7 @@ const euro=(value:number)=>new Intl.NumberFormat('de-DE',{style:'currency',curre
 const blockLabel=(block:SourceCandidateBlockState)=>block.status==='active'?`Gesperrt seit ${berlinDay(block.effectiveAt)}`:block.status==='pending'?'Verifizierung läuft':'Zustand unklar';
 /** Tabelle der Quell-Kandidaten: Filter/Sortierung als URL-Zustand, Top-50 + „mehr anzeigen“ (D10), Deep-Link-Zeile hervorgehoben, Inline-Sperre und Mehrfachauswahl (max. 5). */
 export default function SourceCandidateList({rows:initialRows,range,openKey,initialFilters,initialSort,mayBlock,finance,blockStatusUnknown=false}:Props){
- const locale=useHydratedLocale();
+ const locale=useHydratedLocale(),missing=localizeLinkText('nicht übermittelt',locale);
  const[rows,setRows]=useState(initialRows),[filters,setFilters]=useState(initialFilters),[sort,setSort]=useState(initialSort),[limit,setLimit]=useState(SOURCE_CANDIDATE_PAGE_SIZE),[selected,setSelected]=useState<string[]>([]),[limitHint,setLimitHint]=useState(false),[bulkOpen,setBulkOpen]=useState(false),mounted=useRef(false);
  useEffect(()=>{setRows(initialRows);setSelected([])},[initialRows]);
  useEffect(()=>{if(!mounted.current){mounted.current=true;return}const query=buildSourceCandidateQuery(range,filters,sort,openKey);window.history.replaceState(window.history.state,'',withGlobalPeriod(`${window.location.pathname}?${query}`,window.location.search))},[range,filters,sort,openKey]);
@@ -49,10 +49,10 @@ export default function SourceCandidateList({rows:initialRows,range,openKey,init
   <div className="tableWrap sourcesTableWrap"><table className="performanceTable sourcesTable"><caption className="srOnly">Partnerübergreifende Quellen mit Handlungsbedarf</caption>
    <thead><tr><th scope="col">{mayBlock?'Auswahl':'#'}</th><th scope="col">Partner</th><th scope="col">Offer</th><th scope="col">Quelle</th><th scope="col">Klicks</th><th scope="col">SOIs</th><th scope="col">First-Sales</th><th scope="col">Rebills</th>{finance&&<><th scope="col">Payout</th><th scope="col">Umsatz</th><th scope="col">Profit</th></>}<th scope="col">Verdikt</th><th scope="col">Lead-Status</th><th scope="col">Sperrstatus</th></tr></thead>
    <tbody>{selection.rows.map((row,index)=>{const isOpen=row.key===openKey,checked=selected.includes(row.key);return <tr key={row.key} id={row.domId} className={isOpen?'sourcesOpenRow':undefined} aria-current={isOpen?'true':undefined}>
-    <td data-label={mayBlock?'Auswahl':'#'}>{mayBlock&&!row.block&&row.blockable?<label className="sourcesSelect"><input type="checkbox" checked={checked} onChange={()=>toggle(row.key)} aria-label={locale==='en'?`Select ${row.affiliate} · ${row.offer} · ${row.mainValue||'not provided'}`:`${row.affiliate} · ${row.offer} · ${row.mainValue||'nicht übermittelt'} auswählen`}/></label>:integer(index+1)}</td>
+    <td data-label={mayBlock?'Auswahl':'#'}>{mayBlock&&!row.block&&row.blockable?<label className="sourcesSelect"><input type="checkbox" checked={checked} onChange={()=>toggle(row.key)} aria-label={locale==='en'?`Select ${row.affiliate} · ${row.offer} · ${row.mainValue||'not provided'}`:`${row.affiliate} · ${row.offer} · ${row.mainValue||missing} auswählen`}/></label>:integer(index+1)}</td>
     <td data-label="Partner"><b data-no-translate>{row.affiliate}</b><small>#{row.affiliateId}</small></td>
     <td data-label="Offer"><b data-no-translate>{row.offer} · #{row.offerId}</b><small data-no-translate>{row.offerUrl}{row.offerUrlId!=='0'?` · URL #${row.offerUrlId}`:''}</small></td>
-    <td data-label="Quelle"><b data-no-translate>{row.level==='sub_source'?`${row.mainValue||'nicht übermittelt'} → ${row.subValue||'nicht übermittelt'}`:(row.mainValue||'nicht übermittelt')}</b><small>{row.trafficMode==='api'?'API · aus Offer-Name erkannt':'Tracked'} · {row.level==='sub_source'?'Unterquelle':'Hauptquelle'}</small></td>
+    <td data-label="Quelle"><b data-no-translate>{row.level==='sub_source'?`${row.mainValue||missing} → ${row.subValue||missing}`:(row.mainValue||missing)}</b><small>{row.trafficMode==='api'?'API · aus Offer-Name erkannt':'Tracked'} · {row.level==='sub_source'?'Unterquelle':'Hauptquelle'}</small></td>
     <td data-label="Klicks">{row.trafficMode==='api'?'n/a':integer(row.clicks)}</td>
     <td data-label="SOIs">{integer(row.sois)}</td>
     <td data-label="First-Sales">{integer(row.firstSales)}<small>{firstSaleRate(row)}</small></td>

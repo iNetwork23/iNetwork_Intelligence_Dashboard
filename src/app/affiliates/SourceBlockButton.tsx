@@ -5,7 +5,7 @@ import { ACTION_WORDS, STATE_WORDS } from "@/lib/verdict-vocabulary";
 import { berlinDateTime, berlinDay } from "@/lib/format-berlin";
 import { createPortal } from "react-dom";
 import { useHydratedLocale } from "../components/LanguageProvider";
-import { localizeClientRoot } from "../components/LocalizedLinkContent";
+import { localizeClientRoot, localizeLinkText } from "../components/LocalizedLinkContent";
 import type {
   SourceBlockLevel,
   SourceBlockRecord,
@@ -218,8 +218,8 @@ export default function SourceBlockButton(props: Props) {
 
   const fieldMain = props.trafficMode === "api" ? "ADV1" : "Source";
   const fieldSub = props.trafficMode === "api" ? "ADV2" : "Sub1";
-  const source = props.mainValue || "nicht übermittelt";
-  const sub = props.subValue || "nicht übermittelt";
+  const source = props.mainValue || localizeLinkText("nicht übermittelt", locale);
+  const sub = props.subValue || localizeLinkText("nicht übermittelt", locale);
   const isSubSource = props.level === "sub_source";
   const controlScope = isSubSource ? fieldSub : fieldMain;
   const triggerLabel = `${isSubSource ? fieldSub : fieldMain} ${isSubSource ? sub : source}: ${active ? ACTION_WORDS.unblock : ACTION_WORDS.block}`;

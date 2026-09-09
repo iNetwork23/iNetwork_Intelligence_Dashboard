@@ -2,14 +2,14 @@
 import{useEffect,useRef,useState}from'react';
 import{createPortal}from'react-dom';
 import{useHydratedLocale}from'../components/LanguageProvider';
-import{localizeClientRoot}from'../components/LocalizedLinkContent';
+import{localizeClientRoot,localizeLinkText}from'../components/LocalizedLinkContent';
 import{SOURCE_BLOCK_REASON_CATEGORIES,SOURCE_BLOCK_REASON_LABELS,type SourceBlockReasonCategory}from'@/lib/source-block-reasons';
 import type{SourceBlockRecord}from'@/lib/source-blocks';
 import{BULK_BLOCK_LIMIT,type SourceCandidateBlockState,type SourceCandidateRow}from'@/lib/source-candidate-view';
 type RowResult={status:'pending'|'running'|'ok'|'error';message:string};
 type Props={rows:SourceCandidateRow[];finance:boolean;onClose:()=>void;onBlocked:(key:string,block:SourceCandidateBlockState)=>void;onFinished?:(hadErrors:boolean)=>void};
 const euro=(value:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(value);
-const sourceLabel=(row:SourceCandidateRow)=>row.level==='sub_source'?`${row.mainValue||'nicht übermittelt'} → ${row.subValue||'nicht übermittelt'}`:(row.mainValue||'nicht übermittelt');
+const sourceLabel=(row:SourceCandidateRow,locale:'de'|'en')=>row.level==='sub_source'?`${row.mainValue||localizeLinkText('nicht übermittelt',locale)} → ${row.subValue||localizeLinkText('nicht übermittelt',locale)}`:(row.mainValue||localizeLinkText('nicht übermittelt',locale));
 export const blockStateFromRecord=(record:SourceBlockRecord):SourceCandidateBlockState=>({id:record.id,status:record.status==='inactive'?'error':record.status,effectiveAt:record.effectiveAt,error:record.error??null});
 /** EIN Dialog für bis zu BULK_BLOCK_LIMIT Zeilen: Grundkategorie + Begründung einmal erfassen, dann die vorhandenen POST-activate-Aufrufe sequenziell je Zeile (kein Bulk-Endpunkt). */
 export default function SourceBulkBlockDialog({rows,finance,onClose,onBlocked,onFinished}:Props){
@@ -53,7 +53,7 @@ export default function SourceBulkBlockDialog({rows,finance,onClose,onBlocked,on
  const modal=localizeClientRoot(<div className="sourceBlockModal" role="dialog" aria-modal="true" aria-labelledby="source-bulk-title" onMouseDown={event=>{if(event.target===event.currentTarget&&!running)onClose()}}>
   <div className="sourceBlockDialog sourceBulkDialog" ref={dialogRef} tabIndex={-1} onMouseDown={event=>event.stopPropagation()}>
    <header className="sourceBlockDialogHeader"><span className="sourceBlockDialogIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M7.1 5.7a8 8 0 1 0 9.8 0"/></svg></span><span><small>Mehrfachauswahl · maximal {BULK_BLOCK_LIMIT}</small><b id="source-bulk-title">{`${rows.length} ${rows.length===1?'Quelle':'Quellen'} sperren`}</b></span><button type="button" className="sourceBlockClose" onClick={onClose} disabled={running} aria-label="Dialog schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
-   <ol className="sourceBulkRows" aria-label="Ausgewählte Quellen">{rows.map(row=>{const result=results[row.key];return <li key={row.key} className={result?`is-${result.status}`:''}><b data-no-translate>{row.affiliate} · {row.offer} (#{row.offerId})</b><span>{row.trafficMode==='api'?'API':'Tracked'} · <span data-no-translate>{sourceLabel(row)}</span> · {row.sois} SOIs{finance&&row.payout!==null?` · Payout ${euro(row.payout)}`:''}{finance&&row.profit!==null?` · Profit ${euro(row.profit)}`:''}</span>{result&&<small role={result.status==='error'?'alert':undefined}>{result.status==='pending'?'Wartet':result.status==='running'?'Wird verifiziert …':result.status==='ok'?'Gesperrt':`Fehler: ${result.message}`}</small>}</li>})}</ol>
+   <ol className="sourceBulkRows" aria-label="Ausgewählte Quellen">{rows.map(row=>{const result=results[row.key];return <li key={row.key} className={result?`is-${result.status}`:''}><b data-no-translate>{row.affiliate} · {row.offer} (#{row.offerId})</b><span>{row.trafficMode==='api'?'API':'Tracked'} · <span data-no-translate>{sourceLabel(row,locale)}</span> · {row.sois} SOIs{finance&&row.payout!==null?` · Payout ${euro(row.payout)}`:''}{finance&&row.profit!==null?` · Profit ${euro(row.profit)}`:''}</span>{result&&<small role={result.status==='error'?'alert':undefined}>{result.status==='pending'?'Wartet':result.status==='running'?'Wird verifiziert …':result.status==='ok'?'Gesperrt':`Fehler: ${result.message}`}</small>}</li>})}</ol>
    <p className="sourceBlockImpact">Ab Bestätigung werden Vergütung und Partner-Postback für jede ausgewählte Quelle bei ihrem Affiliate und Offer gesperrt – campaignübergreifend, nacheinander je Zeile. Eingehenden Traffic kann nur der Partner selbst stoppen.</p>
    {phase==='form'&&<>
     <label className="sourceBlockReason">Grundkategorie <span>Pflicht · gilt für alle ausgewählten Quellen</span><select value={reasonCategory} onChange={event=>setReasonCategory(event.target.value as ''|SourceBlockReasonCategory)} required><option value="">Bitte wählen</option>{SOURCE_BLOCK_REASON_CATEGORIES.map(category=><option key={category} value={category}>{SOURCE_BLOCK_REASON_LABELS[category]}</option>)}</select></label>

@@ -1,5 +1,7 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Partner wählen, um LTV-Kurve, Payout je SOI und Break-even zu sehen.": "Select a partner to view the LTV curve, payout per SOI and break-even.",
+  "Mehrere unabhängige First-Sales und belastbar positiver Profit.": "Multiple independent first sales and reliably positive profit.",
   "Vergütung und Partner-Postback gelten danach wieder normal.": "Payout and the partner postback return to normal afterwards.",
   "Mehrfachauswahl · maximal": "Multiple selection · maximum",
   "Pflicht · gilt für alle ausgewählten Quellen": "Required · applies to all selected sources",
