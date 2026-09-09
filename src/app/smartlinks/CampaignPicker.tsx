@@ -1,7 +1,7 @@
 'use client';
 
 import Link from'next/link';
-import{useEffect,useMemo,useState}from'react';
+import{useMemo,useSyncExternalStore}from'react';
 import{campaignPartnerOptions,filterCampaignOptions,type CampaignOption}from'@/lib/campaign-picker';
 import{affiliateCampaignStateHref,contextlessSmartlinkFavoriteHref}from'@/lib/optimization-workflow';
 
@@ -9,22 +9,28 @@ type Props={campaigns:CampaignOption[];currentId?:number;affiliateId?:string;ret
 const validPartner=(value?:string)=>value==='unassigned'||/^\d+$/.test(value||'')?value!:'all';
 const validOpen=(value?:string)=>/^\d+$/.test(value||'')?Number(value):null;
 const countLabel=(count:number)=>`${count} Smartlink${count===1?'':'s'}`;
+const readPickerUrl=()=>window.location.search;
+function subscribeToPickerUrl(listener:()=>void){window.addEventListener('popstate',listener);window.addEventListener('affiliate-url-statechange',listener);return()=>{window.removeEventListener('popstate',listener);window.removeEventListener('affiliate-url-statechange',listener)}}
 
 function statefulHref(campaignId:number,affiliateId:string|undefined,returnTo:string|undefined,query:string,partner:string,open:number|null){return affiliateCampaignStateHref({campaignId,affiliateId,currentHref:returnTo,query,partner:partner==='all'?undefined:partner,open})}
 
 function legacyFallbackHref(campaignId:number,returnTo:string|undefined,query:string,partner:string){const url=new URL(contextlessSmartlinkFavoriteHref({campaignId,currentHref:returnTo}),'https://dashboard.local');if(query)url.searchParams.set('q',query);if(partner!=='all'&&partner!=='unassigned')url.searchParams.set('partner',partner);url.searchParams.set('open',String(campaignId));return`${url.pathname}${url.search}`}
 
 export default function CampaignPicker({campaigns,currentId,affiliateId,returnTo,initialQuery='',initialPartner,initialOpen,associationError=''}:Props){
- const[query,setQuery]=useState(initialQuery),[partner,setPartner]=useState(validPartner(initialPartner)),[openId,setOpenId]=useState<number|null>(validOpen(initialOpen)),partners=useMemo(()=>campaignPartnerOptions(campaigns),[campaigns]),effectivePartner=associationError?'all':partner,filtered=useMemo(()=>filterCampaignOptions(campaigns,query,effectivePartner),[campaigns,query,effectivePartner]);
- const persist=(next:{query?:string;partner?:string;openId?:number|null},push=false)=>{if(typeof window==='undefined')return;const url=new URL(window.location.href),nextQuery=next.query??query,nextPartner=next.partner??partner,nextOpen=next.openId===undefined?openId:next.openId;if(nextQuery)url.searchParams.set('q',nextQuery);else url.searchParams.delete('q');if(nextPartner!=='all')url.searchParams.set('partner',nextPartner);else url.searchParams.delete('partner');if(nextOpen)url.searchParams.set('open',String(nextOpen));else url.searchParams.delete('open');window.history[push?'pushState':'replaceState']({},'',`${url.pathname}${url.search}${url.hash}`);window.dispatchEvent(new Event('affiliate-url-statechange'))};
- useEffect(()=>{const restore=()=>{const params=new URLSearchParams(window.location.search);setQuery(params.get('q')||'');setPartner(validPartner(params.get('partner')||undefined));setOpenId(validOpen(params.get('open')||undefined))};window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore)},[]);
- const changeQuery=(value:string)=>{setQuery(value);persist({query:value})},changePartner=(value:string)=>{setPartner(value);setOpenId(null);persist({partner:value,openId:null},true)},toggle=(id:number)=>{const next=openId===id?null:id;setOpenId(next);persist({openId:next})};
+ const initialParams=new URLSearchParams();if(initialQuery)initialParams.set('q',initialQuery);if(initialPartner)initialParams.set('partner',initialPartner);if(initialOpen)initialParams.set('open',initialOpen);
+ // A cached route can mount after the browser has already emitted popstate.
+ // Read the current URL on every mount; server props are only the SSR snapshot.
+ const search=useSyncExternalStore(subscribeToPickerUrl,readPickerUrl,()=>initialParams.toString());
+ const{query,partner,openId}=useMemo(()=>{const params=new URLSearchParams(search);return{query:params.get('q')||'',partner:validPartner(params.get('partner')||params.get('affiliate')||undefined),openId:validOpen(params.get('open')||undefined)}},[search]);
+ const partners=useMemo(()=>campaignPartnerOptions(campaigns),[campaigns]),effectivePartner=associationError?'all':partner,filtered=useMemo(()=>filterCampaignOptions(campaigns,query,effectivePartner),[campaigns,query,effectivePartner]);
+ const persist=(next:{query?:string;partner?:string;openId?:number|null},push=false)=>{const url=new URL(window.location.href),nextQuery=next.query??query,nextPartner=next.partner??partner,nextOpen=next.openId===undefined?openId:next.openId;if(nextQuery)url.searchParams.set('q',nextQuery);else url.searchParams.delete('q');if(nextPartner!=='all'||url.searchParams.has('affiliate'))url.searchParams.set('partner',nextPartner);else url.searchParams.delete('partner');if(nextOpen)url.searchParams.set('open',String(nextOpen));else url.searchParams.delete('open');window.history[push?'pushState':'replaceState']({},'',`${url.pathname}${url.search}${url.hash}`);window.dispatchEvent(new Event('affiliate-url-statechange'))};
+ const changeQuery=(value:string)=>persist({query:value}),changePartner=(value:string)=>persist({partner:value,openId:null},true),toggle=(id:number)=>persist({openId:openId===id?null:id});
  return <section className="campaignPicker partnerCampaignPicker">
   <div className="pickerLabel"><div><b>SMARTLINKS UND PARTNER</b><span>{campaigns.length} Campaigns · beobachtete Zuordnung der letzten 30 Tage</span></div>{currentId&&<Link href={returnTo||'/affiliates?mode=smartlinks'}>Alle Smartlinks anzeigen</Link>}</div>
   {associationError&&<div className="campaignAssociationError" role="alert"><b>Partnerzuordnung nicht verfügbar</b><span>{associationError} Campaign-Daten bleiben sichtbar; es wird bewusst keine fehlende Zuordnung behauptet.</span></div>}
   <div className="campaignPickerControls">
    <label><span>Partner auswählen</span><select aria-label="Partner auswählen" value={effectivePartner} onChange={event=>changePartner(event.target.value)} disabled={Boolean(associationError)}><option value="all">Alle Partner · {countLabel(campaigns.length)}</option>{!associationError&&partners.map(item=><option key={item.id} value={item.id}>{item.name} · Affiliate #{item.id} · {countLabel(item.campaignCount)}</option>)}{!associationError&&<option value="unassigned">Partner nicht zugeordnet · {countLabel(campaigns.filter(item=>item.partners.length===0).length)}</option>}</select></label>
-   <label className="pickerSearch"><span>Smartlinks durchsuchen</span><div className="pickerInput"><i aria-hidden="true">⌕</i><input aria-label="Smartlinks durchsuchen" value={query} onChange={event=>changeQuery(event.target.value)} placeholder="Smartlink, Campaign-ID, Partner oder Affiliate-ID suchen …" autoComplete="off"/><button type="button" onClick={()=>{setQuery('');persist({query:''})}} disabled={!query}>Leeren</button></div></label>
+   <label className="pickerSearch"><span>Smartlinks durchsuchen</span><div className="pickerInput"><i aria-hidden="true">⌕</i><input aria-label="Smartlinks durchsuchen" value={query} onChange={event=>changeQuery(event.target.value)} placeholder="Smartlink, Campaign-ID, Partner oder Affiliate-ID suchen …" autoComplete="off"/><button type="button" onClick={()=>persist({query:''})} disabled={!query}>Leeren</button></div></label>
   </div>
   <div className="campaignDirectorySummary" aria-live="polite"><b>{filtered.length} Smartlinks</b><span>{effectivePartner==='all'?'Alle Partner':effectivePartner==='unassigned'?'Ohne beobachtete Zuordnung':`Affiliate #${effectivePartner}`}{query?` · Suche „${query}“`:''}</span></div>
   <div className="campaignDropdown partnerCampaignDirectory">{filtered.map(campaign=>{const expanded=openId===campaign.network_campaign_id,selectedPartner=effectivePartner!=='all'&&effectivePartner!=='unassigned'?campaign.partners.find(item=>item.id===effectivePartner):campaign.partners.length===1?campaign.partners[0]:undefined,incomingPartner=campaign.partners.find(item=>item.id===affiliateId),analysisAffiliate=selectedPartner?.id||incomingPartner?.id;return <article className={`partnerCampaignRow${campaign.network_campaign_id===currentId?' current':''}`} key={campaign.network_campaign_id}>
