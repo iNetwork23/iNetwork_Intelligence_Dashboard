@@ -33,8 +33,11 @@ async function storedEvidence(from:string,to:string):Promise<FraudBackfillEviden
 }
 export async function runFraudConversionSync(now=new Date()){
   const client=getSupabaseAdmin(),requiredFrom=await oldestActiveStopDay();let state=await loadFraudBackfillState()||initialFraudBackfillState(now,requiredFrom||undefined);if(requiredFrom)state=requireFraudCoverageFrom(state,requiredFrom,now);
-  if(state.phase==='rolling'&&state.lastSuccessAt&&now.getTime()-Date.parse(state.lastSuccessAt)<55*60_000)return{mode:'rolling' as const,phase:'rolling' as const,ready:Boolean(state.parityVerifiedThrough&&state.coveredThrough&&state.parityVerifiedThrough>=state.coveredThrough),readyAt:state.readyAt,skipped:true,from:null,to:null,upsertedConversions:0};
-  const window=selectFraudBackfillWindow(state,now),source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),store=createSupabaseSyncStore();
+  const window=selectFraudBackfillWindow(state,now);
+  // Only repeated refreshes wait. A just-finished historical backfill or Berlin
+  // midnight can leave newer days uncovered even after a recent successful run.
+  if(state.phase==='rolling'&&state.coveredThrough&&window.to<=state.coveredThrough&&state.lastSuccessAt&&now.getTime()-Date.parse(state.lastSuccessAt)<55*60_000)return{mode:'rolling' as const,phase:'rolling' as const,ready:Boolean(state.parityVerifiedThrough&&state.coveredThrough&&state.parityVerifiedThrough>=state.coveredThrough),readyAt:state.readyAt,skipped:true,from:null,to:null,upsertedConversions:0};
+  const source=createEverflowHistorySource(process.env.EVERFLOW_API_KEY||''),store=createSupabaseSyncStore();
   const started=Date.now(),progress=(stage:string,rows?:number)=>console.info('Fraud backfill progress',{from:window.from,to:window.to,stage,elapsedMs:Date.now()-started,...(rows===undefined?{}:{rows})});
   progress('started');
   const invalidated=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:invalidateFraudBackfillState(state)},{onConflict:'key'});if(invalidated.error)throw new Error(`Supabase Fraud-Backfill-Invalidierung: ${invalidated.error.message}`);
