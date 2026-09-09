@@ -4,6 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ACTION_WORDS, STATE_WORDS } from "@/lib/verdict-vocabulary";
 import { berlinDateTime, berlinDay } from "@/lib/format-berlin";
 import { createPortal } from "react-dom";
+import { useHydratedLocale } from "../components/LanguageProvider";
+import { localizeClientRoot } from "../components/LocalizedLinkContent";
 import type {
   SourceBlockLevel,
   SourceBlockRecord,
@@ -116,6 +118,7 @@ function CloseIcon() {
 }
 
 export default function SourceBlockButton(props: Props) {
+  const locale = useHydratedLocale();
   const [blocks, setBlocks] = useState<SourceBlockRecord[]>([]);
   const [open, setOpen] = useState(false);
   const [productWide, setProductWide] = useState(false);
@@ -344,7 +347,7 @@ export default function SourceBlockButton(props: Props) {
     }
   };
 
-  const modal = open ? (
+  const modal = open ? localizeClientRoot((
     <div
       className="sourceBlockModal"
       role="dialog"
@@ -384,7 +387,7 @@ export default function SourceBlockButton(props: Props) {
         <dl className="sourceBlockScope">
           <div>
             <dt>Partner</dt>
-            <dd>{props.affiliateName}</dd>
+            <dd data-no-translate>{props.affiliateName}</dd>
           </div>
           <div>
             <dt>{productWide ? "Betroffene Offers" : "Offer"}</dt>
@@ -393,16 +396,16 @@ export default function SourceBlockButton(props: Props) {
                 ? busy
                   ? "Wird serverseitig ermittelt …"
                   : affectedOffers.length
-                    ? <ul className="sourceBlockOfferList">{affectedOffers.map(item=><li key={item.offerId}><b>{item.offerName} (#{item.offerId})</b>{typeof item.sois==="number"&&<span>{integer(item.sois)} SOIs{showMoney&&typeof item.payout==="number"?` · Payout ${euro(item.payout)}`:""}{showMoney&&typeof item.profit==="number"?` · Profit ${euro(item.profit)}`:""}</span>}{item.blocked&&<span className="sourceBlockOfferBlocked">bereits gesperrt</span>}</li>)}</ul>
+                    ? <ul className="sourceBlockOfferList">{affectedOffers.map(item=><li key={item.offerId}><b data-no-translate>{item.offerName} (#{item.offerId})</b>{typeof item.sois==="number"&&<span>{integer(item.sois)} SOIs{showMoney&&typeof item.payout==="number"?` · Payout ${euro(item.payout)}`:""}{showMoney&&typeof item.profit==="number"?` · Profit ${euro(item.profit)}`:""}</span>}{item.blocked&&<span className="sourceBlockOfferBlocked">bereits gesperrt</span>}</li>)}</ul>
                     : "Nicht verfügbar"
-                : props.offerName}
+                : <span data-no-translate>{props.offerName}</span>}
             </dd>
           </div>
           <div className="sourceBlockScopeWide">
             <dt>Auswahl</dt>
             <dd>
-              {fieldMain}: {source}
-              {isSubSource ? ` · ${fieldSub}: ${sub}` : ""}
+              {fieldMain}: <span data-no-translate>{source}</span>
+              {isSubSource ? <> · {fieldSub}: <span data-no-translate>{sub}</span></> : ""}
             </dd>
           </div>
           {props.campaignId && (
@@ -447,7 +450,7 @@ export default function SourceBlockButton(props: Props) {
 
         {productWide && (
           <label className="sourceBlockReason sourceBlockConfirmation">
-            Zur Bestätigung Quellenwert <b>{requiredConfirmation||"…"}</b> eingeben
+            Zur Bestätigung Quellenwert <b data-no-translate>{requiredConfirmation||"…"}</b> eingeben
             <input value={confirmation} onChange={(event)=>setConfirmation(event.target.value)} autoComplete="off" spellCheck={false}/>
           </label>
         )}
@@ -489,8 +492,8 @@ export default function SourceBlockButton(props: Props) {
                       <span>{dateTime(event.at)}</span>
                       <b>{sourceBlockHistoryActionLabel(event.action)}</b>
                       <span>{event.reasonCategory ? SOURCE_BLOCK_REASON_LABELS[event.reasonCategory] : "–"}</span>
-                      <span>{event.actorId}</span>
-                      {event.error && <small>{event.error}</small>}
+                      <span data-no-translate>{event.actorId}</span>
+                      {event.error && <small data-no-translate>{event.error}</small>}
                     </li>
                   ))}
                 </ol>
@@ -538,9 +541,9 @@ export default function SourceBlockButton(props: Props) {
         </footer>
       </div>
     </div>
-  ) : null;
+  ), locale) : null;
 
-  return (
+  return localizeClientRoot(
     <span className="sourceBlockControl">
       {locked ? (
         <button
@@ -591,6 +594,6 @@ export default function SourceBlockButton(props: Props) {
         </small>
       )}
       {modal && createPortal(modal, document.body)}
-    </span>
+    </span>, locale
   );
 }

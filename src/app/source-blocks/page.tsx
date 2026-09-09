@@ -13,6 +13,7 @@ import SourceBlockButton from'../affiliates/SourceBlockButton';
 import SourceBlockHistoryPanel from'./SourceBlockHistoryPanel';
 import DashboardPageHeader from'../components/DashboardPageHeader';import AccessDeniedHint from'../components/AccessDeniedHint';
 import DataStatusBar from'../components/DataStatusBar';
+import LocalizedMain from'../components/LocalizedMain';
 import{getDataStatus}from'@/lib/data-status';
 import{berlinDateTime,berlinDay}from'@/lib/format-berlin';
 export const dynamic='force-dynamic';
@@ -34,7 +35,7 @@ const query=(params:Record<string,string>)=>{const search=new URLSearchParams();
 export default async function SourceBlocksPage({searchParams}:{searchParams:Promise<Params>}){
  const user=await currentUser();if(!user)redirect('/login');
  const allowed=user.access.role!=='partner'&&can(user.access,'landingpages.manage')&&can(user.access,'api.manage');
- if(!allowed)return <main className="fatal"><h1>403 · Keine Berechtigung</h1><AccessDeniedHint permission="landingpages.manage und api.manage"/></main>;
+ if(!allowed)return <LocalizedMain className="fatal"><h1>403 · Keine Berechtigung</h1><AccessDeniedHint permission="landingpages.manage und api.manage"/></LocalizedMain>;
  const finance=can(user.access,'finance.view'),filters=await searchParams,store=securityStore();
  const status=(STATUSES as readonly string[]).includes(filters.status||'')?filters.status!:'all',category=isSourceBlockReasonCategory(filters.category)?filters.category:filters.category==='none'?'none':'all',search=(filters.q||'').trim().slice(0,100),limit=Math.min(2000,Math.max(PAGE_SIZE,Math.floor(Number(filters.limit)||PAGE_SIZE)));
  const dataStatus=await getDataStatus().catch(()=>null);
@@ -44,7 +45,7 @@ export default async function SourceBlocksPage({searchParams}:{searchParams:Prom
  const rows=blocks.filter(matches),visible=rows.slice(0,limit),activeCount=rows.filter(block=>block.status==='active').length,totals=rows.reduce((sum,block)=>{const effect=effectById.get(block.id);if(!effect)return sum;const balance=effect.balance;return{sois:sum.sois+effect.soisSince,payout:sum.payout+effect.payoutSince,savedPayout:sum.savedPayout+(balance?.savedPayout??0),lostRevenue:sum.lostRevenue+(balance?.lostRevenue??0),net:sum.net+(balance?.net??0),withBalance:sum.withBalance+(balance?1:0),withoutBalance:sum.withoutBalance+(balance?0:1),clicks:sum.clicks+(balance?effect.record.metricsAtBlock?.clicks??0:0),refSois:sum.refSois+(balance?effect.record.metricsAtBlock?.sois??0:0)}},{sois:0,payout:0,savedPayout:0,lostRevenue:0,net:0,withBalance:0,withoutBalance:0,clicks:0,refSois:0});
  const balanceTotalTone=signTone(totals.net,{clicks:totals.clicks,sois:totals.refSois});
  const params={status:status==='all'?'':status,category:category==='all'?'':category,q:search},lastReconcileAt=[...markers.values()].map(marker=>marker.at).sort().pop()??null;
- return <main className="dashboard sourceBlocksPage"><DashboardPageHeader kicker="Traffic-Kontrolle" title="Sperr-Bilanz" status={`${blocks.filter(block=>block.status==='active').length} aktiv`} tone="live" icon="automation" description="Offer-spezifische Payout- und Postback-Sperren mit Verstoßsummen, stündlichem Everflow-Abgleich und lückenloser Historie."/>
+ return <LocalizedMain className="dashboard sourceBlocksPage"><DashboardPageHeader kicker="Traffic-Kontrolle" title="Sperr-Bilanz" status={`${blocks.filter(block=>block.status==='active').length} aktiv`} tone="live" icon="automation" description="Offer-spezifische Payout- und Postback-Sperren mit Verstoßsummen, stündlichem Everflow-Abgleich und lückenloser Historie."/>
   {dataStatus&&<DataStatusBar status={dataStatus}/>}
   <p className="sourceBlockReconcileRun" role="status">Letzter Everflow-Abgleich: {lastReconcileAt?fmt(lastReconcileAt):'noch nie gelaufen (Cron stündlich um :27)'}</p>
   <p className="sourceBlockNotice">Traffic wird nicht verworfen. Neue SOIs nach der Sperre bleiben sichtbar; Everflow setzt für die exakte Kombination den Payout auf 0 und unterdrückt den Affiliate-Postback. Tagesdaten am Sperrtag können auch frühere Leads desselben Tages enthalten.{effects===null&&' Verstoßsummen sind gerade nicht verfügbar.'}</p>
@@ -59,5 +60,5 @@ export default async function SourceBlocksPage({searchParams}:{searchParams:Prom
    {block.status==='error'&&<p className="sourceBlockIncident" role="alert"><b>Zustand unklar:</b> {block.error||'Everflow-Antwort nicht bestätigt'} · Zuletzt verifiziert: {block.lastVerifiedAt?fmt(block.lastVerifiedAt):'nie'}<br/>Kein zweiter Aktivierungsversuch ohne manuelle Prüfung in Everflow.</p>}
    <SourceBlockHistoryPanel blockId={block.id}/><small>Geändert von <span data-no-translate>{block.updatedBy}</span> · {fmt(block.updatedAt)}</small></article>}):<p className="noSourceData">{blocks.length?'Keine Sperre entspricht dem Filter.':'Noch keine Quelle wurde über das Dashboard gesperrt.'}</p>}</section>
   {rows.length>visible.length&&<a className="showMoreSources" href={query({...params,limit:String(limit+PAGE_SIZE)})}>Mehr anzeigen · {rows.length-visible.length} weitere</a>}
- </main>;
+ </LocalizedMain>;
 }
