@@ -60,14 +60,15 @@ function canonicalJson(value:unknown):string{
 type ProofContents=Map<string,{json:string;count:number}>;
 // Fixed schema names only. Unknown provider keys may contain sensitive data.
 const proofFields=new Set(['conversion_id','transaction_id','conversion_unix_timestamp','click_unix_timestamp','is_event','event','status','payout','revenue','cost','source_id','sub1','sub2','sub3','sub4','sub5','adv1','adv2','adv4','email','country','is_scrub','error_code','relationship']);
+const relationshipProofFields=new Set(['account_manager','adv_global_event','advertiser','affiliate','affiliate_manager','affiliate_tier','attribution_method','campaign','candidate_clicks','click_attribution_method','conversion_referer','custom_payout_revenue','events_count','is_enforce_caps','line_items_custom_payout_revenue_settings','offer','offer_group','offer_url','on_hold_snapshots','order_line_items','postback_control','redirect_url','referer','snapshots','tiered_commission','unix_timestamp_postback','usm_data','query_parameters']);
 function proofDifference(before:ProofContents,after:ProofContents){
-  let missingIdentities=0,addedIdentities=0,changedContents=0,changedMultiplicities=0;const fields=new Set<string>();
+  let missingIdentities=0,addedIdentities=0,changedContents=0,changedMultiplicities=0;const fields=new Set<string>(),relationshipFields=new Set<string>();
   for(const [id,previous] of before){const current=after.get(id);if(!current){missingIdentities++;continue}
     if(previous.count!==current.count)changedMultiplicities++;
-    if(previous.json!==current.json){changedContents++;const a=JSON.parse(previous.json),b=JSON.parse(current.json);for(const key of new Set([...Object.keys(a),...Object.keys(b)]))if(Object.hasOwn(a,key)!==Object.hasOwn(b,key)||canonicalJson(a[key])!==canonicalJson(b[key]))fields.add(proofFields.has(key)?key:'other')}
+    if(previous.json!==current.json){changedContents++;const a=JSON.parse(previous.json),b=JSON.parse(current.json);for(const key of new Set([...Object.keys(a),...Object.keys(b)]))if(Object.hasOwn(a,key)!==Object.hasOwn(b,key)||canonicalJson(a[key])!==canonicalJson(b[key])){fields.add(proofFields.has(key)?key:'other');if(key==='relationship'){const ar=a[key]&&typeof a[key]==='object'?a[key]:{},br=b[key]&&typeof b[key]==='object'?b[key]:{};for(const field of new Set([...Object.keys(ar),...Object.keys(br)]))if(Object.hasOwn(ar,field)!==Object.hasOwn(br,field)||canonicalJson(ar[field])!==canonicalJson(br[field]))relationshipFields.add(relationshipProofFields.has(field)?field:'other')}}}
   }
   for(const id of after.keys())if(!before.has(id))addedIdentities++;
-  return{missingIdentities,addedIdentities,changedContents,changedMultiplicities,changedFields:[...fields].sort()};
+  return{missingIdentities,addedIdentities,changedContents,changedMultiplicities,changedFields:[...fields].sort(),...(relationshipFields.size?{relationshipFields:[...relationshipFields].sort()}:{})};
 }
 type ConversionPaginationPass={pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[];invalidIdentityRows:number;oversizedPages:number;proofStatus:'unavailable'|'ineligible'|'boundary-overlap'|'first'|'matching'|'mismatch';proofDifference?:ReturnType<typeof proofDifference>};
 
