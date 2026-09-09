@@ -125,9 +125,12 @@ function validActivityDay(value:unknown,marker:SourceSnapshotGeneration,affiliat
 /** Each mutable date key carries the exact immutable source generation. A changed
  * day replaces its summary; merging all accepted days also handles removed leads. */
 async function visitActivityDays(affiliateId:string,markers:SourceSnapshotGeneration[],visit:(entries:SourceActivityEntry[])=>void){
+ // Compact memos are much smaller than raw snapshots. Keep their request
+ // budget separate so a changed generation does not cause dozens of round trips.
+ const memoBatchSize=64;
  let rawBatchSize=8;
- for(let start=0;start<markers.length;start+=8){
-  const batch=markers.slice(start,start+8),cached=await getSupabaseAdmin().from('sync_state').select('key,value').in('key',batch.map(marker=>activityDayKey(marker.date,affiliateId))).abortSignal(new AbortController().signal);
+ for(let start=0;start<markers.length;start+=memoBatchSize){
+  const batch=markers.slice(start,start+memoBatchSize),cached=await getSupabaseAdmin().from('sync_state').select('key,value').in('key',batch.map(marker=>activityDayKey(marker.date,affiliateId))).abortSignal(new AbortController().signal);
   // A cache failure must fall back to the exact raw snapshot, never to no activity.
   const byKey=new Map((cached.error?[]:cached.data||[]).map(row=>[row.key,row.value])),writes:Array<{key:string;value:ActivityDayMemo}>=[],missing:SourceSnapshotGeneration[]=[];
   for(const marker of batch){
