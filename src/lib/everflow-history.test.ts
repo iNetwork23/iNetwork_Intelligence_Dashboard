@@ -319,6 +319,12 @@ describe('Everflow fraud source dimensions',()=>{
 
 
 describe('conversion duplicate proof rejection diagnostics',()=>{
+ it('names changed relationship schema fields without revealing nested data',async()=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size'));const duplicate={conversion_id:'private-first'};return json({conversions:[duplicate,duplicate,{conversion_id:'private-second',relationship:{offer:{name:size===503?'private-new':'private-old'},...(size===503?{'private-property':'private-value'}:{})}}],paging:{total_count:3,page_size:size}})});
+  let failure:unknown;try{await createEverflowHistorySource('private-key',fetcher).loadConversions('2026-04-13','2026-04-13')}catch(error){failure=error}
+  expect(failure).toBeInstanceOf(Error);const message=String(failure),passes=JSON.parse(message.split('diagnostics=')[1]);
+  expect(passes[2].proofDifference.relationshipFields).toEqual(['offer','other']);expect(message).not.toContain('private-');
+ });
  it.each(['identity','multiplicity','content','unknown-field'])('distinguishes %s disagreement using bounded field names only',async scenario=>{
   const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),changed=size===503;
    const first={conversion_id:'private-first',payout:1,transaction_id:'private-customer'};
