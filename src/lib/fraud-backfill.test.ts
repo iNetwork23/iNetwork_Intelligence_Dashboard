@@ -3,6 +3,15 @@ import {advanceFraudBackfillState,buildFraudBackfillParity,initialFraudBackfillS
 
 describe('resumable fraud conversion backfill',()=>{
   const now=new Date('2026-07-30T12:00:00Z');
+  it('retries an interrupted backfill at the unchanged cursor as one day before returning to normal chunks',()=>{
+    const state={...initialFraudBackfillState(now),nextFrom:'2026-07-20',lastSuccessAt:'2026-07-30T10:00:00Z',lastParity:null};
+    const window=selectFraudBackfillWindow(state,now);
+    expect(window).toEqual({mode:'backfill',from:'2026-07-20',to:'2026-07-20'});
+    const counts={soi:12,coin_spend:2,first_sale:1,rebill:3};
+    const next=advanceFraudBackfillState(state,window,now,{...window,expected:counts,stored:counts,expectedDigest:'same',storedDigest:'same',reportHasActivity:true,verified:true});
+    expect(next).toMatchObject({nextFrom:'2026-07-21',parityVerifiedThrough:'2026-07-20',readyAt:null});
+    expect(selectFraudBackfillWindow(next,now)).toEqual({mode:'backfill',from:'2026-07-21',to:'2026-07-23'});
+  });
   it('starts a versioned 120-day backfill in three-day chunks accepted by atomic metric replacement',()=>{
     const state=initialFraudBackfillState(now),window=selectFraudBackfillWindow(state,now);
     expect(state).toMatchObject({version:4,phase:'backfill',windowFrom:'2026-04-02',windowTo:'2026-07-30',nextFrom:'2026-04-02',coveredFrom:null,coveredThrough:null,parityVerifiedThrough:null});
