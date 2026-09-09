@@ -74,9 +74,11 @@ export async function loadAffiliateConversionsFromCache(affiliateId:string,lookb
   for(;;){
     // Seek through the existing partial index instead of rescanning an ever
     // larger OFFSET. Preserve database timestamp precision and tie-break by ID.
-    const status='status.eq.approved,status.is.null';
-    const filter=cursor?`and(or(${status}),or(converted_at.gt.${literal(cursor.converted_at)},and(converted_at.eq.${literal(cursor.converted_at)},id.gt.${literal(cursor.id)})))`:status;
-    const {data,error}=await getSupabaseAdmin().from('conversions').select('raw,type,lead_id,converted_at,id').eq('affiliate_id',affiliateId).gte('converted_at',cursor?.converted_at||from).or(filter).order('converted_at').order('id').limit(pageSize).abortSignal(new AbortController().signal);
+    // The service-role-only view fixes approved/NULL in SQL. A parameterized
+    // status predicate cannot retain the partial index in a generic query plan.
+    let query=getSupabaseAdmin().from('affiliate_approved_conversions').select('raw,type,lead_id,converted_at,id').eq('affiliate_id',affiliateId).gte('converted_at',cursor?.converted_at||from);
+    if(cursor)query=query.or(`converted_at.gt.${literal(cursor.converted_at)},and(converted_at.eq.${literal(cursor.converted_at)},id.gt.${literal(cursor.id)})`);
+    const {data,error}=await query.order('converted_at').order('id').limit(pageSize).abortSignal(new AbortController().signal);
     if(error){
       if(/statement timeout/i.test(error.message)&&pageSize>125){console.warn('Affiliate conversion page retry',{affiliateId,pagesRead,pageSize,nextPageSize:pageSize/2});pageSize/=2;continue}
       throw new Error(`Supabase affiliate conversions: ${error.message} (pages read: ${pagesRead}, page size: ${pageSize})`);
