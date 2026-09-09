@@ -319,6 +319,17 @@ describe('Everflow fraud source dimensions',()=>{
 
 
 describe('conversion duplicate proof rejection diagnostics',()=>{
+ it('accepts three complete identical conversion traversals despite a changing numeric relationship event counter',async()=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),duplicate={conversion_id:'same',payout:1,relationship:{events_count:size,offer:{network_offer_id:56}}};return json({conversions:[duplicate,duplicate,{conversion_id:'other',payout:2}],paging:{total_count:3,page_size:size}})});
+  const rows=await createEverflowHistorySource('key',fetcher).loadConversions('2026-04-13','2026-04-13');
+  expect(rows.map(row=>row.conversion_id).sort()).toEqual(['other','same']);expect(fetcher).toHaveBeenCalledTimes(3);
+  // Only comparison is normalized; the source payload is retained.
+  expect(rows.find(row=>row.conversion_id==='same')?.relationship).toHaveProperty('events_count',503);
+ });
+ it.each(['affiliate','offer','campaign','offer_url','events_count'])('still rejects changes to %s other than a valid numeric event counter',async field=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),duplicate={conversion_id:'same',payout:1,relationship:{events_count:size}},relationship=field==='events_count'?{events_count:size===503?'invalid':3}:{events_count:size,[field]:{id:size===503?2:1}};return json({conversions:[duplicate,duplicate,{conversion_id:'other',relationship}],paging:{total_count:3,page_size:size}})});
+  await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-04-13','2026-04-13')).rejects.toThrow('unvollständig');
+ });
  it('names changed relationship schema fields without revealing nested data',async()=>{
   const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size'));const duplicate={conversion_id:'private-first'};return json({conversions:[duplicate,duplicate,{conversion_id:'private-second',relationship:{offer:{name:size===503?'private-new':'private-old'},...(size===503?{'private-property':'private-value'}:{})}}],paging:{total_count:3,page_size:size}})});
   let failure:unknown;try{await createEverflowHistorySource('private-key',fetcher).loadConversions('2026-04-13','2026-04-13')}catch(error){failure=error}

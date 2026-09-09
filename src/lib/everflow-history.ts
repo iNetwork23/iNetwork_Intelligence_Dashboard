@@ -57,6 +57,18 @@ function canonicalJson(value:unknown):string{
   return JSON.stringify(value)??'null';
 }
 
+/** events_count is mutable relationship metadata, not a conversion/event row.
+ * Production diagnostics isolated it as the sole changing field in otherwise
+ * identical complete traversals. No cache/report consumer uses this counter.
+ * Normalize only valid numeric counters in the proof; retain the original row,
+ * presence/type checks, every other field and all pagination safeguards. */
+function conversionProofJson(row:EverflowConversion):string{
+  const relationship=row.relationship as Record<string,unknown>|undefined;
+  if(relationship&&Number.isSafeInteger(relationship.events_count)&&Number(relationship.events_count)>=0)
+    return canonicalJson({...row,relationship:{...relationship,events_count:0}});
+  return canonicalJson(row);
+}
+
 type ProofContents=Map<string,{json:string;count:number}>;
 // Fixed schema names only. Unknown provider keys may contain sensitive data.
 const proofFields=new Set(['conversion_id','transaction_id','conversion_unix_timestamp','click_unix_timestamp','is_event','event','status','payout','revenue','cost','source_id','sub1','sub2','sub3','sub4','sub5','adv1','adv2','adv4','email','country','is_scrub','error_code','relationship']);
@@ -104,7 +116,7 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         const identities=rows.map(row=>row.conversion_id||canonicalJson(row)),fingerprint=JSON.stringify(identities),pageIdentities=new Set<string>();
         if(rows.length>pageSize){pass.oversizedPages++;validProof=false;}
         for(let index=0;index<rows.length;index++){
-          const row=rows[index],id=identities[index],json=canonicalJson(row),previous=contents.get(id);
+          const row=rows[index],id=identities[index],json=conversionProofJson(row),previous=contents.get(id);
           if(typeof row.conversion_id!=='string'||!row.conversion_id.trim()){pass.invalidIdentityRows++;validProof=false;}
           if(previous){pass.duplicateRows++;if(previous.json!==json)pass.changedDuplicateRows++;if(!pageIdentities.has(id))pass.crossPageDuplicateRows++}
           contents.set(id,{json,count:(previous?.count??0)+1});pageIdentities.add(id);unique.set(id,row);
