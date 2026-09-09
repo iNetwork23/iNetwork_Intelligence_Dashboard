@@ -577,6 +577,8 @@ export const translations = {
   "← Zurück": "← Back",
   "Weiter →": "Next →",
   "Noch keine Kohorten vorhanden": "No cohorts yet",
+  "Keine Kohorten für diese Filter": "No cohorts match these filters",
+  "Filter ändern oder zurücksetzen, um andere Kohorten anzuzeigen.": "Change or reset the filters to view other cohorts.",
   "Nach den ersten erfolgreichen Sync-Chunks erscheinen die Daten hier.": "After the first successful sync chunks, the data appears here.",
   "Account Monitor": "Account monitor",
   "LTV-Kohorten": "LTV cohorts",
