@@ -1,14 +1,14 @@
 # Fraud-Control-Migration und Cutover
 
-Status: ausführbare Produktionsanleitung; noch nicht gegen Produktion ausgeführt.
+Stand 09.09.2026: Die Schemaabschnitte sind Installationsreferenz. Der vorhandene Produktionsstand wurde bereits zurückgelesen; vorhandene Objekte und Reparaturen nicht erneut ausführen. Der genehmigte Berlin-Backfill verwendet Version 4 unter `fraud_conversion_backfill_berlin_v4`, Berichts-/Source-Nachweise Version 5 und Europe/Berlin (Everflow-Zeitzone 56). Aktuelle Fortsetzung siehe unten; die alten v3-Checkpoints sind kein Cutover-Nachweis.
 
 ## Sicherheitsgrenzen
 
-- Die Operator-Dateien und anschließend die Migrationen **einzeln und in der angegebenen Reihenfolge** im Supabase SQL Editor ausführen.
+- Zuerst Objekte, Rechte und Datenstand zurücklesen. Nur tatsächlich fehlende und ausdrücklich genehmigte Änderungen ausführen, die Operator-Dateien und Migrationen dabei **einzeln und in der angegebenen Reihenfolge** verwenden.
 - `01a-fraud-schema.sql` enthält den transaktionalen Schemaanteil. Die drei Dateien `01b` bis `01d` enthalten jeweils genau einen Online-Indexaufbau und dürfen niemals in einen gemeinsamen `BEGIN … COMMIT`-Block oder eine gemeinsame SQL-Editor-Ausführung eingebettet werden.
 - Falls der SQL Editor bei einer einzelnen `CREATE INDEX CONCURRENTLY`-Datei `ERROR 25001` meldet, **nicht wiederholen und nicht auf einen blockierenden normalen Index ausweichen**. Zuerst den unbekannten Ausführungszustand per Read-back prüfen und einen bestätigten nicht-transaktionalen DDL-Kanal beziehungsweise ein Wartungsfenster festlegen.
 - Vorher aktuellen Datenbank-Backup-/PITR-Status prüfen.
-- Während der Migration und des Backfills bleibt der Automation-Journal-Cron pausiert.
+- Vorhandene Cron-Einstellungen bleiben im genehmigten Fortsetzungsscope unverändert. Eine Pause oder andere Konfigurationsänderung ist kein automatischer Bestandteil des Backfills.
 - Der Fraud-Screen bleibt bis zur nachgewiesenen Parität im Shadow Mode. Er löst keine Everflow-, Payout-, Postback- oder Source-Änderung aus.
 - SQL-Ergebnisse ohne Credential-, Connection-String- oder Tokenwerte dokumentieren.
 
@@ -189,16 +189,16 @@ where key = 'ltv_cohorts_materialized';
 
 Erwartung: beide Werte `true`. Der Sync-State muss nach einem erfolgreichen Refresh `status = ready` oder `status = refreshed` ausweisen.
 
-## Deployment-Reihenfolge
+## Fortsetzung des genehmigten Produktions-Backfills
 
-1. Alle Operator-SQLs und Read-backs erfolgreich abschließen.
-2. Den unveränderlichen, vollständig geprüften Releasecommit als **nicht kanonische, unaliasierte Dark-/Preview-Deploymentinstanz** mit dem kontrollierten Produktions-Datenbankzugang bereitstellen. Die öffentliche Produktions-URL darf dabei noch nicht auf den Kandidaten zeigen.
-3. Healthcheck und anonymen 401-/Login-Grenztest gegen diese unveränderliche Instanz durchführen.
-4. Fraud-Backfill ausschließlich über diese kontrollierte Instanz unter dem gemeinsamen History-Sync-Lock starten. Ein ungescopter Super-Admin mit `api.manage`, `statistics.view` und `finance.view` sendet den CSRF-geschützten `POST /api/sync?refresh=fraud-backfill`; der öffentliche Produktions-Cron ist dafür noch nicht freigegeben.
-5. Backfill wiederholen, bis der Rückgabestatus `phase = rolling` und `ready = true` meldet.
-6. `sync_state.key = 'fraud_conversion_backfill_v3'` lesen und die unten genannten Paritätsbedingungen bestätigen.
-7. Erst nach erfolgreicher Parität einen neuen unabhängigen Review des unveränderten Commit-/Deploymentfingerprints abschließen.
-8. Nur bei terminalem PASS die bereits geprüfte immutable Deploymentinstanz auf den kanonischen Produktionsalias promoten. Kein Neubuild zwischen Parität, Review und Promotion.
+1. Aktuellen Checkpoint und die gemeinsamen History-/Metrics-Sperren frisch lesen. Bestehende DDL und Zeitbudgetänderungen nicht wiederholen. Es gilt ausschließlich der bereits genehmigte Datenimport-Scope.
+2. Codekorrekturen auf einem unveränderlichen Kandidaten vollständig prüfen; nach Veröffentlichung den READY-Produktionsalias samt Commit/Tree und Health-/401-Grenzen bestätigen.
+3. Den vorhandenen authentifizierten `GET /api/sync/fraud`-Cron über Vercel starten, wenn keine andere Import-Sperre aktiv ist. Keine Cron-Secrets auslesen oder in URLs eintragen. History und Fraud verwenden denselben Lease.
+4. Ein Lauf verarbeitet höchstens drei Berliner Kalendertage. Conversion-Ersetzungen erfolgen tagweise atomar; erst nach Berichtsersatz sowie exakter Typ- und Identitätsparität wird der gesamte Fenster-Cursor fortgeschrieben. Ein Fehler invalidiert den Cutover und bewegt den Cursor nicht; die genehmigte Wiederholung beginnt an derselben Stelle, nach einem unterbrochenen erfolgreichen Backfill mit nur einem Tag.
+5. Nach jedem Lauf Cursor, Parität und freigegebene Sperren lesen. Bei einem Provider-Quotenfehler keine schnelle Wiederholung auslösen. Vorhandene reguläre Crons bleiben bestehen.
+6. Nach `phase = rolling` zusätzlich bis zum aktuellen benötigten Berlin-Tag aufholen. Die 55-Minuten-Pause gilt nur für wiederholte Aktualisierung bereits abgedeckter Tage, nicht für fehlende Nachholtage. `ready = true` eines historischen Fensters ersetzt nicht die Prüfung der angefragten Zeitraumgrenzen.
+7. `sync_state.key = 'fraud_conversion_backfill_berlin_v4'` und die unten genannten Paritätsbedingungen bestätigen. Dann die Produktionsabnahme durchführen; Shadow Mode bleibt aktiv und erzeugt keine automatischen Provider-Sperren.
+8. Der abschließende unabhängige Review des exakten Releasefingerprints und alle offenen fachlichen Abnahmen gehören weiterhin zur Gesamtfreigabe WLX-012.
 
 ```sql
 select
@@ -209,7 +209,7 @@ select
   value->>'readyAt' as ready_at,
   value->'lastParity'->>'verified' as last_parity_verified
 from public.sync_state
-where key = 'fraud_conversion_backfill_v3';
+where key = 'fraud_conversion_backfill_berlin_v4';
 ```
 
 Erwartung:
@@ -217,6 +217,7 @@ Erwartung:
 - `phase = rolling`;
 - `covered_from` ist gesetzt;
 - `covered_through = parity_verified_through`;
+- `covered_through` deckt das Ende des angefragten Berliner Zeitraums ab;
 - `ready_at` ist gesetzt;
 - `last_parity_verified = true`.
 
@@ -229,7 +230,7 @@ Erst nach vollständigem Cutover:
 - Smartlink, Direct und clickless API getrennt sichtbar;
 - Affiliate-, Offer-, Campaign-, Source- und Subsource-Dimensionen prüfen;
 - Top-1-/Top-2-Rebillkonzentration nur bei verlässlicher Kundenidentität anzeigen;
-- unvollständige v3-Source-Coverage muss fail-closed warnen;
+- unvollständige v5-/Berlin-Source-Coverage muss fail-closed warnen;
 - gescopte Super-Admins, Admins, Employees und Partner müssen 403 erhalten;
 - `writesPerformed = 0` und Shadow Mode sichtbar;
 - keine Everflow-Source-Mutation durch Fraud-Aktionen;

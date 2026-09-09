@@ -1,6 +1,7 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 import {runFraudConversionSync,loadFraudBackfillState} from './fraud-backfill-service';
 import {initialFraudBackfillState,type FraudBackfillState} from './fraud-backfill';
+import {buildFraudBackfillParity} from './fraud-backfill';
 import {berlinRangeUtcBounds} from './reporting-day';
 import type {ConversionCacheRow,EverflowConversion} from './history-cache';
 
@@ -96,4 +97,24 @@ it.each([
 it('gives successive checkpoint reads distinct abort signals to bypass request memoization',async()=>{
  await loadFraudBackfillState();await loadFraudBackfillState();
  expect(fixture.signals).toHaveLength(2);expect(new Set(fixture.signals).size).toBe(2);expect(fixture.signals.every(signal=>signal instanceof AbortSignal)).toBe(true);
+});
+
+function rollingThrough(day:string,at:string){
+ const evidence={typeCounts:{soi:1,rebill:0,coin_spend:0,first_sale:0},identityDigest:'verified'};
+ return{...initialFraudBackfillState(now),phase:'rolling' as const,coveredFrom:'2026-05-12',coveredThrough:day,parityVerifiedThrough:day,readyAt:at,lastSuccessAt:at,lastParity:buildFraudBackfillParity({from:day,to:day,expected:evidence,stored:evidence,reportHasActivity:true})};
+}
+it('catches up a missing Berlin day immediately after a recent successful backfill',async()=>{
+ fixture.checkpoint=rollingThrough('2026-09-07','2026-09-08T11:59:00Z');fixture.raw=[raw('today','2026-09-08T10:00:00Z')];
+ const result=await runFraudConversionSync(now);
+ expect(result.skipped).toBe(false);expect(fixture.replacements.map(row=>row.from)).toEqual(['2026-09-08']);
+ expect(fixture.checkpoint.coveredThrough).toBe('2026-09-08');expect(result).toMatchObject({parity:{verified:true}});
+});
+it('keeps the refresh cooldown when coverage already includes the current Berlin day',async()=>{
+ fixture.checkpoint=rollingThrough('2026-09-08','2026-09-08T11:59:00Z');fixture.raw=[];
+ expect(await runFraudConversionSync(now)).toMatchObject({skipped:true,ready:true});expect(fixture.replacements).toEqual([]);expect(fixture.writes).toEqual([]);
+});
+it('uses the Berlin date at midnight even before the UTC date changes',async()=>{
+ const at=new Date('2026-09-08T22:05:00Z');fixture.checkpoint=rollingThrough('2026-09-08','2026-09-08T22:04:00Z');fixture.raw=[raw('midnight','2026-09-08T22:01:00Z')];
+ const result=await runFraudConversionSync(at);
+ expect(result.skipped).toBe(false);expect(fixture.replacements.map(row=>row.from)).toEqual(['2026-09-09']);expect(fixture.checkpoint.coveredThrough).toBe('2026-09-09');
 });
