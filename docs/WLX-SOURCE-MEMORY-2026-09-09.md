@@ -1,0 +1,9 @@
+# Source-Rollups: Jahresaktivität und Conversion-Memo begrenzen
+
+Der erste produktive Lauf nach PR #37 veröffentlichte die belegten 7-/30-/90-Tage-Ranges. Der anschließend erstmals wieder erreichbare Source-Pfad brach jedoch am 09.09.2026 um 09:45 UTC wegen ausgeschöpftem Vercel-Arbeitsspeicher ab. Zusätzlich traten Conversion-Lese-Timeouts auf. Dieser Lauf war kein erfolgreicher Source-Rollup.
+
+Der Aktivitäts-Memo-Miss lud bislang die komplette verfügbare Jahreshistorie als expandierte Reporting-Zeilen, obwohl nur die Identität und das letzte Lead-Datum benötigt werden. Der Leser verarbeitet jetzt jeweils einen bestätigten Tag, verwirft bereits vor der Expansion die für diesen Index irrelevanten Campaign-Zeilen und führt nur den kompakten Index fort. Fehler in späteren Tagen verhindern weiterhin die Veröffentlichung eines Teil-Memos. Der unveränderte allgemeine Source-Leser verwendet denselben validierten Snapshot-Pfad und behält seinen adaptiven 8/4/2/1-Readvertrag.
+
+Die Kandidatenberechnung verarbeitet jeweils einen Partner statt vier gleichzeitig. Der Conversion-Memo behält maximal acht Einträge und insgesamt 10.000 geladene Zeilen; größere Ergebnisse werden nach der Auswertung freigegeben und bei Bedarf erneut vollständig geladen. Keine fachlichen Datensätze werden abgeschnitten. Alte Fehler nach `clear()` dürfen einen neu gestarteten Eintrag nicht entfernen.
+
+Zwei Regressionen reproduzierten zunächst den unbeschränkten Lese-/Memo-Pfad. Weitere Fälle prüfen kombinierte Speicherbudgets, veraltete Promise-Fehler und das Verwerfen unvollständiger Aktivität. Bisherige Summen-, Typ-, Source-, Zeitbudget- und Scopeverträge bleiben bestehen. Die produktive Laufzeitprüfung muss zeigen, ob darüber hinaus bestehende SQL-Timeouts oder weitere große Einzelpartnerloads zu behandeln sind; diese Änderung behauptet keinen vollständigen Source-Datenstand.

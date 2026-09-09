@@ -199,6 +199,25 @@ describe('rangeCoversTrend',()=>{
  });
 });
 describe('memoizedConversionsLoader',()=>{
+ it('evicts older results when the combined retained row budget is exceeded',async()=>{
+  const{memoizedConversionsLoader}=await import('./source-candidates');
+  const load=vi.fn(async()=>Array(6_000).fill({}) as ConversionRow[]),memo=memoizedConversionsLoader(load),now=new Date();
+  await memo.conversionsFor('1',now);await memo.conversionsFor('2',now);expect(memo.size()).toBe(1);
+  await memo.conversionsFor('2',now);expect(load).toHaveBeenCalledTimes(2);
+  await memo.conversionsFor('1',now);expect(load).toHaveBeenCalledTimes(3);
+ });
+ it('does not let an older failed request remove a replacement after clear',async()=>{
+  const{memoizedConversionsLoader}=await import('./source-candidates');
+  let reject!:(error:Error)=>void;const load=vi.fn().mockImplementationOnce(()=>new Promise<ConversionRow[]>((_resolve,fail)=>{reject=fail})).mockResolvedValue([]),memo=memoizedConversionsLoader(load),now=new Date();
+  const old=memo.conversionsFor('1',now);memo.clear();await memo.conversionsFor('1',now);reject(new Error('old failure'));await expect(old).rejects.toThrow('old failure');
+  await memo.conversionsFor('1',now);expect(load).toHaveBeenCalledTimes(2);expect(memo.size()).toBe(1);
+ });
+ it('releases oversized conversion results rather than retaining every partner until both ranges finish',async()=>{
+  const{memoizedConversionsLoader}=await import('./source-candidates');
+  const large=Array(10_001).fill({}) as ConversionRow[],load=vi.fn(async()=>large),memo=memoizedConversionsLoader(load);
+  expect(await memo.conversionsFor('154',new Date())).toBe(large);
+  expect(memo.size()).toBe(0);await memo.conversionsFor('154',new Date());expect(load).toHaveBeenCalledTimes(2);
+ });
  it('loads each affiliate once across ranges, forgets failures and can be cleared',async()=>{
   const{memoizedConversionsLoader}=await import('./source-candidates');
   let calls=0;const load=vi.fn(async(affiliateId:string)=>{calls++;if(affiliateId==='bad')throw new Error('down');return[]});

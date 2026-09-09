@@ -1,12 +1,13 @@
 import {beforeEach, expect, it, vi} from 'vitest';
-import {loadAffiliateSourceRowsRangeFromCache} from './cached-evaluations';
+import {loadAffiliateSourceRowsRangeFromCache,loadAffiliateActivityIndex} from './cached-evaluations';
 
 const state = vi.hoisted(() => ({batches: [] as string[][], signals: [] as AbortSignal[], active: 0, peak: 0, failDay: '', malformedDay: '', missingDay: '', emptyDay: '', batchLimit:8, failure:'canceling statement due to statement timeout'}));
 const day = (n: number) => `2026-08-${String(n).padStart(2, '0')}`;
+const writes=vi.hoisted(()=>vi.fn(async()=>({error:null})));
 vi.mock('./supabase', () => ({getSupabaseAdmin: () => ({from: () => {
   let keys: string[] | undefined;
   const query = {
-    select: () => query, gte: () => query, lte: () => query, order: () => query,
+    select: () => query, gte: () => query, lte: () => query, order: () => query,eq:()=>query,maybeSingle:async()=>({data:null,error:null}),upsert:writes,
     in: (_field: string, values: string[]) => {keys = values; return query;},
     abortSignal: (signal: AbortSignal) => {state.signals.push(signal); return query;},
     then: async (resolve: (value: unknown) => unknown) => {
@@ -24,7 +25,7 @@ vi.mock('./supabase', () => ({getSupabaseAdmin: () => ({from: () => {
   };
   return query;
 }})}));
-beforeEach(() => {state.batches = []; state.signals = []; state.active = 0; state.peak = 0; state.failDay = ''; state.malformedDay = ''; state.missingDay = ''; state.emptyDay = '';state.batchLimit=8;state.failure='canceling statement due to statement timeout';});
+beforeEach(() => {writes.mockClear();state.batches = []; state.signals = []; state.active = 0; state.peak = 0; state.failDay = ''; state.malformedDay = ''; state.missingDay = ''; state.emptyDay = '';state.batchLimit=8;state.failure='canceling statement due to statement timeout';});
 const range = {from: '2026-08-01', to: '2026-08-19'};
 
 it('reads every accepted affiliate day once within the response budget and preserves totals', async () => {
@@ -73,4 +74,13 @@ it('accepts absent affiliate-day records and explicitly empty snapshots', async 
   const rows = await loadAffiliateSourceRowsRangeFromCache(range, '154');
   expect(rows).toHaveLength(16);
   expect(rows.reduce((sum, row) => sum + row.reporting.cv, 0)).toBe(16);
+});
+it('builds annual activity one day at a time without retaining the expanded history',async()=>{
+ const entries=await loadAffiliateActivityIndex('154',range);
+ expect(entries).toHaveLength(1);expect(entries[0].lastLeadDate).toBe('2026-08-18');
+ expect(state.batches).toHaveLength(18);expect(state.batches.every(batch=>batch.length===1)).toBe(true);
+ expect(writes).toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({entries:[['50','154','5','tracked','source','sub','2026-08-18']]})}),{onConflict:'key'});
+});
+it('does not publish an activity memo after a later malformed day',async()=>{
+ state.malformedDay='2026-08-09';await expect(loadAffiliateActivityIndex('154',range)).rejects.toThrow('invalid snapshot');expect(writes).not.toHaveBeenCalled();
 });

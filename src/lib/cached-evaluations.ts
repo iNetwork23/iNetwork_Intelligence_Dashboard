@@ -26,12 +26,18 @@ export async function loadAffiliateSourceRowsFromCache(period:Period,affiliateId
 }
 
 export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;to:string},affiliateId:string):Promise<ReportRow[]>{
+  const rows:ReportRow[]=[];
+  await visitAffiliateSourceRowsRangeFromCache(range,affiliateId,batch=>{rows.push(...batch)});
+  return rows;
+}
+/** Consume immutable daily snapshots without retaining expanded annual history. */
+async function visitAffiliateSourceRowsRangeFromCache(range:{from:string;to:string},affiliateId:string,visit:(rows:ReportRow[])=>void,options:{batchSize?:number;directOnly?:boolean}={}){
   const markerPrefix='source_day_generation:',markerQuery=await getSupabaseAdmin().from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');
   if(markerQuery.error)throw new Error(`Supabase source generations: ${markerQuery.error.message}`);
-  const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}}),{minimumVersion:5}),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`),snapshotRows:ReportRow[]=[];
+  const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}}),{minimumVersion:5}),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`);
   // A snapshot can contain thousands of rows. Decode one bounded response before
   // requesting the next; an explicit signal also avoids retained Next GET clones.
-  let batchSize=8;
+  let batchSize=options.batchSize??8;
   for(let start=0;start<keys.length;){
     const batch=keys.slice(start,start+batchSize);
     const result=await getSupabaseAdmin().from('sync_state').select('value').in('key',batch).abortSignal(new AbortController().signal);
@@ -46,12 +52,12 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
       // A missing affiliate-day record can be legitimate. A returned but malformed
       // record must never silently reduce history used by a source-block preview.
       if(!value||!Array.isArray(value.rows))throw new Error('Supabase source snapshots: invalid snapshot');
-      const decoded=value.rows.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));
-      snapshotRows.push(...mapAffiliateSourceRows(decoded,value.date));
+      const compact=options.directOnly?value.rows.filter(row=>row.c==='0'):value.rows;
+      const decoded=compact.map(row=>decodeSourceSnapshotRow(row,value.affiliate_id||affiliateId,value.affiliate_name||'N/A'));
+      visit(mapAffiliateSourceRows(decoded,value.date));
     }
     start+=batch.length;
   }
-  return snapshotRows;
 }
 
 const sourceMarkers=(data:Array<{value:unknown}>):SourceSnapshotGeneration[]=>(data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}});
@@ -100,7 +106,15 @@ export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:
  const fingerprint=activityMemoFingerprint(available),memoKey=`source_activity_memo:berlin-v5:${affiliateId}:${range.from}:${range.to}`;
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
  if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeActivityEntries(memo.data!.value.entries);
- const history=await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),entries=buildSourceActivityIndex(history);
+ const activity=new Map<string,SourceActivityEntry>();
+ await visitAffiliateSourceRowsRangeFromCache(range,affiliateId,rows=>{
+  for(const entry of buildSourceActivityIndex(rows)){
+   const identity=entry.identity,key=`${identity.pathKey}|${identity.trafficMode}|${identity.mainValue||''}|${identity.subValue||''}`,previous=activity.get(key);
+   if(!previous)activity.set(key,entry);
+   else if(entry.lastLeadDate&&(!previous.lastLeadDate||entry.lastLeadDate>previous.lastLeadDate))previous.lastLeadDate=entry.lastLeadDate;
+  }
+ },{batchSize:1,directOnly:true});
+ const entries=[...activity.values()];
  const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries:encodeActivityEntries(entries)}},{onConflict:'key'});
  if(write.error)console.warn('Activity memo write failed',write.error.message);
  return entries;
