@@ -60,12 +60,13 @@ function canonicalJson(value:unknown):string{
 /** events_count is mutable relationship metadata, not a conversion/event row.
  * Production diagnostics isolated it as the sole changing field in otherwise
  * identical complete traversals. No cache/report consumer uses this counter.
- * Normalize only valid numeric counters in the proof; retain the original row,
- * presence/type checks, every other field and all pagination safeguards. */
+ * Its format and presence do not affect the consumed conversion data.
+ * Exclude that exact unused metadata key from the proof; retain the original
+ * row, the relationship itself, every other field and pagination safeguards. */
 function conversionProofJson(row:EverflowConversion):string{
   const relationship=row.relationship as Record<string,unknown>|undefined;
-  if(relationship&&Number.isSafeInteger(relationship.events_count)&&Number(relationship.events_count)>=0)
-    return canonicalJson({...row,relationship:{...relationship,events_count:0}});
+  if(relationship&&typeof relationship==='object'&&!Array.isArray(relationship))
+    return canonicalJson({...row,relationship:Object.fromEntries(Object.entries(relationship).filter(([key])=>key!=='events_count'))});
   return canonicalJson(row);
 }
 

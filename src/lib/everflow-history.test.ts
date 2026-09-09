@@ -319,6 +319,12 @@ describe('Everflow fraud source dimensions',()=>{
 
 
 describe('conversion duplicate proof rejection diagnostics',()=>{
+ it.each([123,'123',{sale:4},[1,2],null])('ignores only derived event-counter metadata regardless of its representation: %j',async counter=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),duplicate={conversion_id:'same',relationship:{offer:{network_offer_id:56},...(size===2000?{}:{events_count:size===997?0:counter})}};return json({conversions:[duplicate,duplicate,{conversion_id:'other'}],paging:{total_count:3,page_size:size}})});
+  const rows=await createEverflowHistorySource('key',fetcher).loadConversions('2026-04-13','2026-04-13');
+  expect(rows).toHaveLength(2);expect(fetcher).toHaveBeenCalledTimes(3);expect(rows[0].relationship).toHaveProperty('events_count',counter);
+ });
+
  it('accepts three complete identical conversion traversals despite a changing numeric relationship event counter',async()=>{
   const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),duplicate={conversion_id:'same',payout:1,relationship:{events_count:size,offer:{network_offer_id:56}}};return json({conversions:[duplicate,duplicate,{conversion_id:'other',payout:2}],paging:{total_count:3,page_size:size}})});
   const rows=await createEverflowHistorySource('key',fetcher).loadConversions('2026-04-13','2026-04-13');
@@ -326,8 +332,8 @@ describe('conversion duplicate proof rejection diagnostics',()=>{
   // Only comparison is normalized; the source payload is retained.
   expect(rows.find(row=>row.conversion_id==='same')?.relationship).toHaveProperty('events_count',503);
  });
- it.each(['affiliate','offer','campaign','offer_url','events_count'])('still rejects changes to %s other than a valid numeric event counter',async field=>{
-  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),duplicate={conversion_id:'same',payout:1,relationship:{events_count:size}},relationship=field==='events_count'?{events_count:size===503?'invalid':3}:{events_count:size,[field]:{id:size===503?2:1}};return json({conversions:[duplicate,duplicate,{conversion_id:'other',relationship}],paging:{total_count:3,page_size:size}})});
+ it.each(['affiliate','offer','campaign','offer_url'])('still rejects changes to %s in conversion relationships',async field=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),duplicate={conversion_id:'same',payout:1,relationship:{events_count:size}},relationship={events_count:size,[field]:{id:size===503?2:1}};return json({conversions:[duplicate,duplicate,{conversion_id:'other',relationship}],paging:{total_count:3,page_size:size}})});
   await expect(createEverflowHistorySource('key',fetcher).loadConversions('2026-04-13','2026-04-13')).rejects.toThrow('unvollständig');
  });
  it('names changed relationship schema fields without revealing nested data',async()=>{
