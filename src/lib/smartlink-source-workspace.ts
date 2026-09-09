@@ -11,7 +11,7 @@ const finish=(value:SourceLandingpageMetrics,mode:'tracked'|'api'):SourceLanding
 const add=(target:SourceLandingpageMetrics,row:Pick<SmartlinkSourceBreakdown,'clicks'|'sois'|'firstSales'|'rebills'|'coinSpend'|'revenue'|'payout'|'profit'>)=>{target.clicks+=row.clicks;target.sois+=row.sois;target.firstSales+=row.firstSales;target.rebills+=row.rebills;target.coinSpend+=row.coinSpend;target.revenue+=row.revenue;target.payout+=row.payout;target.profit+=row.profit};
 const technical=(value:string|null|undefined)=>value??null;
 const tupleKey=(row:SmartlinkSourceBreakdown)=>JSON.stringify([row.mode,technical(row.mainValue),technical(row.subValue)]);
-export const isSmartlinkSourceCoverageComplete=(slot:SmartSlot)=>{const coverage=slot.sourceCoverage,visibleSois=(slot.sourceBreakdown||[]).reduce((sum,row)=>sum+row.sois,0);return Boolean(coverage&&coverage.missingDays.length===0&&coverage.acceptedDays===coverage.expectedDays&&visibleSois===slot.metrics14.sois)};
+export const isSmartlinkSourceCoverageComplete=(slot:SmartSlot)=>{const coverage=slot.sourceCoverage,visibleSois=(slot.sourceBreakdown||[]).reduce((sum,row)=>sum+row.sois,0);return Boolean(coverage&&coverage.expectedDays>0&&coverage.from<=coverage.to&&coverage.missingDays.length===0&&coverage.acceptedDays===coverage.expectedDays&&visibleSois===slot.metrics14.sois)};
 
 export function buildCampaignSourceRows(slots:SmartSlot[]):CampaignSourceRow[]{
  const grouped=new Map<string,{row:SmartlinkSourceBreakdown;observed:Map<string,SourceLandingpageMetrics>}>();
