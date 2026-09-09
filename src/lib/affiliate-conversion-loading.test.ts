@@ -32,18 +32,22 @@ it('continues timestamp ties by database ID without an increasing OFFSET and pre
   expect(result[1000]).toMatchObject({event: 'SOI', stableCustomerId: 'tracked-transaction:tx-1000'});
   expect(requests).toHaveLength(2);
   for (const {url, signal} of requests) {
+    expect(url.pathname).toBe('/rest/v1/affiliate_approved_conversions');
     expect(url.searchParams.get('affiliate_id')).toBe('eq.154');
     expect(url.searchParams.get('order')).toBe('converted_at.asc,id.asc');
     expect(url.searchParams.get('limit')).toBe('1000');
     expect(url.searchParams.has('offset')).toBe(false);
     expect(url.searchParams.get('select')).toBe('raw,type,lead_id,converted_at,id');
     expect(signal).toBeInstanceOf(AbortSignal);
-    expect(url.searchParams.get('or')).toContain('status.eq.approved,status.is.null');
-    expect(url.searchParams.getAll('or')).toHaveLength(1);
+    // The private view fixes approved/NULL in SQL so generic plans retain the
+    // existing partial index. The HTTP query must not parameterize that value.
+    expect(url.searchParams.get('or')||'').not.toContain('status');
   }
   expect(requests[0].url.searchParams.get('converted_at')).toBe('gte.2026-06-12T10:00:00.000Z');
   expect(requests[1].url.searchParams.get('converted_at')).toBe(`gte.${timestamp}`);
-  expect(requests[1].url.searchParams.get('or')).toBe(`(and(or(status.eq.approved,status.is.null),or(converted_at.gt."${timestamp}",and(converted_at.eq."${timestamp}",id.gt."id-00999"))))`);
+  expect(requests[0].url.searchParams.has('or')).toBe(false);
+  expect(requests[1].url.searchParams.getAll('or')).toHaveLength(1);
+  expect(requests[1].url.searchParams.get('or')).toBe(`(converted_at.gt."${timestamp}",and(converted_at.eq."${timestamp}",id.gt."id-00999"))`);
 });
 
 it('uses the last database row even when its raw event is filtered and escapes cursor literals', async () => {
