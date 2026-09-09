@@ -268,6 +268,12 @@ describe('publishSourceCandidates',()=>{
 });
 
 describe('loadSourceCandidates',()=>{
+ it('does not disclose account coverage or maturity counts through a scoped snapshot',async()=>{
+  const{loadSourceCandidates}=await import('./source-candidates');
+  maybeSingle.mockResolvedValue({data:{value:{version:1,range,generatedAt:'2026-09-04T10:00:00Z',affiliates:50,affiliatesProcessed:47,coverageComplete:false,maturityUnavailable:9,rows:[]}},error:null});
+  const result=await loadSourceCandidates(range,access('partner',{affiliate:['376']}));
+  expect(result).toMatchObject({scopeRestricted:true,affiliates:0,affiliatesProcessed:0,coverageComplete:false,maturityUnavailable:1});
+ });
  const stored=(rows:Array<Partial<Record<string,unknown>>>)=>({version:1,range,generatedAt:'2026-09-04T10:00:00Z',affiliates:2,affiliatesProcessed:2,coverageComplete:true,rows:rows.map(row=>({affiliateId:'376',affiliate:'P',offerId:'8',offer:'O',offerUrlId:'2766',offerUrl:'LP',trafficMode:'tracked',level:'main_source',mainValue:'s1',subValue:null,action:'AUSSCHALTEN',severity:'critical',reason:'r',clicks:1,sois:0,firstSales:0,rebills:0,revenue:0,payout:0,profit:0,lastLeadDate:null,leadStatus:null,...row}))});
  it('returns null when the key is missing or belongs to another range (fail-closed)',async()=>{
   const{loadSourceCandidates}=await import('./source-candidates');

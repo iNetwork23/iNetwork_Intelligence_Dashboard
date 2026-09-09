@@ -8,17 +8,18 @@ import SourceBlocksPage from '../app/source-blocks/page';
 const fixture=vi.hoisted(()=>({id:'block-fixture',affiliateId:6,affiliateName:'Standard',offerId:2,offerName:'App installieren',trafficMode:'tracked',level:'sub_source',mainField:'source_id',mainValue:'Standard',subField:'sub1',subValue:'App installieren',status:'active',effectiveAt:'2026-08-01T12:00:00Z',updatedAt:'2026-08-01T12:00:00Z',updatedBy:'Standard',reason:'App installieren',everflowSettingId:'fixture'}));
 vi.mock('server-only',()=>({}));
 vi.mock('next/navigation',()=>({redirect:vi.fn()}));
-vi.mock('./session',()=>({currentUser:async()=>({access:{role:'super_admin'}})}));
-vi.mock('./rbac',()=>({can:()=>true}));
+const viewer=vi.hoisted(()=>({scopes:{} as Record<string,string[]>}));
+vi.mock('./session',async()=>{const{parseAccessMetadata}=await import('./rbac');return{currentUser:async()=>({access:parseAccessMetadata({role:'super_admin',scopes:viewer.scopes})})}});
+vi.mock('./rbac',async original=>({...await original<object>(),can:()=>true}));
 vi.mock('./access-store',()=>({securityStore:()=>({})}));
-vi.mock('./source-block-service',()=>({listSourceBlocks:async()=>[fixture]}));
+vi.mock('./source-block-service',()=>({listSourceBlocks:async()=>[fixture,{...fixture,id:'foreign',affiliateId:29,affiliateName:'Foreign partner'}]}));
 vi.mock('./block-effects',()=>({loadBlockEffects:async()=>[]}));
 vi.mock('./source-block-reconcile',()=>({loadReconcileMarkers:async()=>new Map()}));
 vi.mock('./data-status',()=>({getDataStatus:async()=>null}));
 vi.mock('./supabase-reporting',()=>({reportingRange:()=>({from:'2026-08-11',to:'2026-09-09'})}));
 let root:Root|undefined;
 beforeEach(()=>{
- vi.stubGlobal('React',React);vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);vi.stubGlobal('localStorage',{getItem:()=>null,setItem:vi.fn()});
+ viewer.scopes={};vi.stubGlobal('React',React);vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);vi.stubGlobal('localStorage',{getItem:()=>null,setItem:vi.fn()});
  document.body.replaceChildren();document.documentElement.dataset.locale='en';
  vi.stubGlobal('requestAnimationFrame',(cb:FrameRequestCallback)=>setTimeout(()=>cb(0),0));vi.stubGlobal('cancelAnimationFrame',clearTimeout);
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({blocks:[fixture]})}));
@@ -55,4 +56,11 @@ it('hydrates the streamed block register and its control before translating, and
  expect(host.querySelector('.sourceBlockIconButton span')?.textContent).toBe('Gesperrt seit 01.08.2026');
  expect(host.querySelector('option[value="inactive"]')?.textContent).toBe('Inaktiv');
  expect(recoverable).not.toHaveBeenCalled();
+});
+
+it('omits foreign blocks and their counts from the server-rendered register',async()=>{
+ viewer.scopes={affiliate:['6']};
+ const html=renderToString(await SourceBlocksPage({searchParams:Promise.resolve({})}));
+ expect(html).not.toContain('Foreign partner');expect(html).not.toContain('foreign');
+ expect(html).toContain('Standard');expect(html).toContain('1 aktiv');
 });
