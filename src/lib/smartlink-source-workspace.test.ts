@@ -1,5 +1,5 @@
 import{describe,expect,it}from'vitest';
-import{buildCampaignSourceRows}from'./smartlink-source-workspace';
+import{buildCampaignSourceRows,isSmartlinkSourceCoverageComplete}from'./smartlink-source-workspace';
 import type{SmartMetrics,SmartSlot,SmartlinkSourceBreakdown}from'./smartlink';
 
 const metrics=(overrides:Partial<SmartMetrics>={}):SmartMetrics=>({clicks:0,sois:0,cvr:0,firstSales:0,firstSaleRate:0,rebills:0,coinSpend:0,revenue:0,payout:0,profit:0,profitEpc:0,...overrides});
@@ -7,6 +7,13 @@ const source=(overrides:Partial<SmartlinkSourceBreakdown>):SmartlinkSourceBreakd
 const slot=(id:string,name:string,rows:SmartlinkSourceBreakdown[],offerId='57',complete=true):SmartSlot=>{const sois=rows.reduce((sum,row)=>sum+row.sois,0);return{id,name,offerId,weight:50,status:'active',metrics24:metrics(),metrics72:metrics(),metrics14:metrics({sois}),hoursTo50Sois:null,sourceBreakdown:rows,sourceCoverage:{from:'2026-08-01',to:'2026-08-01',acceptedFrom:'2026-08-01',acceptedTo:'2026-08-01',acceptedDays:complete?1:0,expectedDays:1,missingDays:complete?[]:['2026-08-01']}}};
 
 describe('Campaign Source × Landingpage workspace model',()=>{
+ it.each([0,1])('does not treat an empty or reversed maturity window as complete (%i expected days)',expectedDays=>{
+  const pending={...slot('2','Pending',[]),sourceCoverage:{from:'2026-09-10',to:'2026-09-09',acceptedFrom:null,acceptedTo:null,acceptedDays:expectedDays,expectedDays,missingDays:[]}};
+  expect(isSmartlinkSourceCoverageComplete(pending)).toBe(false);
+  const row=buildCampaignSourceRows([slot('1','Observed',[source({sois:20,profit:30})]),pending])[0];
+  expect(row.cells[1]).toMatchObject({state:'unknown',metrics:null,coverageComplete:false});
+  expect(row).toMatchObject({fit:'insufficient',bestLandingpageId:null,worstLandingpageId:null});
+ });
  it('groups the same exact source tuple across landingpages and reconciles every metric without inventing routing advice',()=>{
   const slots=[slot('101','Alpha',[source({clicks:100,sois:20,firstSales:2,rebills:1,coinSpend:4,revenue:180,payout:120,profit:60})],'57'),slot('102','Beta',[source({clicks:80,sois:15,firstSales:0,rebills:0,coinSpend:2,revenue:20,payout:90,profit:-70})],'50')],snapshot=JSON.stringify(slots),rows=buildCampaignSourceRows(slots);
   expect(rows).toHaveLength(1);

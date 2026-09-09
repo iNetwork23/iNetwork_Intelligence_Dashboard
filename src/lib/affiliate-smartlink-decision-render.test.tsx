@@ -10,6 +10,18 @@ const slot=(id:string,profit:number):SmartSlot=>({id,name:`LP ${id}`,offerId:'57
 const recommendation=(id:string):SlotRecommendation=>({slotId:id,action:'rotate',severity:'critical',reasonCode:'mature',title:'Austausch empfohlen',detail:'50 SOIs ohne robuste Sales-Evidenz.'});
 
 describe('Campaign executive decision surface',()=>{
+ it('shows a pending maturity window without reversed dates, measured zeroes or a complete coverage claim',()=>{
+  const pending={...slot('101',0),metrics14:money(0),sourceCoverage:{from:'2026-09-10',to:'2026-09-09',acceptedFrom:null,acceptedTo:null,acceptedDays:0,expectedDays:0,missingDays:[]}};
+  const html=renderToStaticMarkup(<CampaignPeriodOverview rangeLabel="11.08.–09.09.2026" total={money(20,30,10)} slots={[pending]} maturityWindow="Noch kein vollständiger Kalendertag"/>);
+  const sourceCard=html.slice(html.indexOf('3 · QUELLENANALYSE'));
+  expect(sourceCard).toContain('Noch kein abgeschlossener Kalendertag');
+  expect(sourceCard).toContain('n/a');
+  expect(sourceCard).not.toContain('0 von 0');
+  expect(sourceCard).not.toContain('10.09.2026–09.09.2026');
+  expect(sourceCard).not.toContain('Vollständige Source-Abdeckung');
+  expect(sourceCard).not.toContain('0,00');
+  expect(sourceCard).not.toContain('0 SOIs');
+ });
  it('keeps the Campaign deep-link target and separate event windows in the incomplete-data fallback',()=>{
   const coverage={from:'2026-08-25',to:'2026-09-07',acceptedFrom:'2026-08-25',acceptedTo:'2026-09-07',acceptedDays:13,expectedDays:14,missingDays:['2026-09-02']};
   const current={...slot('2946',0),sourceCoverage:{...coverage,from:'2026-09-01'}};
