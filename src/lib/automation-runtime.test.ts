@@ -5,7 +5,7 @@ import {describe,expect,it} from 'vitest';
 describe('automation runtime conversion evidence',()=>{
  it('loads authoritative stable customer identity with explicit provenance instead of guessing transaction_id',()=>{
   const source=readFileSync(join(process.cwd(),'src/lib/cached-evaluations.ts'),'utf8');
-  expect(source).toContain("select('raw,type,lead_id')");
+  expect(source).toContain("select('raw,type,lead_id,converted_at,id')");
   expect(source).toContain("/^api-customer-sha256:[0-9a-f]{64}$/");
   expect(source).toContain("lead_id===normalized.transaction_id");
   expect(source).toContain('stableCustomerId:');

@@ -68,8 +68,14 @@ export async function loadSourceSnapshotFreshness(range:{from:string;to:string})
 export async function loadAffiliateConversionsFromCache(affiliateId:string,lookbackDays=90,now=new Date()):Promise<Array<ConversionRow&{stableCustomerId?:string}>>{
   const from=new Date(now.getTime()-(lookbackDays-1)*86_400_000).toISOString();
   const rows:Array<ConversionRow&{stableCustomerId?:string}>=[];
-  for(let start=0;;start+=1000){
-    const {data,error}=await getSupabaseAdmin().from('conversions').select('raw,type,lead_id').eq('affiliate_id',affiliateId).gte('converted_at',from).or('status.eq.approved,status.is.null').order('converted_at').order('id').range(start,start+999);
+  const literal=(value:string)=>`"${value.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`;
+  let cursor:{converted_at:string;id:string}|undefined;
+  for(;;){
+    // Seek through the existing partial index instead of rescanning an ever
+    // larger OFFSET. Preserve database timestamp precision and tie-break by ID.
+    const status='status.eq.approved,status.is.null';
+    const filter=cursor?`and(or(${status}),or(converted_at.gt.${literal(cursor.converted_at)},and(converted_at.eq.${literal(cursor.converted_at)},id.gt.${literal(cursor.id)})))`:status;
+    const {data,error}=await getSupabaseAdmin().from('conversions').select('raw,type,lead_id,converted_at,id').eq('affiliate_id',affiliateId).gte('converted_at',cursor?.converted_at||from).or(filter).order('converted_at').order('id').limit(1000).abortSignal(new AbortController().signal);
     if(error)throw new Error(`Supabase affiliate conversions: ${error.message}`);
     const databaseCount=(data||[]).length,batch=(data||[]).map(item=>{
       const raw=item.raw as ConversionRow,lead_id=typeof item.lead_id==='string'?item.lead_id:'';
@@ -79,6 +85,9 @@ export async function loadAffiliateConversionsFromCache(affiliateId:string,lookb
     }).filter(row=>row?.transaction_id&&row?.event);
     rows.push(...batch);
     if(databaseCount<1000)break;
+    const last=data![databaseCount-1];
+    if(typeof last.converted_at!=='string'||!Number.isFinite(Date.parse(last.converted_at))||typeof last.id!=='string'||!last.id||(last.converted_at===cursor?.converted_at&&last.id===cursor.id))throw new Error('Supabase affiliate conversions: invalid or unchanged pagination cursor');
+    cursor={converted_at:last.converted_at,id:last.id};
   }
   return rows;
 }
