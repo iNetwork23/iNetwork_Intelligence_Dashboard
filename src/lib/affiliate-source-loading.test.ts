@@ -3,7 +3,7 @@ import {loadAffiliateSourceRowsRangeFromCache,loadAffiliateActivityIndex} from '
 
 const state = vi.hoisted(() => ({batches: [] as string[][], signals: [] as AbortSignal[], active: 0, peak: 0, failDay: '', malformedDay: '', missingDay: '', emptyDay: '', batchLimit:8, failure:'canceling statement due to statement timeout'}));
 const day = (n: number) => `2026-08-${String(n).padStart(2, '0')}`;
-const writes=vi.hoisted(()=>vi.fn(async()=>({error:null})));
+const writes=vi.hoisted(()=>vi.fn<(...args:unknown[])=>Promise<{error:null}>>(async()=>({error:null})));
 vi.mock('./supabase', () => ({getSupabaseAdmin: () => ({from: () => {
   let keys: string[] | undefined;
   const query = {
@@ -12,6 +12,7 @@ vi.mock('./supabase', () => ({getSupabaseAdmin: () => ({from: () => {
     abortSignal: (signal: AbortSignal) => {state.signals.push(signal); return query;},
     then: async (resolve: (value: unknown) => unknown) => {
       if (!keys) return resolve({data: Array.from({length: 19}, (_, i) => ({value: {version: i === 18 ? 4 : 5, timezoneId: 56, date: day(i + 1), generation: `g${i + 1}`}})), error: null});
+      if(keys.every(key=>key.startsWith('source_activity_day:')))return resolve({data:[],error:null});
       state.batches.push(keys);
       state.active++;
       state.peak = Math.max(state.peak, state.active);
@@ -81,6 +82,8 @@ it('builds annual activity one day at a time without retaining the expanded hist
  expect(state.batches).toHaveLength(18);expect(state.batches.every(batch=>batch.length===1)).toBe(true);
  expect(writes).toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({entries:[['50','154','5','tracked','source','sub','2026-08-18']]})}),{onConflict:'key'});
 });
-it('does not publish an activity memo after a later malformed day',async()=>{
- state.malformedDay='2026-08-09';await expect(loadAffiliateActivityIndex('154',range)).rejects.toThrow('invalid snapshot');expect(writes).not.toHaveBeenCalled();
+it('does not publish an annual activity memo after a later malformed day',async()=>{
+ state.malformedDay='2026-08-09';await expect(loadAffiliateActivityIndex('154',range)).rejects.toThrow('invalid snapshot');
+ // Valid earlier daily summaries may remain; no partial annual result is published.
+ expect(writes.mock.calls.some(call=>!Array.isArray(call[0]))).toBe(false);
 });
