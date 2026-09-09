@@ -319,6 +319,18 @@ describe('Everflow fraud source dimensions',()=>{
 
 
 describe('conversion duplicate proof rejection diagnostics',()=>{
+ it.each(['identity','multiplicity','content','unknown-field'])('distinguishes %s disagreement using bounded field names only',async scenario=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size')),changed=size===503;
+   const first={conversion_id:'private-first',payout:1,transaction_id:'private-customer'};
+   const second={conversion_id:changed&&scenario==='identity'?'private-third':'private-second',payout:changed&&scenario==='content'?2:1,...(changed&&scenario==='unknown-field'?{'private-secret-field':'private-secret-value'}:{})};
+   return json({conversions:changed&&scenario==='multiplicity'?[first,second,second]:[first,first,second],paging:{total_count:3,page_size:size}});
+  });
+  let failure:unknown;try{await createEverflowHistorySource('private-api-key',fetcher).loadConversions('2026-04-13','2026-04-13')}catch(error){failure=error}
+  expect(failure).toBeInstanceOf(Error);const message=String(failure),passes=JSON.parse(message.split('diagnostics=')[1]);
+  expect(passes.map((pass:{proofStatus:string})=>pass.proofStatus)).toEqual(['first','matching','mismatch']);
+  expect(passes[2].proofDifference).toEqual({missingIdentities:scenario==='identity'?1:0,addedIdentities:scenario==='identity'?1:0,changedMultiplicities:scenario==='multiplicity'?2:0,changedContents:['content','unknown-field'].includes(scenario)?1:0,changedFields:scenario==='content'?['payout']:scenario==='unknown-field'?['other']:[]});
+  expect(message).not.toContain('private-');expect(fetcher).toHaveBeenCalledTimes(3);
+ });
  it.each(['changed-content','missing-identity'])('explains %s without exposing provider data or accepting the rows',async scenario=>{
   const fetcher=vi.fn<typeof fetch>(async url=>{const size=Number(new URL(String(url)).searchParams.get('page_size'));const shared={transaction_id:'secret-customer',payout:1,...(scenario==='missing-identity'?{}:{conversion_id:'secret-id'})};return json({conversions:[shared,shared,{conversion_id:'another-secret-id',payout:scenario==='changed-content'?size:1}],paging:{total_count:3,page_size:size}})});
   let failure:unknown;try{await createEverflowHistorySource('secret-api-key',fetcher).loadConversions('2026-04-13','2026-04-13')}catch(error){failure=error}

@@ -57,7 +57,19 @@ function canonicalJson(value:unknown):string{
   return JSON.stringify(value)??'null';
 }
 
-type ConversionPaginationPass={pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[];invalidIdentityRows:number;oversizedPages:number;proofStatus:'unavailable'|'ineligible'|'boundary-overlap'|'first'|'matching'|'mismatch'};
+type ProofContents=Map<string,{json:string;count:number}>;
+// Fixed schema names only. Unknown provider keys may contain sensitive data.
+const proofFields=new Set(['conversion_id','transaction_id','conversion_unix_timestamp','click_unix_timestamp','is_event','event','status','payout','revenue','cost','source_id','sub1','sub2','sub3','sub4','sub5','adv1','adv2','adv4','email','country','is_scrub','error_code','relationship']);
+function proofDifference(before:ProofContents,after:ProofContents){
+  let missingIdentities=0,addedIdentities=0,changedContents=0,changedMultiplicities=0;const fields=new Set<string>();
+  for(const [id,previous] of before){const current=after.get(id);if(!current){missingIdentities++;continue}
+    if(previous.count!==current.count)changedMultiplicities++;
+    if(previous.json!==current.json){changedContents++;const a=JSON.parse(previous.json),b=JSON.parse(current.json);for(const key of new Set([...Object.keys(a),...Object.keys(b)]))if(Object.hasOwn(a,key)!==Object.hasOwn(b,key)||canonicalJson(a[key])!==canonicalJson(b[key]))fields.add(proofFields.has(key)?key:'other')}
+  }
+  for(const id of after.keys())if(!before.has(id))addedIdentities++;
+  return{missingIdentities,addedIdentities,changedContents,changedMultiplicities,changedFields:[...fields].sort()};
+}
+type ConversionPaginationPass={pageSize:number;pages:number;receivedRows:number;uniqueRows:number;duplicateRows:number;changedDuplicateRows:number;crossPageDuplicateRows:number;reportedPageSizes:number[];invalidIdentityRows:number;oversizedPages:number;proofStatus:'unavailable'|'ineligible'|'boundary-overlap'|'first'|'matching'|'mismatch';proofDifference?:ReturnType<typeof proofDifference>};
 
 export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch){
   if(!apiKey.trim())throw new Error('EVERFLOW_API_KEY fehlt');
@@ -66,6 +78,7 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     const unique=new Map<string,EverflowConversion>();
     const diagnostics:ConversionPaginationPass[]=[];
     const duplicateProofs:string[]=[];
+    let firstProofContents:ProofContents|undefined;
     let expectedTotal:number|undefined,repeatedPage=false,totalChanged=false,recoveryAllowed=true;
     // Coprime sizes move offset boundaries. Raw totals may include identical
     // provider records, but accepting those requires three complete, matching
@@ -110,6 +123,8 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         for(const id of [...contents.keys()].sort()){const entry=contents.get(id)!;hash.update(JSON.stringify([id,entry.json,entry.count]));hash.update('\n')}
         const digest=hash.digest('hex');
         pass.proofStatus=duplicateProofs.length===0?'first':duplicateProofs.every(proof=>proof===digest)?'matching':'mismatch';
+        if(pass.proofStatus==='mismatch'&&firstProofContents)pass.proofDifference=proofDifference(firstProofContents,contents);
+        firstProofContents??=contents;
         if(duplicateProofs.some(proof=>proof!==digest))recoveryAllowed=false;
         duplicateProofs.push(digest);
       }
