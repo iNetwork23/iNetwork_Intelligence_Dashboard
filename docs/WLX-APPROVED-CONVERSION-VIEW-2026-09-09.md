@@ -18,10 +18,10 @@ Migration: `supabase/migrations/20260909104000_add_approved_conversion_read_view
 
 Nach Freigabe und Ausführung: Viewdefinition, security_invoker, ACL und Spalten zurücklesen; generischen Plan auf der View prüfen; erlaubte Mengen für Affiliate 6 und 154 gegen die bisherige approved/NULL-Abfrage abgleichen. Danach geprüften Anwendungscode deployen und einen begrenzten Source-Rollup ausführen.
 
-Rückweg: zuerst die Anwendung auf den vorherigen Produktionscommit `48b7a3fe3c3019fd30ac2dd48c54edd305620320` zurücksetzen, dann ausschließlich die neue View mit DROP VIEW ohne CASCADE entfernen und den PostgREST-Schemacache neu laden. Die View enthält keine eigenen Daten. Der vorhandene Index und sämtliche Conversions bleiben erhalten. Der SQL-Rückweg liegt in `docs/sql/rollback-approved-conversion-read-view.sql` und der Freigabevorschau und wird nicht vorsorglich produktiv ausgeführt.
+Rückweg: zuerst die Anwendung auf den vorherigen Produktionscommit `36b394de6c7e5b77f4e079497ca54908259b0acd` zurücksetzen, dann ausschließlich die neue View mit DROP VIEW ohne CASCADE entfernen und den PostgREST-Schemacache neu laden. Die View enthält keine eigenen Daten. Der vorhandene Index und sämtliche Conversions bleiben erhalten. Der SQL-Rückweg liegt in `docs/sql/rollback-approved-conversion-read-view.sql` und der Freigabevorschau und wird nicht vorsorglich produktiv ausgeführt.
 
 Grundlage: [PostgreSQL 17 – generische Pläne](https://www.postgresql.org/docs/17/sql-explain.html) und [partielle Indizes](https://www.postgresql.org/docs/current/indexes-partial.html).
 
 ## Prüfung vor der Freigabe
 
-223 Testdateien mit 1810 Tests bestanden. Lint: null Fehler und zwei bereits bestehende Warnungen. TypeScript, Produktionsbuild und git diff --check erfolgreich. README und Migrationsinventar enthalten die neue Datei und die zwingende Reihenfolge Migration/Read-back vor App-Deployment. Ein produktiver Erfolg dieser Änderung wird erst nach Freigabe, Ausführung und anschließendem Read-back behauptet.
+224 Testdateien mit 1815 Tests bestanden. Lint: null Fehler und zwei bereits bestehende Warnungen. TypeScript, Produktionsbuild und git diff --check erfolgreich. README und Migrationsinventar enthalten die neue Datei und die zwingende Reihenfolge Migration/Read-back vor App-Deployment. Ein produktiver Erfolg dieser Änderung wird erst nach Freigabe, Ausführung und anschließendem Read-back behauptet.
