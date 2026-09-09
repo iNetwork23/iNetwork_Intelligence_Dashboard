@@ -32,7 +32,11 @@ export async function GET(request:NextRequest){
  if(!authorized(request))return NextResponse.json({error:'Nicht autorisiert'},{status:401});
  try{
   const release=await acquireHistorySyncLock();
-  try{const started=Date.now(),snapshots=await refreshLongPortfolioRangeSnapshots(getSupabaseAdmin());return NextResponse.json({snapshots,sourceCandidates:await publishSourceCandidateRanges(started)})}
+  try{
+   const started=Date.now(),{snapshots,incompleteRanges}=await refreshLongPortfolioRangeSnapshots(getSupabaseAdmin());
+   const portfolioComplete=incompleteRanges.length===0;
+   return NextResponse.json({snapshots,incompleteRanges,portfolioComplete,sourceCandidates:await publishSourceCandidateRanges(started)},{status:portfolioComplete?200:503});
+  }
   finally{await release()}
  }
  catch(error){console.error('Supabase range rollup failed',error);return NextResponse.json({error:'Range-Snapshots konnten nicht aktualisiert werden'},{status:500})}

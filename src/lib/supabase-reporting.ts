@@ -1,4 +1,4 @@
-import {assertBerlinReportingRange,isBerlinDayMarker} from './berlin-reporting-contract';
+import {assertBerlinReportingRange,IncompleteBerlinReportingRangeError,isBerlinDayMarker} from './berlin-reporting-contract';
 import {aggregatePortfolio,type Portfolio,type ReportRow} from './portfolio';
 import{dailySeriesByKey,variantDailyKey,type DailyByKey}from'./daily-series';
 import type{SupabaseClient}from'@supabase/supabase-js';
@@ -95,13 +95,21 @@ export async function publishPortfolioRangeRecords(client:CacheClient,records:Po
 
 export async function refreshLongPortfolioRangeSnapshots(client:CacheClient,now=new Date()){
  if(!client.from)throw new Error('Supabase range rollups require a table client');
- const records=[];
+ const records:PortfolioRangeSnapshotRecord[]=[],incompleteRanges:Array<{period:typeof backgroundPortfolioPeriods[number];from:string;to:string;confirmedDays:number;totalDays:number}>=[];
  for(const period of backgroundPortfolioPeriods){
-  const range=reportingRange(period,now),rows=await loadMetricRows(client,range,false);
-  records.push(buildPortfolioRangeSnapshotRecordFromAggregates(range.from!,range.to,rows.map(row=>({...row,clicks:number(row.clicks),sois:number(row.sois),first_sales:number(row.first_sales),rebills:number(row.rebills),coin_spend:number(row.coin_spend),payout:number(row.payout),revenue:number(row.revenue),profit:number(row.profit)}))));
+  const range=reportingRange(period,now);
+  try{
+   const rows=await loadMetricRows(client,range,false);
+   records.push(buildPortfolioRangeSnapshotRecordFromAggregates(range.from!,range.to,rows.map(row=>({...row,clicks:number(row.clicks),sois:number(row.sois),first_sales:number(row.first_sales),rebills:number(row.rebills),coin_spend:number(row.coin_spend),payout:number(row.payout),revenue:number(row.revenue),profit:number(row.profit)}))));
+  }catch(error){
+   // A pending backfill must not hold back other, fully proven ranges.
+   // Database and publication errors remain fatal.
+   if(!(error instanceof IncompleteBerlinReportingRangeError))throw error;
+   incompleteRanges.push({period,from:range.from!,to:range.to,confirmedDays:error.confirmedDays,totalDays:error.totalDays});
+  }
  }
- await publishPortfolioRangeRecords(client,records);
- return records.map(record=>({key:record.key,rows:record.value.rows.length}));
+ if(records.length)await publishPortfolioRangeRecords(client,records);
+ return{snapshots:records.map(record=>({key:record.key,rows:record.value.rows.length})),incompleteRanges};
 }
 
 export async function loadPortfolioFromCache(period:ReportingPeriod,client:CacheClient,now=new Date(),custom?:{from?:string;to?:string},access?:AccessMetadata):Promise<Portfolio>{

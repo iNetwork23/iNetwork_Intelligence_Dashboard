@@ -273,7 +273,7 @@ describe('loadSourceCandidates',()=>{
 });
 
 describe('rollups route hook',()=>{
- beforeEach(()=>{process.env.CRON_SECRET='secret';refreshLongPortfolioRangeSnapshots.mockResolvedValue([{key:'portfolio_range:x',rows:1}])});
+ beforeEach(()=>{process.env.CRON_SECRET='secret';refreshLongPortfolioRangeSnapshots.mockResolvedValue({snapshots:[{key:'portfolio_range:x',rows:1}],incompleteRanges:[]})});
  it('publishes both ranges after the portfolio rollups inside their own try/catch',()=>{
   const route=read('src/app/api/sync/rollups/route.ts');
   expect(route).toContain('maxDuration=240');
@@ -300,9 +300,27 @@ describe('rollups route hook',()=>{
   loadRows.mockResolvedValue([rRow('376','dead','N/A',{total_click:150})]);
   const response=await GET(new NextRequest('http://localhost/api/sync/rollups',{headers:{authorization:'Bearer secret'}}));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({snapshots:[{key:'portfolio_range:x',rows:1}],sourceCandidates:{'7d':{error:'7d portfolio missing'},'30d':{rows:1,coverageComplete:true}}});
+  expect(await response.json()).toEqual({snapshots:[{key:'portfolio_range:x',rows:1}],incompleteRanges:[],portfolioComplete:true,sourceCandidates:{'7d':{error:'7d portfolio missing'},'30d':{rows:1,coverageComplete:true}}});
   expect(upsert).toHaveBeenCalledWith(expect.objectContaining({key:'source_candidates:berlin-v5:2026-08-06:2026-09-04'}),{onConflict:'key'});
   expect(acquireHistorySyncLock).toHaveBeenCalledTimes(1);expect(release).toHaveBeenCalledTimes(1);
   expect((await GET(new NextRequest('http://localhost/api/sync/rollups'))).status).toBe(401);
+ });
+ it('publishes short-range candidates despite incomplete annual coverage and reports the partial result',async()=>{
+  const{GET}=await import('@/app/api/sync/rollups/route');const{NextRequest}=await import('next/server');
+  const incompleteRanges=[{period:'all',from:'2025-09-05',to:'2026-09-04',confirmedDays:116,totalDays:365}];
+  refreshLongPortfolioRangeSnapshots.mockResolvedValue({snapshots:[{key:'portfolio_range:x',rows:1}],incompleteRanges});
+  loadPortfolioFromCache.mockResolvedValue(portfolio(['376']));loadRows.mockResolvedValue([rRow('376','dead','N/A',{total_click:150})]);
+  const response=await GET(new NextRequest('http://localhost/api/sync/rollups',{headers:{authorization:'Bearer secret'}}));
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({snapshots:[{key:'portfolio_range:x',rows:1}],incompleteRanges,portfolioComplete:false,sourceCandidates:{'7d':{rows:1,coverageComplete:true},'30d':{rows:1,coverageComplete:true}}});
+  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({key:'source_candidates:berlin-v5:2026-08-29:2026-09-04'}),{onConflict:'key'});
+  expect(upsert).toHaveBeenCalledWith(expect.objectContaining({key:'source_candidates:berlin-v5:2026-08-06:2026-09-04'}),{onConflict:'key'});
+  expect(release).toHaveBeenCalledTimes(1);
+ });
+ it('keeps database failures fatal and releases the lease without publishing candidates',async()=>{
+  const{GET}=await import('@/app/api/sync/rollups/route');const{NextRequest}=await import('next/server');
+  refreshLongPortfolioRangeSnapshots.mockRejectedValue(new Error('database unavailable'));
+  const response=await GET(new NextRequest('http://localhost/api/sync/rollups',{headers:{authorization:'Bearer secret'}}));
+  expect(response.status).toBe(500);expect(loadPortfolioFromCache).not.toHaveBeenCalled();expect(upsert).not.toHaveBeenCalled();expect(release).toHaveBeenCalledTimes(1);
  });
 });
