@@ -24,6 +24,23 @@ describe('materialized LTV cohort access',()=>{
   await expect(getLtvCohorts({},malformed)).rejects.toThrow('403');
   expect(rpc).not.toHaveBeenCalled();
  });
+ it.each(['','  '])('treats blank source inputs %j as all sources when the partner form is submitted',async blank=>{
+  const{getLtvCohorts}=await import('./cohorts');
+  rpc.mockImplementation(async(_name,args)=>({data:args.p_source===null&&args.p_sub_source===null?[row,{...row,source_id:'',sub_source:'',registrations:'3'}]:[],error:null}));
+  const result=await getLtvCohorts({source:blank,subSource:blank},access('admin'));
+  expect(rpc).toHaveBeenCalledWith('ltv_cohorts_internal_v1',{p_source:null,p_sub_source:null});
+  expect(result.map(row=>row.registrations)).toEqual([2,3]);
+ });
+ it('retains mandatory source scopes when blank optional filters mean all allowed sources',async()=>{
+  const{getLtvCohorts}=await import('./cohorts');
+  await getLtvCohorts({source:'',subSource:' '},access('employee',{affiliate:['6'],source:['own']}));
+  expect(rpc).toHaveBeenCalledWith('ltv_cohorts_scoped_v1',expect.objectContaining({p_affiliate_ids:['6'],p_source_ids:['own'],p_source:null,p_sub_source:null}));
+ });
+ it('preserves nonblank source identifiers exactly, including zero and meaningful spaces',async()=>{
+  const{getLtvCohorts}=await import('./cohorts');
+  await getLtvCohorts({source:'0',subSource:' with spaces '},access('admin'));
+  expect(rpc).toHaveBeenCalledWith('ltv_cohorts_internal_v1',{p_source:'0',p_sub_source:' with spaces '});
+ });
  it('uses the scoped snapshot RPC with every mandatory scope and request filter',async()=>{
   const {getLtvCohorts}=await import('./cohorts');
   await getLtvCohorts({source:'s1',subSource:'ss1'},access('partner',{affiliate:['a1'],offer:['o1'],campaign:['c1'],source:['s1'],sub_source:['ss1']}));
