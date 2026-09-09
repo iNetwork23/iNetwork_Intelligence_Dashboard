@@ -10,6 +10,10 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Dieses Gerät ist registriert \((\d+) insgesamt\)\.$/,'This device is registered ($1 total).',/^This device is registered \((\d+) total\)\.$/,'Dieses Gerät ist registriert ($1 insgesamt).'],
+ [/^Dieses Gerät ist nicht registriert \((\d+) insgesamt\)\.$/,'This device is not registered ($1 total).',/^This device is not registered \((\d+) total\)\.$/,'Dieses Gerät ist nicht registriert ($1 insgesamt).'],
+ [/^(\d+) aktive Sperren$/,'$1 active blocks',/^(\d+) active blocks$/,'$1 aktive Sperren'],
+ [/^(\d+) offene Ausschalt-Kandidaten$/,'$1 open switch-off candidates',/^(\d+) open switch-off candidates$/,'$1 offene Ausschalt-Kandidaten'],
  [/^(\d+(?:,\d+)?) % der tracked SOIs in höchstens 15 Sekunden$/,'$1 % of tracked SOIs within 15 seconds',/^(\d+(?:,\d+)?) % of tracked SOIs within 15 seconds$/,'$1 % der tracked SOIs in höchstens 15 Sekunden'],
  [/^(\d+(?:,\d+)?) % sehr schnelle tracked SOIs$/,'$1 % very fast tracked SOIs',/^(\d+(?:,\d+)?) % very fast tracked SOIs$/,'$1 % sehr schnelle tracked SOIs'],
  [/^(\d+) unabhängige Coin-Nutzer ohne Zahler · Null-Sale-Wahrscheinlichkeit (\d+(?:,\d+)?) %$/,'$1 independent coin users without payers · Zero-sale probability $2 %',/^(\d+) independent coin users without payers · Zero-sale probability (\d+(?:,\d+)?) %$/,'$1 unabhängige Coin-Nutzer ohne Zahler · Null-Sale-Wahrscheinlichkeit $2 %'],
