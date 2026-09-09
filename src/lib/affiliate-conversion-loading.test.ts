@@ -56,9 +56,26 @@ it('uses the last database row even when its raw event is filtered and escapes c
   expect(result.at(-1)?.transaction_id).toBe('tx-1000');
 });
 
-it('fails closed on a later database error instead of accepting the first page', async () => {
-  responses = [{data: page()}, {data: {message: 'canceling statement due to statement timeout', code: '57014'}, status: 500}];
-  await expect(loadAffiliateConversionsFromCache('154', 90, now)).rejects.toThrow('Supabase affiliate conversions: canceling statement due to statement timeout');
+it('fails closed on a later general database error instead of accepting the first page', async () => {
+  responses = [{data: page()}, {data: {message: 'permission denied', code: '42501'}, status: 403}];
+  await expect(loadAffiliateConversionsFromCache('154', 90, now)).rejects.toThrow('Supabase affiliate conversions: permission denied');
+  expect(requests).toHaveLength(2);
+});
+
+it('retries only a timed-out page with a smaller limit at the same cursor and preserves all rows', async () => {
+  responses = [{data: page()}, {data: {message: 'canceling statement due to statement timeout', code: '57014'}, status: 500}, {data: Array.from({length: 500}, (_,i)=>row(i+1000))}, {data: [row(1500)]}];
+  const result=await loadAffiliateConversionsFromCache('154',90,now);
+  expect(result).toHaveLength(1501);
+  expect(new Set(result.map(item=>item.transaction_id)).size).toBe(1501);
+  expect(requests.map(({url})=>url.searchParams.get('limit'))).toEqual(['1000','1000','500','500']);
+  expect(requests[1].url.searchParams.get('or')).toBe(requests[2].url.searchParams.get('or'));
+  expect(requests[3].url.searchParams.get('or')).toContain('id.gt."id-01499"');
+});
+
+it('bounds statement-timeout retries and never returns a partial page sequence', async () => {
+  responses=[{data:page()},...Array.from({length:4},()=>({data:{message:'canceling statement due to statement timeout',code:'57014'},status:500}))];
+  await expect(loadAffiliateConversionsFromCache('154',90,now)).rejects.toThrow('Supabase affiliate conversions: canceling statement due to statement timeout');
+  expect(requests.map(({url})=>url.searchParams.get('limit'))).toEqual(['1000','1000','500','250','125']);
 });
 
 it.each(['missing', 'invalid', 'unchanged'])('rejects a %s cursor without looping or returning partial data', async kind => {
