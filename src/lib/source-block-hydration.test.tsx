@@ -42,6 +42,7 @@ it('hydrates the streamed block register and its control before translating, and
  expect(modal.querySelector('#source-block-title')?.textContent).toBe('Sub1: Unblock');
  expect([...modal.querySelectorAll('.sourceBlockScope dd')].map(e=>e.textContent)).toEqual(['Standard','App installieren','Source: Standard · Sub1: App installieren']);
  expect(modal.querySelector('.sourceBlockCancel')?.textContent).toBe('Cancel');
+ expect(modal.querySelector('.sourceBlockImpact')?.textContent).toBe('Payout and the partner postback return to normal afterwards.');
  expect(modal.querySelector('.sourceBlockClose')?.getAttribute('aria-label')).toBe('Close dialog');
  vi.mocked(fetch).mockResolvedValueOnce({ok:true,json:async()=>({events:[{id:'event',at:'2026-08-01T12:00:00Z',action:'reconcile_ok',actorId:'Standard',error:'App installieren'}]})} as Response);
  await act(async()=>modal.querySelector<HTMLButtonElement>('.sourceBlockHistoryToggle')!.click());
