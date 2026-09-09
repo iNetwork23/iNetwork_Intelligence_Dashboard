@@ -128,6 +128,8 @@ export default function SourceBlockButton(props: Props) {
   const [affectedOffers, setAffectedOffers] = useState<AffectedOffer[]>([]);
   const [history, setHistory] = useState<HistoryState>({ status: "idle", events: [], error: "" });
   const dialogRef = useRef<HTMLDivElement>(null);
+  const busyRef = useRef(busy);
+  useEffect(() => { busyRef.current = busy; }, [busy]);
   const showMoney = props.showMoney !== false;
   const metrics = props.metrics;
 
@@ -154,17 +156,33 @@ export default function SourceBlockButton(props: Props) {
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const controls = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]') ?? [])
+      .filter(element => !element.closest('[hidden],[inert]') && getComputedStyle(element).display !== 'none' && getComputedStyle(element).visibility !== 'hidden');
+    const focusFirst = () => (controls()[0] ?? dialogRef.current)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) setOpen(false);
+      if (event.key === "Escape" && !busyRef.current) { event.preventDefault(); setOpen(false); }
+      if (event.key !== 'Tab') return;
+      const items = controls(), first = items[0], last = items.at(-1), active = document.activeElement;
+      if (!items.length) { event.preventDefault(); dialogRef.current?.focus(); }
+      else if (!dialogRef.current?.contains(active) || active === dialogRef.current || (event.shiftKey ? active === first : active === last)) {
+        event.preventDefault(); (event.shiftKey ? last : first)?.focus();
+      }
     };
+    const onFocus = (event: FocusEvent) => { if (event.target instanceof Node && !dialogRef.current?.contains(event.target)) focusFirst(); };
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKeyDown);
-    requestAnimationFrame(() => dialogRef.current?.focus());
+    document.addEventListener('focusin', onFocus);
+    focusFirst();
+    const frame = requestAnimationFrame(() => { if (!dialogRef.current?.contains(document.activeElement)) focusFirst(); });
     return () => {
+      cancelAnimationFrame(frame);
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener('focusin', onFocus);
+      if (opener?.isConnected) opener.focus();
     };
-  }, [open, busy]);
+  }, [open]);
 
   const active = useMemo(
     () =>
@@ -233,7 +251,7 @@ export default function SourceBlockButton(props: Props) {
   }, [autoOpen]);
 
   const openProductWide = async () => {
-    openDialog(true); setConfirmation(""); setAffectedOffers([]); setBusy(true); setError("");
+    openDialog(true); setConfirmation(""); setRequiredConfirmation(""); setAffectedOffers([]); setBusy(true); setError("");
     try {
       const params = new URLSearchParams({action:"preview_across_offers",affiliateId:props.affiliateId,affiliateName:props.affiliateName,offerId:props.offerId,offerName:props.offerName,trafficMode:props.trafficMode,level:props.level,mainValue:props.mainValue||"",subValue:props.subValue||""});
       const response=await fetch(`/api/source-blocks?${params}`,{cache:"no-store"}),body=await response.json();
@@ -257,6 +275,7 @@ export default function SourceBlockButton(props: Props) {
   };
 
   const activate = async () => {
+    if (productWide && (!requiredConfirmation || !affectedOffers.length || error || confirmation !== requiredConfirmation)) return;
     if (!reasonCategory) {
       setError("Grundkategorie fehlt");
       return;
@@ -405,9 +424,9 @@ export default function SourceBlockButton(props: Props) {
             )}
             <div><dt>First-Sale-Rate</dt><dd>{metrics.sois > 0 ? `${(metrics.firstSales / metrics.sois * 100).toFixed(1).replace(".", ",")} % (${integer(metrics.firstSales)})` : "–"}</dd></div>
             <div><dt>Klicks</dt><dd>{props.trafficMode === "api" ? "n/a – clickless" : integer(metrics.clicks)}</dd></div>
-            <div><dt>Reife · Lead-Status</dt><dd>{[metrics.maturity, metrics.leadStatus].filter(Boolean).join(" · ") || "–"}</dd></div>
+            <div><dt>Reife · Lead-Status</dt><dd>{metrics.maturity || metrics.leadStatus ? [metrics.maturity, metrics.leadStatus].filter(Boolean).map((text,index) => <span key={index}>{index > 0 && ' · '}<span>{text}</span></span>) : '–'}</dd></div>
             {metrics.trend !== undefined && (
-              <div className="sourceBlockScopeWide"><dt>Trend</dt><dd>{metrics.trend ?? "nicht berechnet"}</dd></div>
+              <div className="sourceBlockScopeWide"><dt>Trend</dt><dd>{(metrics.trend ?? "nicht berechnet").split(' · ').map((text,index) => <span key={index}>{index > 0 && ' · '}<span>{text}</span></span>)}</dd></div>
             )}
             <div className="sourceBlockScopeWide"><dt>Sperrstatus</dt><dd>{blockStatusLabel}</dd></div>
           </dl>
@@ -492,6 +511,7 @@ export default function SourceBlockButton(props: Props) {
           </div>
         )}
 
+        {error && <small className="sourceBlockError" role="alert">{error}</small>}
         <footer className="sourceBlockDialogActions">
           <button
             type="button"
@@ -505,7 +525,7 @@ export default function SourceBlockButton(props: Props) {
             type="button"
             className={(active||recovering)&&!productWide ? "sourceReactivate" : "sourceConfirmBlock"}
             onClick={(active||recovering)&&!productWide ? deactivate : activate}
-            disabled={busy || (productWide && confirmation !== requiredConfirmation) || (activating && !reasonCategory)}
+            disabled={busy || (productWide && (!requiredConfirmation || !affectedOffers.length || Boolean(error) || confirmation !== requiredConfirmation)) || (activating && !reasonCategory)}
           >
             {busy
               ? "Wird verifiziert …"
@@ -565,7 +585,7 @@ export default function SourceBlockButton(props: Props) {
       {!locked && !recoverable && (
         <button type="button" className="sourceBlockAllProductsButton" onClick={openProductWide}>{ACTION_WORDS.blockAcrossOffersScoped(controlScope)}</button>
       )}
-      {error && (
+      {error && !open && (
         <small className="sourceBlockError" role="alert">
           {error}
         </small>

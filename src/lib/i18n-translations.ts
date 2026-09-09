@@ -1089,5 +1089,13 @@ export const translations = {
   "Ausreichend Test-SOIs, aber kein First-Sale und negativer Profit.": "Enough test SOIs, but no first sale and negative profit.",
   "Partnern wurden innerhalb des Zeitbudgets ausgewertet. Quellen fehlender Partner sind nicht bewertet und fehlen in dieser Liste.": "partners were evaluated within the time budget. Sources from missing partners have not been evaluated and are absent from this list.",
   "Partner konnten die Conversions nicht geladen werden – deren Ausschalt-Kandidaten stehen fail-closed auf BEOBACHTEN.": "partners could not load conversions – their switch-off candidates remain on WATCH as a precaution.",
-  "Quellen gleichzeitig – bitte zuerst eine Auswahl aufheben.": "sources at once – please deselect one first."
+  "Quellen gleichzeitig – bitte zuerst eine Auswahl aufheben.": "sources at once – please deselect one first.",
+  "Source-Historie ist unvollständig. Keine Änderung durchgeführt.": "Source history is incomplete. No changes were made.",
+  "Ab Bestätigung werden Vergütung und Partner-Postback für diese Auswahl bei diesem Affiliate und Offer gesperrt – campaignübergreifend. Eingehenden Traffic kann nur der Partner selbst stoppen.": "After confirmation, payout and the partner postback will be blocked for this selection, affiliate and offer across campaigns. Only the partner can stop incoming traffic.",
+  "Diese besonders geschützte Aktion setzt Payout und SOI-/Lead-Postback für die Quelle in allen serverseitig gefundenen Offers dieses Affiliates auf aus. Bei einem Teilfehler werden neu angelegte Regeln zurückgerollt.": "This protected action disables payout and SOI/lead postbacks for the source in all matching offers for this affiliate. Newly created rules are rolled back if any part fails.",
+  "Profit – (unter Reifeschwelle (≥ 100 Klicks oder ≥ 20 SOIs))": "Profit – (below maturity threshold (≥ 100 clicks or ≥ 20 SOIs))",
+  "SOIs – (unter Reifeschwelle (≥ 100 Klicks oder ≥ 20 SOIs))": "SOIs – (below maturity threshold (≥ 100 clicks or ≥ 20 SOIs))",
+  "7 Tage vs. 7 Tage davor": "7 days vs. the previous 7 days",
+  "Nach Everflow-Prüfung deaktivieren": "Deactivate after checking Everflow",
+  "Sperre aufheben": "Unblock"
 } as const;
