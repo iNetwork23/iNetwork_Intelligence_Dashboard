@@ -70,4 +70,11 @@ describe('resumable fraud conversion backfill',()=>{
     const ready={...initialFraudBackfillState(now),phase:'rolling' as const,coveredFrom:'2026-04-02',coveredThrough:'2026-07-30',parityVerifiedThrough:'2026-07-30',readyAt:'2026-07-30T10:00:00.000Z',lastParity:{from:'2026-07-28',to:'2026-07-30',expected:{soi:1,coin_spend:0,first_sale:0,rebill:0},stored:{soi:1,coin_spend:0,first_sale:0,rebill:0},expectedDigest:'same',storedDigest:'same',reportHasActivity:true,verified:true}};
     expect(invalidateFraudBackfillState(ready)).toMatchObject({phase:'rolling',readyAt:null,parityVerifiedThrough:null,lastParity:null});
   });
+  it.each(['missing-proof','wrong-digest','coverage-gap','oversized-window'])('never preserves unproven history during %s recovery',scenario=>{
+    const counts={soi:1,coin_spend:0,first_sale:0,rebill:0};
+    const ready={...initialFraudBackfillState(now),phase:'rolling' as const,coveredFrom:'2026-04-02',coveredThrough:'2026-07-30',parityVerifiedThrough:'2026-07-30',readyAt:now.toISOString(),lastParity:{from:'2026-07-28',to:'2026-07-30',expected:counts,stored:counts,expectedDigest:'same',storedDigest:scenario==='wrong-digest'?'wrong':'same',reportHasActivity:true,verified:true}};
+    const state=scenario==='missing-proof'?{...ready,lastParity:null}:ready;
+    const window={mode:'rolling' as const,from:scenario==='coverage-gap'?'2026-08-02':scenario==='oversized-window'?'2026-07-27':'2026-07-28',to:scenario==='coverage-gap'?'2026-08-03':'2026-07-30'};
+    expect(normalizeFraudBackfillState(invalidateFraudBackfillState(state,window))).toMatchObject({phase:'backfill',nextFrom:'2026-04-02',coveredFrom:null,coveredThrough:null,readyAt:null,parityVerifiedThrough:null});
+  });
 });

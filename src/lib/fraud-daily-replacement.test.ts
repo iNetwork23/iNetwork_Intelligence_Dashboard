@@ -118,3 +118,27 @@ it('uses the Berlin date at midnight even before the UTC date changes',async()=>
  const result=await runFraudConversionSync(at);
  expect(result.skipped).toBe(false);expect(fixture.replacements.map(row=>row.from)).toEqual(['2026-09-09']);expect(fixture.checkpoint.coveredThrough).toBe('2026-09-09');
 });
+
+it.each(['conversion','report'])('recovers a failed rolling %s refresh without restarting verified history',async failure=>{
+ fixture.checkpoint=rollingThrough('2026-09-08','2026-09-08T10:00:00Z');
+ const recent=['06','07','08'].map(day=>raw(`recent-${day}`,`2026-09-${day}T10:00:00Z`));fixture.raw=recent;
+ fixture.failDay=failure==='conversion'?'2026-09-07':'';fixture.failMetrics=failure==='report';
+ await expect(runFraudConversionSync(now)).rejects.toThrow(failure==='conversion'?'day replacement failed':'metric replacement failed');
+ expect(await loadFraudBackfillState()).toMatchObject({phase:'backfill',windowFrom:'2026-05-12',windowTo:'2026-09-08',nextFrom:'2026-09-06',readyAt:null,parityVerifiedThrough:null,lastParity:null});
+ fixture.failDay='';fixture.failMetrics=false;fixture.replacements=[];fixture.raw=recent.slice(0,1);
+ expect(await runFraudConversionSync(now)).toMatchObject({ready:false,parity:{verified:true}});
+ expect(fixture.checkpoint).toMatchObject({nextFrom:'2026-09-07',readyAt:null,parityVerifiedThrough:'2026-09-06'});
+ fixture.raw=recent.slice(1);
+ expect(await runFraudConversionSync(now)).toMatchObject({ready:true,parity:{verified:true}});
+ expect(fixture.replacements.map(row=>row.from)).toEqual(['2026-09-06','2026-09-07','2026-09-08']);
+ expect(fixture.checkpoint).toMatchObject({phase:'rolling',coveredFrom:'2026-05-12',coveredThrough:'2026-09-08',parityVerifiedThrough:'2026-09-08'});
+});
+
+it('retains the exact newly uncovered day after an interrupted Berlin midnight catch-up',async()=>{
+ const at=new Date('2026-09-08T22:05:00Z');fixture.checkpoint=rollingThrough('2026-09-08','2026-09-08T22:04:00Z');fixture.raw=[raw('midnight','2026-09-08T22:01:00Z')];fixture.failMetrics=true;
+ await expect(runFraudConversionSync(at)).rejects.toThrow('metric replacement failed');
+ expect(await loadFraudBackfillState()).toMatchObject({nextFrom:'2026-09-09',windowTo:'2026-09-09',readyAt:null});
+ fixture.failMetrics=false;fixture.replacements=[];
+ expect(await runFraudConversionSync(at)).toMatchObject({ready:true,parity:{verified:true}});
+ expect(fixture.replacements.map(row=>row.from)).toEqual(['2026-09-09']);
+});
