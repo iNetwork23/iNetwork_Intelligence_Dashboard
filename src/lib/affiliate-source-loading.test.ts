@@ -76,14 +76,28 @@ it('accepts absent affiliate-day records and explicitly empty snapshots', async 
   expect(rows).toHaveLength(16);
   expect(rows.reduce((sum, row) => sum + row.reporting.cv, 0)).toBe(16);
 });
-it('builds annual activity one day at a time without retaining the expanded history',async()=>{
+it('builds identical annual activity with bounded batch reads instead of one round trip per day',async()=>{
  const entries=await loadAffiliateActivityIndex('154',range);
  expect(entries).toHaveLength(1);expect(entries[0].lastLeadDate).toBe('2026-08-18');
- expect(state.batches).toHaveLength(18);expect(state.batches.every(batch=>batch.length===1)).toBe(true);
+ expect(state.batches).toHaveLength(3);expect(state.batches.every(batch=>batch.length<=8)).toBe(true);expect(state.peak).toBe(1);
  expect(writes).toHaveBeenCalledWith(expect.objectContaining({value:expect.objectContaining({entries:[['50','154','5','tracked','source','sub','2026-08-18']]})}),{onConflict:'key'});
 });
 it('does not publish an annual activity memo after a later malformed day',async()=>{
  state.malformedDay='2026-08-09';await expect(loadAffiliateActivityIndex('154',range)).rejects.toThrow('invalid snapshot');
  // Valid earlier daily summaries may remain; no partial annual result is published.
+ expect(writes.mock.calls.some(call=>!Array.isArray(call[0]))).toBe(false);
+});
+
+it('shrinks large activity reads and still preserves every accepted day',async()=>{
+ state.batchLimit=2;
+ const entries=await loadAffiliateActivityIndex('154',range);
+ expect(entries).toHaveLength(1);expect(entries[0].lastLeadDate).toBe('2026-08-18');
+ expect(state.batches.slice(0,3).map(batch=>batch.length)).toEqual([8,4,2]);
+ expect(state.batches.slice(2).flat()).toHaveLength(18);expect(state.peak).toBe(1);
+});
+it('does not retry an activity permission failure or publish an annual result',async()=>{
+ state.failDay='2026-08-09';state.failure='permission denied';
+ await expect(loadAffiliateActivityIndex('154',range)).rejects.toThrow('permission denied');
+ expect(state.batches).toHaveLength(2);
  expect(writes.mock.calls.some(call=>!Array.isArray(call[0]))).toBe(false);
 });
