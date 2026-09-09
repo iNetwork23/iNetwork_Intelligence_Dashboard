@@ -114,6 +114,39 @@ export const isValidActivityMemo=(value:unknown,fingerprint:string):value is Act
 type DirectMemoTuple=[string,string,string,string,string|null,string|null,string|null];
 export const encodeActivityEntries=(entries:SourceActivityEntry[]):DirectMemoTuple[]=>entries.map(e=>[e.identity.offerId,e.identity.affiliateId,e.identity.offerUrlId,e.identity.trafficMode,e.identity.mainValue,e.identity.subValue,e.lastLeadDate]);
 export const decodeActivityEntries=(tuples:unknown[]):SourceActivityEntry[]=>(tuples as DirectMemoTuple[]).map(([offerId,affiliateId,offerUrlId,trafficMode,mainValue,subValue,lastLeadDate])=>({identity:{pathKey:`${offerId}|${affiliateId}|0|${offerUrlId}`,offerId,affiliateId,offerUrlId,sourceId:mainValue===null?'Ohne Source-ID':mainValue,subSource:subValue===null?'Ohne Sub-Source':subValue,trafficMode:trafficMode==='api'?'api':'tracked',mainValue,subValue},lastLeadDate}));
+type ActivityDayMemo={version:1;date:string;affiliateId:string;generation:string;entries:DirectMemoTuple[]};
+const activityDayKey=(date:string,affiliateId:string)=>`source_activity_day:berlin-v5:${date}:${affiliateId}`;
+function validActivityDay(value:unknown,marker:SourceSnapshotGeneration,affiliateId:string):value is ActivityDayMemo{
+ const day=value as ActivityDayMemo|null;
+ return Boolean(day&&day.version===1&&day.date===marker.date&&day.affiliateId===affiliateId&&day.generation===marker.generation&&Array.isArray(day.entries)&&day.entries.every(tuple=>
+  Array.isArray(tuple)&&tuple.length===7&&typeof tuple[0]==='string'&&tuple[1]===affiliateId&&typeof tuple[2]==='string'&&(tuple[3]==='api'||tuple[3]==='tracked')&&
+  (tuple[4]===null||typeof tuple[4]==='string')&&(tuple[5]===null||typeof tuple[5]==='string')&&(tuple[6]===null||tuple[6]===marker.date)));
+}
+/** Each mutable date key carries the exact immutable source generation. A changed
+ * day replaces its summary; merging all accepted days also handles removed leads. */
+async function visitActivityDays(affiliateId:string,markers:SourceSnapshotGeneration[],visit:(entries:SourceActivityEntry[])=>void){
+ for(let start=0;start<markers.length;start+=8){
+  const batch=markers.slice(start,start+8),cached=await getSupabaseAdmin().from('sync_state').select('key,value').in('key',batch.map(marker=>activityDayKey(marker.date,affiliateId))).abortSignal(new AbortController().signal);
+  // A cache failure must fall back to the exact raw snapshot, never to no activity.
+  const byKey=new Map((cached.error?[]:cached.data||[]).map(row=>[row.key,row.value])),writes:Array<{key:string;value:ActivityDayMemo}>=[];
+  for(const marker of batch){
+   const key=activityDayKey(marker.date,affiliateId),value=byKey.get(key);
+   if(validActivityDay(value,marker,affiliateId)){visit(decodeActivityEntries(value.entries));continue}
+   const raw=await getSupabaseAdmin().from('sync_state').select('value').in('key',[`source_day:${marker.date}:${marker.generation}:${affiliateId}`]).abortSignal(new AbortController().signal);
+   if(raw.error)throw new Error(`Supabase source snapshots: ${raw.error.message}`);
+   const rows:ReportRow[]=[];
+   for(const item of raw.data||[]){
+    const snapshot=item.value as{date?:string;affiliate_id?:string;affiliate_name?:string;rows?:SourceSnapshotRow[]}|null;
+    if(!snapshot||snapshot.date!==marker.date||snapshot.affiliate_id!==affiliateId||!Array.isArray(snapshot.rows))throw new Error('Supabase source snapshots: invalid snapshot');
+    const decoded=snapshot.rows.filter(row=>row.c==='0').map(row=>decodeSourceSnapshotRow(row,affiliateId,snapshot.affiliate_name||'N/A'));
+    rows.push(...mapAffiliateSourceRows(decoded,marker.date));
+   }
+   const entries=buildSourceActivityIndex(rows);visit(entries);
+   writes.push({key,value:{version:1,date:marker.date,affiliateId,generation:marker.generation,entries:encodeActivityEntries(entries)}});
+  }
+  if(writes.length){const saved=await getSupabaseAdmin().from('sync_state').upsert(writes,{onConflict:'key'});if(saved.error)console.warn('Activity day memo write failed',saved.error.message)}
+ }
+}
 export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:string;to:string}):Promise<SourceActivityEntry[]>{
  const markerQuery=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`source_day_generation:${range.from}`).lte('key',`source_day_generation:${range.to}`).order('key');
  if(markerQuery.error)throw new Error(`Supabase activity markers: ${markerQuery.error.message}`);
@@ -123,13 +156,13 @@ export async function loadAffiliateActivityIndex(affiliateId:string,range:{from:
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
  if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeActivityEntries(memo.data!.value.entries);
  const activity=new Map<string,SourceActivityEntry>();
- await visitAffiliateSourceRowsRangeFromCache(range,affiliateId,rows=>{
-  for(const entry of buildSourceActivityIndex(rows)){
+ await visitActivityDays(affiliateId,available,entries=>{
+  for(const entry of entries){
    const identity=entry.identity,key=`${identity.pathKey}|${identity.trafficMode}|${identity.mainValue||''}|${identity.subValue||''}`,previous=activity.get(key);
    if(!previous)activity.set(key,entry);
    else if(entry.lastLeadDate&&(!previous.lastLeadDate||entry.lastLeadDate>previous.lastLeadDate))previous.lastLeadDate=entry.lastLeadDate;
   }
- },{batchSize:1,directOnly:true});
+ });
  const entries=[...activity.values()];
  const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries:encodeActivityEntries(entries)}},{onConflict:'key'});
  if(write.error)console.warn('Activity memo write failed',write.error.message);
