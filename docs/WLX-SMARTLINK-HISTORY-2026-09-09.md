@@ -1,0 +1,7 @@
+# Smartlink-Zustand nach Browser-Zurück wiederherstellen
+
+Produktiv beobachtet: Das Verzeichnis startete mit allen Partnern; danach wurden Affiliate 6 und Campaign 2 gewählt. Nach dem Wechsel in den Partnerarbeitsbereich und Browser-Zurück blieb `partner=6&open=2` in der URL, die wiederhergestellte Ansicht zeigte jedoch alle Partner und keine geöffnete Campaign. Ein vollständiges Neuladen derselben URL stellte den richtigen Zustand wieder her.
+
+Der Picker initialisierte drei lokale Zustände aus den ursprünglichen Server-Props und hörte erst nach dem Mount auf popstate. Bei einer aus dem Routercache wieder montierten Seite war dieses Ereignis bereits vorbei. Der Picker beobachtet jetzt die URL mit `useSyncExternalStore`, einschließlich des aktuellen Werts beim Mount und der eigenen URL-Änderungsereignisse. Die Server-Props liefern weiterhin den SSR-Snapshot. Suche, Partner und Disclosure stammen anschließend aus der tatsächlichen Browser-URL. Die Auswahl „Alle“ bleibt auch in einem bestehenden Affiliate-Kontext möglich.
+
+Die neue DOM-Regression reproduzierte den verpassten popstate vor dem Mount und scheiterte zunächst. Sie prüft den vollständigen Ablauf mit Auswahl, Disclosure, Unmount und bereits abgeschlossenem Zurückereignis. Ein weiterer Fall prüft Änderungen bei gemounteter Ansicht und das Zurücksetzen von Filter und Disclosure. Bestehende Render-/Scope-/Deep-Link-Verträge bleiben erhalten.
