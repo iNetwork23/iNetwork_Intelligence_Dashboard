@@ -1176,5 +1176,13 @@ export const translations = {
   "z. B. Publisher": "e.g. publisher",
   "z. B. P-3591625022": "e.g. P-3591625022",
   "Fraud Detection konnte nicht geladen werden": "Could not load Fraud Detection",
-  "Migration, Backfill und Supabase-Verbindung prüfen.": "Check the migration, backfill and Supabase connection."
+  "Migration, Backfill und Supabase-Verbindung prüfen.": "Check the migration, backfill and Supabase connection.",
+  "Sperre": "Block",
+  "unbekannt": "unknown",
+  "Kohorte noch nicht reif": "Cohort is not mature yet",
+  "Keine nutzerverknüpfbaren Registrierungen": "No registrations linked to customer identities",
+  "Trafficpfad unbekannt · Identitätsmetriken deaktiviert": "Traffic path unknown · Identity metrics disabled",
+  "Join-Coverage unter 80 % · Identitätsmetriken unbekannt": "Join coverage below 80 % · Identity metrics unknown",
+  "Widerspruch zwischen Report und Conversion-Cache · Identitätsmetriken unbekannt": "Report and conversion cache disagree · Identity metrics unknown",
+  "Keine passende Offer-Baseline": "No matching offer baseline"
 } as const;

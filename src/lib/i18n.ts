@@ -10,6 +10,9 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+(?:,\d+)?) % der tracked SOIs in höchstens 15 Sekunden$/,'$1 % of tracked SOIs within 15 seconds',/^(\d+(?:,\d+)?) % of tracked SOIs within 15 seconds$/,'$1 % der tracked SOIs in höchstens 15 Sekunden'],
+ [/^(\d+(?:,\d+)?) % sehr schnelle tracked SOIs$/,'$1 % very fast tracked SOIs',/^(\d+(?:,\d+)?) % very fast tracked SOIs$/,'$1 % sehr schnelle tracked SOIs'],
+ [/^(\d+) unabhängige Coin-Nutzer ohne Zahler · Null-Sale-Wahrscheinlichkeit (\d+(?:,\d+)?) %$/,'$1 independent coin users without payers · Zero-sale probability $2 %',/^(\d+) independent coin users without payers · Zero-sale probability (\d+(?:,\d+)?) %$/,'$1 unabhängige Coin-Nutzer ohne Zahler · Null-Sale-Wahrscheinlichkeit $2 %'],
  [/^(\d+) Kandidaten$/,'$1 candidates',/^(\d+) candidates$/,'$1 Kandidaten'],
  [/^(\d+) von (\d+) Kandidaten$/,'$1 of $2 candidates',/^(\d+) of (\d+) candidates$/,'$1 von $2 Kandidaten'],
  [/^· (\d+) sichtbar$/,'· $1 visible',/^· (\d+) visible$/,'· $1 sichtbar'],
