@@ -16,7 +16,7 @@ const CANDIDATE_PERIODS=['30d','7d']as const;
 type CandidateResult={rows:number;coverageComplete:boolean}|{error:string};
 async function publishSourceCandidateRanges(started:number){
  const sourceCandidates:Record<'7d'|'30d',CandidateResult>={'7d':{error:'nicht gestartet'},'30d':{error:'nicht gestartet'}};
- // Conversions je Partner nur einmal je Lauf laden (beide Zeiträume nutzen dieselben 90 Tage); Reife-Kurzfassung nur im ersten Zeitraum persistieren; Memo nach dem letzten Zeitraum freigeben.
+ // Kleine Conversion-Ergebnisse zwischen Zeiträumen wiederverwenden; große Ergebnisse vollständig laden und danach freigeben. Reife-Kurzfassung nur im ersten Zeitraum persistieren; Memo nach dem letzten Zeitraum freigeben.
  const memo=memoizedConversionsLoader(),conversionsFor=memo.conversionsFor;
  for(const[index,period]of CANDIDATE_PERIODS.entries()){
   const rangeStarted=Date.now();

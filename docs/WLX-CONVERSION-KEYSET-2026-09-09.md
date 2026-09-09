@@ -1,0 +1,11 @@
+# Conversion-Leser ohne wachsenden OFFSET
+
+Der Source-Lauf auf PR #39 hat am 09.09.2026 um 10:02:51 UTC beide Kandidatenzeiträume veröffentlicht und die gemeinsame Sperre freigegeben. Der Speicherabbruch aus dem vorherigen Lauf ist dabei nicht wieder aufgetreten. Die Ergebnisse bleiben ausdrücklich unvollständig: 30 Tage 108 Zeilen, 7 Tage 106 Zeilen, jeweils eine fehlende Reifeauswertung wegen Conversion-Statement-Timeout bei Affiliate 154; zusätzlich überschritt Affiliate 6 im 7-Tage-Lauf das Partnerbudget. Die 503-Antwort kennzeichnet weiterhin den unvollständigen Jahres-Portfoliozeitraum.
+
+Die Produktionsabfrage verwendet bereits den gültigen partiellen Index `conversions_affiliate_converted_id_approved_idx`. EXPLAIN des bisherigen Lesers mit OFFSET 10000 zeigt jedoch 9305,41 geschätzte Startkosten, weil die vorangehenden Datensätze erneut durchlaufen werden. Es fehlt kein weiterer Index.
+
+Der Leser setzt jetzt nach dem letzten Datenbankpaar `(converted_at,id)` fort. Die nächste Abfrage behält Affiliate, approved/NULL-Status, Sortierung und 1000er Seitengröße bei, verwendet die unveränderte Zeitstempelpräzision und escaped beide Cursorwerte nach PostgREST-Syntax. Der Cursor stammt aus der vollständigen Datenbankseite, bevor ungültige Raw-Ereignisse herausgefiltert werden. Fehlende/ungültige oder unveränderte Cursor brechen ebenso wie spätere Datenbankfehler ab. Jeder Request erhält ein explizites AbortSignal, damit Nexts GET-Verarbeitung keine Antwortklone für den Cache zurückhält.
+
+Fünf neue Regressionen scheiterten am bisherigen Leser. Die Tests verwenden den echten Supabase/PostgREST-Client mit ausschließlich lokal abgefangenem HTTP-Transport und prüfen Zeitstempelgleichstände über zwei Seiten, Vollständigkeit, Status-/Affiliate-Grenzen, fehlenden OFFSET, Cursor-Escaping, gefilterte letzte Rohzeile, späte Fehler, ungültige Cursor und die bisherige stabile Kundenidentität. Die vorhandene statische Spaltenprüfung wurde um die beiden Cursorfelder ergänzt.
+
+Keine SQL-Migration, Änderung des Laufzeitlimits, Cronänderung oder Geschäftsaktion. Die produktive Nachprüfung muss zeigen, ob das bestehende Partnerzeitbudget für sämtliche Datenmengen ausreicht; das ist durch die lokale Regression allein nicht belegt.
