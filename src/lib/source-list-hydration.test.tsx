@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React,{act,Suspense,use} from 'react';
-import {hydrateRoot,type Root} from 'react-dom/client';
+import {createRoot,hydrateRoot,type Root} from 'react-dom/client';
 import {renderToString} from 'react-dom/server';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import LanguageProvider from '../app/components/LanguageProvider';
@@ -43,4 +43,18 @@ it('hydrates the delayed source list and preserves identities through localized 
  await act(async()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true})));expect(document.activeElement).toBe(close);
  await act(async()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));expect(document.querySelector('[role="dialog"]')).toBeNull();
  expect(document.activeElement).toBe(host.querySelector('.sourcesBulkButton'));expect(vi.mocked(fetch).mock.calls.every(([,options])=>options?.method===undefined)).toBe(true);
+});
+
+it('translates a missing source in the table and both previews without changing null in the underlying identity',async()=>{
+ const candidate:SourceCandidate={affiliateId:'6',affiliate:'Partner',offerId:'56',offer:'Offer',offerUrlId:'0',offerUrl:'N/A',trafficMode:'tracked',level:'main_source',mainValue:null,subValue:null,action:'BEOBACHTEN',severity:'warning',reason:'No data',clicks:0,sois:1,firstSales:0,rebills:0,revenue:0,payout:3,profit:-3,lastLeadDate:null,leadStatus:null};
+ const rows=prepareSourceCandidateRows([candidate],new Map(),{finance:true}),host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ await act(async()=>root!.render(<LanguageProvider><SourceCandidateList rows={rows} range="30d" openKey={null} initialFilters={DEFAULT_SOURCE_CANDIDATE_FILTERS} initialSort="profit" mayBlock finance/></LanguageProvider>));
+ expect(host.querySelector('td[data-label="Source"] b')?.textContent).toBe('not transmitted');
+ await act(async()=>host.querySelector<HTMLButtonElement>('.sourceBlockIconButton')!.click());
+ expect(document.querySelector('.sourceBlockScopeWide dd')?.textContent).toBe('Source: not transmitted');
+ await act(async()=>document.querySelector<HTMLButtonElement>('.sourceBlockClose')!.click());
+ await act(async()=>host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+ await act(async()=>host.querySelector<HTMLButtonElement>('.sourcesBulkButton')!.click());
+ expect(document.querySelector('.sourceBulkRows')?.textContent).toContain('Tracked · not transmitted');
+ expect(candidate.mainValue).toBeNull();expect(rows[0].mainValue).toBeNull();expect(vi.mocked(fetch).mock.calls.every(([,options])=>options?.method===undefined)).toBe(true);
 });

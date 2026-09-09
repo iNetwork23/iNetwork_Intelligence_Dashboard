@@ -10,6 +10,7 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+) Klicks ohne einen einzigen SOI\.$/,'$1 clicks without a single SOI.',/^(\d+) clicks without a single SOI\.$/,'$1 Klicks ohne einen einzigen SOI.'],
  [/^(\d+) Quelle sperren$/,'Block $1 source',/^Block (\d+) source$/,'$1 Quelle sperren'],
  [/^(\d+) Quellen sperren$/,'Block $1 sources',/^Block (\d+) sources$/,'$1 Quellen sperren'],
  [/^(\d+) Quelle jetzt sperren$/,'Block $1 source now',/^Block (\d+) source now$/,'$1 Quelle jetzt sperren'],
