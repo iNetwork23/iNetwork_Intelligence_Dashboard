@@ -10,6 +10,10 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+) Quelle sperren$/,'Block $1 source',/^Block (\d+) source$/,'$1 Quelle sperren'],
+ [/^(\d+) Quellen sperren$/,'Block $1 sources',/^Block (\d+) sources$/,'$1 Quellen sperren'],
+ [/^(\d+) Quelle jetzt sperren$/,'Block $1 source now',/^Block (\d+) source now$/,'$1 Quelle jetzt sperren'],
+ [/^(\d+) Quellen jetzt sperren$/,'Block $1 sources now',/^Block (\d+) sources now$/,'$1 Quellen jetzt sperren'],
  [/^(\d+) aktiv$/,'$1 active',/^(\d+) active$/,'$1 aktiv'],
  [/^Setting #(\d+) · Payout 0 · Postback aus$/,'Setting #$1 · Payout 0 · Postback off',/^Setting #(\d+) · Payout 0 · Postback off$/,'Setting #$1 · Payout 0 · Postback aus'],
  [/^Gesperrt seit (\d{2}\.\d{2}\.\d{4})$/,'Blocked since $1',/^Blocked since (\d{2}[./]\d{2}[./]\d{4})$/,'Gesperrt seit $1'],

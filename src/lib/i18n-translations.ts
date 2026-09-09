@@ -1,5 +1,9 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Vergütung und Partner-Postback gelten danach wieder normal.": "Payout and the partner postback return to normal afterwards.",
+  "Mehrfachauswahl · maximal": "Multiple selection · maximum",
+  "Pflicht · gilt für alle ausgewählten Quellen": "Required · applies to all selected sources",
+  "Ab Bestätigung werden Vergütung und Partner-Postback für jede ausgewählte Quelle bei ihrem Affiliate und Offer gesperrt – campaignübergreifend, nacheinander je Zeile. Eingehenden Traffic kann nur der Partner selbst stoppen.": "After confirmation, payout and partner postback are blocked for each selected source at its affiliate and offer, across campaigns and one row at a time. Only the partner can stop incoming traffic.",
   "Nur für eindeutig klickbasierten Traffic mit Klicks verfügbar.": "Only available for verified click-based traffic with recorded clicks.",
   "CVR und Profit-EPC werden nur für eindeutig klickbasierten Traffic mit Klicks angezeigt.": "CVR and profit EPC are only shown for verified click-based traffic with recorded clicks.",
   "CVR wird nur für eindeutig klickbasierten Traffic mit Klicks angezeigt.": "CVR is only shown for verified click-based traffic with recorded clicks.",
