@@ -22,7 +22,17 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^Letzter erfolgreicher Sync vor (\d+) (h|min) – Zahlen können veraltet sein$/,'Last successful sync $1 $2 ago – figures may be outdated',/^Last successful sync (\d+) (h|min) ago – figures may be outdated$/,'Letzter erfolgreicher Sync vor $1 $2 – Zahlen können veraltet sein'],
  [/^LTV-Kohorten (\d{2}:\d{2})$/,'LTV cohorts $1',/^LTV cohorts (\d{2}:\d{2})$/,'LTV-Kohorten $1'],
 ];
-function translateStatus(text:string,locale:DashboardLocale){
+function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const action=locale==='en'
+  ?text.match(/^(Source|Sub1|ADV1|ADV2)( [\s\S]+)?: (Vergütung sperren|Sperre aufheben|Nach Everflow-Prüfung deaktivieren)$/)
+  :text.match(/^(Source|Sub1|ADV1|ADV2)( [\s\S]+)?: (Block payout|Unblock|Deactivate after checking Everflow)$/);
+ if(action){const[,scope,identity='',label]=action;return `${scope}${identity}: ${translateText(label,locale)}`}
+ const scoped=locale==='en'
+  ?text.match(/^(Source|Sub1|ADV1|ADV2) (überall sperren|in allen gefundenen Produkten sperren)$/)
+  :text.match(/^(Source|Sub1|ADV1|ADV2) (block across offers|block in all matching offers)$/);
+ if(scoped){const[,scope,label]=scoped;return `${scope} ${locale==='en'?(label==='überall sperren'?'block across offers':'block in all matching offers'):(label==='block across offers'?'überall sperren':'in allen gefundenen Produkten sperren')}`}
+ const confirm=locale==='en'?text.match(/^(Vergütung sperren|Sperre aufheben) · (Source|Sub1|ADV1|ADV2)$/):text.match(/^(Block payout|Unblock) · (Source|Sub1|ADV1|ADV2)$/);
+ if(confirm)return `${translateText(confirm[1],locale)} · ${confirm[2]}`;
  const maturity=locale==='en'
   ?text.match(/^(\d+) von (\d+) SOIs reif \(Wartezeit p75 ≈ (\d+(?:,\d+)?) h\); Ausschalten erst ab (\d+) reifen SOIs\.$/)
   :text.match(/^(\d+) of (\d+) SOIs mature \(p75 waiting time ≈ (\d+(?:\.\d+)?) h\); switch off only after (\d+) mature SOIs\.$/);
@@ -36,7 +46,7 @@ function translateStatus(text:string,locale:DashboardLocale){
 export function normalizeLocale(value:string|null|undefined):DashboardLocale{return value==='en'?'en':'de'}
 export function localeTag(locale:DashboardLocale){return locale==='en'?'en-GB':'de-DE'}
 
-export function translateText(value:string,locale:DashboardLocale){
+export function translateText(value:string,locale:DashboardLocale):string{
  const match=value.match(/^(\s*)([\s\S]*?)(\s*)$/);if(!match)return value;
  const [,before,text,after]=match;if(!text)return value;
  const translated=(locale==='en'?(translations as Record<string,string>)[text]:reverseTranslations.get(text))??translateStatus(text,locale);
