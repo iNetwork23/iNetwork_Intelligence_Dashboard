@@ -115,18 +115,18 @@ export default async function AffiliateOptimizerPage({
   const finance = can(user.access, "finance.view");
   const maySmartlinks = can(user.access, "smartlinks.view") && can(user.access, "finance.view");
   if (!mayPartners && maySmartlinks && !query.mode) query.mode = "smartlinks";
-  if (!mayPartners && !(query.mode === "smartlinks" && maySmartlinks))
-    return (
-      <main className="fatal">
-        <h1>403 · Keine Berechtigung</h1>
-        <AccessDeniedHint permission="partners.view" />
-      </main>
-    );
   if (query.mode === "smartlinks" && !maySmartlinks)
     return (
       <main className="fatal">
         <h1>403 · Smartlink Intelligence nicht freigegeben</h1>
         <AccessDeniedHint permission="smartlinks.view und finance.view" />
+      </main>
+    );
+  if (!mayPartners && !(query.mode === "smartlinks" && maySmartlinks))
+    return (
+      <main className="fatal">
+        <h1>403 · Keine Berechtigung</h1>
+        <AccessDeniedHint permission="partners.view" />
       </main>
     );
   if (
