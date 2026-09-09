@@ -39,6 +39,9 @@ export function selectFraudBackfillWindow(state:FraudBackfillState,now=new Date(
     if(catchupFrom<=to){const proposed=shift(catchupFrom,2);return{mode:'rolling',from:catchupFrom,to:proposed>to?to:proposed}}
     return{mode:'rolling',from:shift(to,-2),to};
   }
+  // An interrupted run invalidates parity before writes, but never advances the
+  // cursor. Retry that same day alone so a large three-day window can recover.
+  if(state.lastSuccessAt&&!state.lastParity)return{mode:'backfill',from:state.nextFrom,to:state.nextFrom};
   const proposed=shift(state.nextFrom,2);return{mode:'backfill',from:state.nextFrom,to:proposed>state.windowTo?state.windowTo:proposed};
 }
 export function advanceFraudBackfillState(state:FraudBackfillState,window:FraudBackfillWindow,now:Date,newParity:FraudBackfillParity):FraudBackfillState{
