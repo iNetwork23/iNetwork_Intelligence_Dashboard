@@ -21,7 +21,7 @@ export type SourceCandidateBuildOptions={now?:Date;timeBudgetMs?:number;/** Conv
 export const CANDIDATE_ROW_LIMITS:Record<SourceCandidate['action'],number>={AUSSCHALTEN:800,BEOBACHTEN:400,SKALIEREN:300};
 export function capSourceCandidates(rows:SourceCandidate[]):{rows:SourceCandidate[];truncated:boolean}{const kept:SourceCandidate[]=[],seen:Record<string,number>={};let truncated=false;for(const row of rows){const count=seen[row.action]??0;if(count>=CANDIDATE_ROW_LIMITS[row.action]){truncated=true;continue}seen[row.action]=count+1;kept.push(row)}return{rows:kept,truncated}}
 export const sourceCandidatesKey=(range:{from:string;to:string})=>`source_candidates:berlin-v5:${range.from}:${range.to}`;
-export const DEFAULT_CANDIDATE_TIME_BUDGET_MS=150_000,CANDIDATE_CONCURRENCY=4;
+export const DEFAULT_CANDIDATE_TIME_BUDGET_MS=150_000,CANDIDATE_CONCURRENCY=1;
 const WINDOW='days30' as const;
 const money=(value:number)=>Math.round(value*100)/100;
 const isCandidate=(leaf:TrafficLeaf)=>leaf.assessment.action!=='BEOBACHTEN'||leaf.metric.profit<0;
@@ -105,9 +105,16 @@ export async function loadSourceCandidates(range:{from:string;to:string},access:
  return isScopeRestricted(access)?{...snapshot,rows:scopeSourceCandidates(snapshot.rows,access)}:snapshot;
 }
 
-/** Memo für einen Cron-Lauf: Conversions je Partner einmal laden (beide Zeiträume nutzen dieselben 90 Tage); Fehler werden nicht memoisiert. */
+/** Small conversion results can be reused across ranges; large histories must
+ * be released after evaluation rather than retained for every account partner. */
 export function memoizedConversionsLoader(load:(affiliateId:string,now:Date)=>Promise<ConversionRow[]>=(affiliateId,now)=>loadAffiliateConversionsFromCache(affiliateId,90,now)){
- const memo=new Map<string,Promise<ConversionRow[]>>();
- const conversionsFor=(affiliateId:string,now:Date)=>{let pending=memo.get(affiliateId);if(!pending){pending=load(affiliateId,now);memo.set(affiliateId,pending);pending.catch(()=>memo.delete(affiliateId))}return pending};
+ const memo=new Map<string,{promise:Promise<ConversionRow[]>;rows:number}>();
+ const trim=()=>{while(memo.size>8||[...memo.values()].reduce((sum,entry)=>sum+entry.rows,0)>10_000)memo.delete(memo.keys().next().value!)};
+ const conversionsFor=(affiliateId:string,now:Date)=>{
+  const cached=memo.get(affiliateId);if(cached){memo.delete(affiliateId);memo.set(affiliateId,cached);return cached.promise}
+  const pending=load(affiliateId,now),entry={promise:pending,rows:0};memo.set(affiliateId,entry);trim();
+  pending.then(rows=>{if(memo.get(affiliateId)!==entry)return;if(rows.length>10_000)memo.delete(affiliateId);else{entry.rows=rows.length;trim()}},()=>{if(memo.get(affiliateId)===entry)memo.delete(affiliateId)});
+  return pending;
+ };
  return{conversionsFor,clear:()=>memo.clear(),size:()=>memo.size};
 }
