@@ -10,6 +10,14 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Auswahl für LP #(\d+)$/,'Selection for LP #$1',/^Selection for LP #(\d+)$/,'Auswahl für LP #$1'],
+ [/^Familien-ID für LP #(\d+)$/,'Family ID for LP #$1',/^Family ID for LP #(\d+)$/,'Familien-ID für LP #$1'],
+ [/^Familienname für LP #(\d+)$/,'Family name for LP #$1',/^Family name for LP #(\d+)$/,'Familienname für LP #$1'],
+ [/^Journal-Stand vor (\d+) (h|min)$/,'Journal updated $1 $2 ago',/^Journal updated (\d+) (h|min) ago$/,'Journal-Stand vor $1 $2'],
+ [/^Berlin-Tagesdaten müssen neu synchronisiert werden \((\d+)\/(\d+) Tage bestätigt\)$/,'Berlin daily data must be refreshed ($1/$2 days confirmed)',/^Berlin daily data must be refreshed \((\d+)\/(\d+) days confirmed\)$/,'Berlin-Tagesdaten müssen neu synchronisiert werden ($1/$2 Tage bestätigt)'],
+ [/^Mindestens (\d+) Klicks berücksichtigen die Rule of Three bei null Conversions\.$/,'At least $1 clicks account for the rule of three with zero conversions.',/^At least (\d+) clicks account for the rule of three with zero conversions\.$/,'Mindestens $1 Klicks berücksichtigen die Rule of Three bei null Conversions.'],
+ [/^Traffic wird auf (\d+) Varianten verteilt\.$/,'Traffic is split across $1 variants.',/^Traffic is split across (\d+) variants\.$/,'Traffic wird auf $1 Varianten verteilt.'],
+ [/^· noch (\d+)$/,'· $1 remaining',/^· (\d+) remaining$/,'· noch $1'],
  [/^(\d+) Klicks ohne einen einzigen SOI\.$/,'$1 clicks without a single SOI.',/^(\d+) clicks without a single SOI\.$/,'$1 Klicks ohne einen einzigen SOI.'],
  [/^(\d+) Quelle sperren$/,'Block $1 source',/^Block (\d+) source$/,'$1 Quelle sperren'],
  [/^(\d+) Quellen sperren$/,'Block $1 sources',/^Block (\d+) sources$/,'$1 Quellen sperren'],
