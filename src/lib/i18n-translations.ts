@@ -42,6 +42,8 @@ export const translations = {
   "Laufzeit": "Runtime",
   "erwarteter Bedarf": "Estimated duration",
   "Entwurf speichern": "Save draft",
+  "Entwurf": "Draft",
+  "Entfernen": "Remove",
   "KANONISCHE KONFIGURATIONEN": "CANONICAL CONFIGURATIONS",
   "Automationen, Fortschritt und Historie": "Automations, progress and history",
   "Noch keine Dashboard-Automation": "No dashboard automation yet",
