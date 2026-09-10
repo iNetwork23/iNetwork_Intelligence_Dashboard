@@ -34,8 +34,8 @@ describe('source block reference metrics contract (Etappe 4, Maßnahmen-Bilanz)'
  });
  it('keeps the Everflow write path and the visibility check unchanged',()=>{
   const source=route();
-  expect(source).toContain('activate:(block:Parameters<typeof activateEverflowSourceBlock>[0],id:string)=>activateEverflowSourceBlock(block,id,apiKey)');
-  expect(source).toContain('deactivate:(id:number,block:Parameters<typeof deactivateEverflowSourceBlock>[1])=>deactivateEverflowSourceBlock(id,block,apiKey)');
+  expect(source).toContain('activate:(block:Parameters<typeof activateEverflowSourceBlock>[0],id:string,beforeWrite?:()=>Promise<void>)=>activateEverflowSourceBlock(block,id,apiKey,undefined,beforeWrite)');
+  expect(source).toContain('deactivate:(id:number,block:Parameters<typeof deactivateEverflowSourceBlock>[1],beforeWrite?:()=>Promise<void>)=>deactivateEverflowSourceBlock(id,block,apiKey,undefined,beforeWrite)');
   expect(source).toContain("if(!sourceBlockVisibleInSnapshotRows(rows,block))throw new Error(");
   expect(source).not.toContain('input.variables');expect(source).not.toContain('input.payout_amount');
  });

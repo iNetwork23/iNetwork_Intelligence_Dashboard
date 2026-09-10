@@ -9,6 +9,8 @@ export type SourceBlockInput={affiliateId:string;affiliateName:string;offerId:st
 export type NormalizedSourceBlock={affiliateId:number;affiliateName:string;offerId:number;offerName:string;originCampaignId:number|null;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainField:'source_id'|'adv1';mainValue:string|null;subField:'sub1'|'adv2';subValue:string|null;variables:EverflowBlockVariable[];reason:string};
 export type SourceBlockRecord=NormalizedSourceBlock&{id:string;status:'pending'|'active'|'inactive'|'error';effectiveAt:string;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string;everflowSettingId:number|null;lastVerifiedAt:string|null;error:string|null;metricsAtBlock?:SourceBlockMetricsAtBlock;reasonCategory?:SourceBlockReasonCategory};
 export class SourceBlockActivationCompensatedError extends Error{override name='SourceBlockActivationCompensatedError';constructor(message:string,options?:ErrorOptions){super(message,options)}}
+/** The final guard rejected before any provider mutation or adoption. */
+export class SourceBlockWritePreventedError extends Error{override name='SourceBlockWritePreventedError';constructor(cause:unknown){super(cause instanceof Error?cause.message:'Quellen-Änderung nicht freigegeben',{cause})}}
 
 const normalizedValue=(value:unknown)=>{if(value===undefined||value===null)return null;const text=String(value).trim();if(!text||['N/A','Ohne Source-ID','Ohne Sub-Source','Nicht übermittelt'].includes(text))return null;if(text.length>200)throw new Error('Quellenwert ist zu lang');return text};
 const positiveId=(value:unknown,label:string)=>{const text=String(value??'').trim();if(!/^\d+$/.test(text)||Number(text)<=0)throw new Error(`${label} fehlt oder ist ungültig`);return Number(text)};

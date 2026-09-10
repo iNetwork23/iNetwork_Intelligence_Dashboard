@@ -1,6 +1,7 @@
-import{SourceBlockActivationCompensatedError,type NormalizedSourceBlock,type EverflowBlockVariable,type SourceBlockProviderPreview}from'./source-blocks';
+import{SourceBlockActivationCompensatedError,SourceBlockWritePreventedError,type NormalizedSourceBlock,type EverflowBlockVariable,type SourceBlockProviderPreview}from'./source-blocks';
 const BASE='https://api.eflow.team/v1';
 type Fetcher=typeof fetch;
+async function guardWrite(beforeWrite?:()=>Promise<void>){try{await beforeWrite?.()}catch(error){throw new SourceBlockWritePreventedError(error)}}
 type EverflowPayload=ReturnType<typeof buildEverflowBlockPayload>;
 type SettingSummary={network_custom_payout_revenue_setting_id:number;network_affiliate_ids:number[]|null;network_offer_id:number;network_offer_payout_revenue_id?:number;is_apply_all_affiliates?:boolean;custom_setting_status?:string;is_custom_payout_enabled?:boolean;payout_amount?:number;payout_percentage?:number;is_postback_disabled?:boolean};
 type EverflowRuleset=Record<string,unknown>;
@@ -53,8 +54,9 @@ export async function previewEverflowSourceBlock(block:NormalizedSourceBlock,api
  const plan=await readSourceBlockPlan(block,apiKey,fetcher);
  return{checkedAt:new Date().toISOString(),operation:plan.existing?'reuse':'create',matchingSettingIds:plan.matchingIds,affiliateId:block.affiliateId,offerId:block.offerId,trafficMode:block.trafficMode,level:block.level,variables:block.variables.map(variable=>({...variable})),payoutAmount:0,postbackDisabled:true};
 }
-export async function activateEverflowSourceBlock(block:NormalizedSourceBlock,dashboardId:string,apiKey:string,fetcher:Fetcher=fetch){
+export async function activateEverflowSourceBlock(block:NormalizedSourceBlock,dashboardId:string,apiKey:string,fetcher:Fetcher=fetch,beforeWrite?:()=>Promise<void>){
  const {existing,requiredRuleset}=await readSourceBlockPlan(block,apiKey,fetcher);
+ await guardWrite(beforeWrite);
  if(existing)return{settingId:existing.network_custom_payout_revenue_setting_id,created:false};
  const payload=buildEverflowBlockPayload(block,dashboardId,requiredRuleset),created=await json<{network_custom_payout_revenue_setting_id?:number}>(fetcher,`${BASE}/networks/custom/payoutrevenue`,{method:'POST',headers:headers(apiKey),body:JSON.stringify(payload)}),id=Number(created.network_custom_payout_revenue_setting_id);
  if(!Number.isSafeInteger(id)||id<=0)throw new Error('Everflow hat keine gültige Setting-ID zurückgegeben');
@@ -70,7 +72,7 @@ export async function activateEverflowSourceBlock(block:NormalizedSourceBlock,da
   throw new SourceBlockActivationCompensatedError(error instanceof Error?error.message:'Everflow-Aktivierung fehlgeschlagen und wurde zurückgerollt',{cause:error});
  }
 }
-export async function deactivateEverflowSourceBlock(settingId:number,block:NormalizedSourceBlock,apiKey:string,fetcher:Fetcher=fetch){if(!Number.isSafeInteger(settingId)||settingId<=0)throw new Error('Ungültige Everflow-Setting-ID');if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');const detail=await setting(fetcher,settingId,apiKey);if(!verify(detail,block))throw new Error('Everflow-Scope der gespeicherten Quellen-Sperre stimmt nicht exakt überein. Keine Löschung durchgeführt.');await deleteSettingVerified(fetcher,settingId,apiKey);return{deleted:true}}
+export async function deactivateEverflowSourceBlock(settingId:number,block:NormalizedSourceBlock,apiKey:string,fetcher:Fetcher=fetch,beforeWrite?:()=>Promise<void>){if(!Number.isSafeInteger(settingId)||settingId<=0)throw new Error('Ungültige Everflow-Setting-ID');if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');const detail=await setting(fetcher,settingId,apiKey);if(!verify(detail,block))throw new Error('Everflow-Scope der gespeicherten Quellen-Sperre stimmt nicht exakt überein. Keine Löschung durchgeführt.');await guardWrite(beforeWrite);await deleteSettingVerified(fetcher,settingId,apiKey);return{deleted:true}}
 /** Nur lesen (Reconcile-Cron): dasselbe Setting-Detail wie im Verify-Pfad; 404 → null, andere Fehler werfen. Kein Schreibpfad. */
 export type EverflowSourceBlockSettingDetail=SettingDetail;
 export async function readEverflowSourceBlockSetting(settingId:number,apiKey:string,fetcher:Fetcher=fetch):Promise<SettingDetail|null>{if(!Number.isSafeInteger(settingId)||settingId<=0)throw new Error('Ungültige Everflow-Setting-ID');if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');const response=await fetcher(`${BASE}/networks/custom/payoutrevenue/${settingId}?relationship=all`,{headers:headers(apiKey),signal:AbortSignal.timeout(30_000)});const text=await response.text();if(response.status===404)return null;if(response.status!==200)throw new Error(`Everflow HTTP ${response.status}: ${text.slice(0,250)}`);return(text?JSON.parse(text):{})as SettingDetail}
