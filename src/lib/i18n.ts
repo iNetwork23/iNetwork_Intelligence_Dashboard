@@ -10,6 +10,10 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Notiz ist zu lang \(max\. (\d+) Zeichen\)\.$/,'Note is too long (max. $1 characters).',/^Note is too long \(max\. (\d+) characters\)\.$/,'Notiz ist zu lang (max. $1 Zeichen).'],
+ [/^Höchstens (\d+) Regeln\.$/,'At most $1 rules.',/^At most (\d+) rules\.$/,'Höchstens $1 Regeln.'],
+ [/^Für Partner (\d+)( \/ Campaign \d+)? gibt es bereits eine Regel\.$/,'A rule already exists for partner $1$2.',/^A rule already exists for partner (\d+)( \/ Campaign \d+)?\.$/,'Für Partner $1$2 gibt es bereits eine Regel.'],
+ [/^Partner (\d+)( \/ Campaign \d+)? ist doppelt\.$/,'Partner $1$2 is duplicated.',/^Partner (\d+)( \/ Campaign \d+)? is duplicated\.$/,'Partner $1$2 ist doppelt.'],
  [/^([\d.,]+) % First-Sales je SOI$/,'$1 % first sales per SOI',/^([\d.,]+)% first sales per SOI$/,'$1 % First-Sales je SOI'],
  [/^(-?[\d.,]+\s*€) bei ([\d.,]+) SOIs(\.?)$/,'$1 from $2 SOIs$3',/^(-?€[\d.,]+) from ([\d.,]+) SOIs(\.?)$/,'$1 bei $2 SOIs$3'],
  [/^([\d.,]+) SOIs · noch keine belastbare Mindestmenge\.$/,'$1 SOIs · minimum sample size not yet reached.',/^([\d.,]+) SOIs · minimum sample size not yet reached\.$/,'$1 SOIs · noch keine belastbare Mindestmenge.'],
@@ -66,6 +70,15 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^LTV-Kohorten (\d{2}:\d{2})$/,'LTV cohorts $1',/^LTV cohorts (\d{2}:\d{2})$/,'LTV-Kohorten $1'],
 ];
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const rule=locale==='en'?text.match(/^Regel (\d+): (.+)$/):text.match(/^Rule (\d+): (.+)$/);
+ if(rule){const translated=translateText(rule[2],locale);if(translated!==rule[2])return `${locale==='en'?'Rule':'Regel'} ${rule[1]}: ${translated}`}
+ const dealField=locale==='en'
+  ?text.match(/^(Testquote \(SOIs\)|Reife \(Stunden\)|CVR-Untergrenze \(%\)) (ist keine Zahl\.|muss eine ganze Zahl sein\.|muss zwischen ([\d.]+) und ([\d.]+) liegen\.)$/)
+  :text.match(/^(Test quota \(SOIs\)|Maturity \(hours\)|CVR floor \(%\)) (is not a number\.|must be an integer\.|must be between ([\d.]+) and ([\d.]+)\.)$/);
+ if(dealField){const[,label,message,min,max]=dealField;const translated=locale==='en'
+  ?min!==undefined?`must be between ${min} and ${max}.`:message==='ist keine Zahl.'?'is not a number.':'must be an integer.'
+  :min!==undefined?`muss zwischen ${min} und ${max} liegen.`:message==='is not a number.'?'ist keine Zahl.':'muss eine ganze Zahl sein.';
+  return `${translateText(label,locale)} ${translated}`}
  const action=locale==='en'
   ?text.match(/^(Source|Sub1|ADV1|ADV2)( [\s\S]+)?: (Vergütung sperren|Sperre aufheben|Nach Everflow-Prüfung deaktivieren)$/)
   :text.match(/^(Source|Sub1|ADV1|ADV2)( [\s\S]+)?: (Block payout|Unblock|Deactivate after checking Everflow)$/);

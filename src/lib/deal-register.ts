@@ -5,6 +5,7 @@
  */
 export type DealRule={affiliateId:number;campaignId?:number;testQuotaSois?:number;maturityHours?:number;cvrFloorPct?:number;note:string;updatedAt:string;updatedBy:string};
 export type DealRuleInput=Omit<DealRule,'updatedAt'|'updatedBy'>;
+export type DealRuleField=keyof DealRuleInput;
 export type DealRegisterState={rules:DealRule[];source:'stored'|'defaults'};
 export const DEAL_REGISTER_STORE_KEY='deal_register:v1';
 export const DEAL_REGISTER_CACHE_TAG='deal-register';
@@ -31,21 +32,21 @@ const inRange=(field:NumericField,value:number)=>{const limit=DEAL_RULE_LIMITS[f
 const numberField=(value:unknown):number|undefined|'invalid'=>{if(value===undefined||value===null||value==='')return undefined;const n=typeof value==='number'?value:typeof value==='string'&&value.trim()?Number(value.replace(',','.')):Number.NaN;return Number.isFinite(n)?n:'invalid'};
 const LABELS:Record<NumericField,string>={testQuotaSois:'Testquote (SOIs)',maturityHours:'Reife (Stunden)',cvrFloorPct:'CVR-Untergrenze (%)'};
 /** Validiert Formular-/API-Eingaben. Gibt entweder die bereinigten Regeln (ohne Zeitstempel) oder einen deutschen Fehlertext zurück. */
-export function validateDealRules(raw:unknown):{ok:true;rules:DealRuleInput[]}|{ok:false;error:string}{
+export function validateDealRules(raw:unknown):{ok:true;rules:DealRuleInput[]}|{ok:false;error:string;fields?:DealRuleField[]}{
  if(!Array.isArray(raw))return{ok:false,error:'Regeln fehlen oder sind kein Array.'};
  if(raw.length>DEAL_RULE_LIMITS.maxRules)return{ok:false,error:`Höchstens ${DEAL_RULE_LIMITS.maxRules} Regeln.`};
  const rules:DealRuleInput[]=[],seen=new Set<string>();
  for(const[index,item]of raw.entries()){
   const at=`Regel ${index+1}`;if(!item||typeof item!=='object'||Array.isArray(item))return{ok:false,error:`${at}: ungültiges Format.`};
   const input=item as Record<string,unknown>,affiliateId=numberField(input.affiliateId),campaignId=numberField(input.campaignId);
-  if(affiliateId===undefined||affiliateId==='invalid'||!positiveInt(affiliateId))return{ok:false,error:`${at}: Partner-ID muss eine positive ganze Zahl sein.`};
-  if(campaignId==='invalid'||(campaignId!==undefined&&!positiveInt(campaignId)))return{ok:false,error:`${at}: Campaign-ID muss leer oder eine positive ganze Zahl sein.`};
+  if(affiliateId===undefined||affiliateId==='invalid'||!positiveInt(affiliateId))return{ok:false,fields:['affiliateId'],error:`${at}: Partner-ID muss eine positive ganze Zahl sein.`};
+  if(campaignId==='invalid'||(campaignId!==undefined&&!positiveInt(campaignId)))return{ok:false,fields:['campaignId'],error:`${at}: Campaign-ID muss leer oder eine positive ganze Zahl sein.`};
   const rule:DealRuleInput={affiliateId,...(campaignId!==undefined?{campaignId}:{}),note:''};
-  for(const field of NUMERIC_FIELDS){const value=numberField(input[field]);if(value==='invalid')return{ok:false,error:`${at}: ${LABELS[field]} ist keine Zahl.`};if(value===undefined)continue;if(field!=='cvrFloorPct'&&!Number.isSafeInteger(value))return{ok:false,error:`${at}: ${LABELS[field]} muss eine ganze Zahl sein.`};if(!inRange(field,value))return{ok:false,error:`${at}: ${LABELS[field]} muss zwischen ${DEAL_RULE_LIMITS[field].min} und ${DEAL_RULE_LIMITS[field].max} liegen.`};rule[field]=field==='cvrFloorPct'?Number(value.toFixed(2)):value}
-  if(NUMERIC_FIELDS.every(field=>rule[field]===undefined))return{ok:false,error:`${at}: mindestens ein Wert (Testquote, Reife oder CVR-Untergrenze) ist erforderlich.`};
-  if(input.note!==undefined&&input.note!==null&&typeof input.note!=='string')return{ok:false,error:`${at}: Notiz ist ungültig.`};
-  rule.note=typeof input.note==='string'?input.note.trim():'';if(rule.note.length>DEAL_RULE_LIMITS.noteLength)return{ok:false,error:`${at}: Notiz ist zu lang (max. ${DEAL_RULE_LIMITS.noteLength} Zeichen).`};
-  const key=`${rule.affiliateId}:${rule.campaignId??''}`;if(seen.has(key))return{ok:false,error:`${at}: Partner ${rule.affiliateId}${rule.campaignId?` / Campaign ${rule.campaignId}`:''} ist doppelt.`};seen.add(key);rules.push(rule);
+  for(const field of NUMERIC_FIELDS){const value=numberField(input[field]);if(value==='invalid')return{ok:false,fields:[field],error:`${at}: ${LABELS[field]} ist keine Zahl.`};if(value===undefined)continue;if(field!=='cvrFloorPct'&&!Number.isSafeInteger(value))return{ok:false,fields:[field],error:`${at}: ${LABELS[field]} muss eine ganze Zahl sein.`};if(!inRange(field,value))return{ok:false,fields:[field],error:`${at}: ${LABELS[field]} muss zwischen ${DEAL_RULE_LIMITS[field].min} und ${DEAL_RULE_LIMITS[field].max} liegen.`};rule[field]=field==='cvrFloorPct'?Number(value.toFixed(2)):value}
+  if(NUMERIC_FIELDS.every(field=>rule[field]===undefined))return{ok:false,fields:[...NUMERIC_FIELDS],error:`${at}: mindestens ein Wert (Testquote, Reife oder CVR-Untergrenze) ist erforderlich.`};
+  if(input.note!==undefined&&input.note!==null&&typeof input.note!=='string')return{ok:false,fields:['note'],error:`${at}: Notiz ist ungültig.`};
+  rule.note=typeof input.note==='string'?input.note.trim():'';if(rule.note.length>DEAL_RULE_LIMITS.noteLength)return{ok:false,fields:['note'],error:`${at}: Notiz ist zu lang (max. ${DEAL_RULE_LIMITS.noteLength} Zeichen).`};
+  const key=`${rule.affiliateId}:${rule.campaignId??''}`;if(seen.has(key))return{ok:false,fields:['affiliateId','campaignId'],error:`${at}: Partner ${rule.affiliateId}${rule.campaignId?` / Campaign ${rule.campaignId}`:''} ist doppelt.`};seen.add(key);rules.push(rule);
  }
  return{ok:true,rules};
 }
