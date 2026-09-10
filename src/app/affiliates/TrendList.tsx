@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import InstantLink from "./InstantLink";
-import CandidateTopN, { CANDIDATE_TOP_N } from "./CandidateTopN";
+import CandidateTopN from "./CandidateTopN";
+import { CANDIDATE_TOP_N } from "../../lib/candidate-list";
 import Sparkline from "../components/Sparkline";
 import type { PriorityItem } from "../../lib/affiliate-priority";
 import { openSourceRowHref } from "../../lib/open-source-row-link";

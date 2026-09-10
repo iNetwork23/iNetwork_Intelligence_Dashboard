@@ -10,6 +10,9 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+) direkte Landingpages$/,'$1 direct landing pages',/^(\d+) direct landing pages$/,'$1 direkte Landingpages'],
+ [/^Letzter Lead (\d{2})\.(\d{2})\.$/,'Last lead $1/$2',/^Last lead (\d{2})\/(\d{2})$/,'Letzter Lead $1.$2.'],
+ [/^Mehr anzeigen · (\d+) weitere$/,'Show more · $1 more',/^Show more · (\d+) more$/,'Mehr anzeigen · $1 weitere'],
  [/^Notiz ist zu lang \(max\. (\d+) Zeichen\)\.$/,'Note is too long (max. $1 characters).',/^Note is too long \(max\. (\d+) characters\)\.$/,'Notiz ist zu lang (max. $1 Zeichen).'],
  [/^Höchstens (\d+) Regeln\.$/,'At most $1 rules.',/^At most (\d+) rules\.$/,'Höchstens $1 Regeln.'],
  [/^Für Partner (\d+)( \/ Campaign \d+)? gibt es bereits eine Regel\.$/,'A rule already exists for partner $1$2.',/^A rule already exists for partner (\d+)( \/ Campaign \d+)?\.$/,'Für Partner $1$2 gibt es bereits eine Regel.'],
