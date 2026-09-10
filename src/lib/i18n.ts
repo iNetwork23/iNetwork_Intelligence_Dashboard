@@ -10,6 +10,8 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Gespeichert · 1 Regel aktiv\.$/,'Saved · 1 rule active.',/^Saved · 1 rule active\.$/,'Gespeichert · 1 Regel aktiv.'],
+ [/^Gespeichert · (\d+) Regeln aktiv\.$/,'Saved · $1 rules active.',/^Saved · (\d+) rules active\.$/,'Gespeichert · $1 Regeln aktiv.'],
  [/^(\d+) von (\d+) SOIs reif \(Schwelle (\d+)\)$/,'$1 of $2 SOIs mature (threshold $3)',/^(\d+) of (\d+) SOIs mature \(threshold (\d+)\)$/,'$1 von $2 SOIs reif (Schwelle $3)'],
  [/^([\d.,]+) % der Sale-Ereignisse$/,'$1 % of sale events',/^([\d.,]+)\s*% of sale events$/,'$1 % der Sale-Ereignisse'],
  [/^(-?[\d.,]+\s*€) Umsatz je SOI$/,'$1 revenue per SOI',/^(-?€[\d.,]+) revenue per SOI$/,'$1 Umsatz je SOI'],
