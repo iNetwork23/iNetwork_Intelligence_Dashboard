@@ -16,7 +16,7 @@ describe('source block persistence',()=>{
   const store=new MemorySecurityStore(),deactivate=vi.fn(async()=>({deleted:true}));
   const active=await activateSourceBlock(store,input,{actorId:'admin',activate:async()=>({settingId:777,created:true}),deactivate});
   const result=await deactivateSourceBlock(store,active.id,{actorId:'admin-2',activate:vi.fn(),deactivate});
-  expect(deactivate).toHaveBeenCalledWith(777,expect.objectContaining({affiliateId:30,offerId:25,level:'sub_source',subValue:'P-3591625022'}));
+  expect(deactivate).toHaveBeenCalledWith(777,expect.objectContaining({affiliateId:30,offerId:25,level:'sub_source',subValue:'P-3591625022'}),expect.any(Function));
   expect(result).toMatchObject({status:'inactive',updatedBy:'admin-2',everflowSettingId:null});
  });
  it('rolls back Everflow when durable activation state cannot be committed',async()=>{

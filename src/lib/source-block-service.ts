@@ -5,6 +5,7 @@ import {
   isSourceBlockMetricsAtBlock,
   normalizeSourceBlockInput,
   SourceBlockActivationCompensatedError,
+  SourceBlockWritePreventedError,
   sourceBlockStoreKey,
   type NormalizedSourceBlock,
   type SourceBlockInput,
@@ -17,8 +18,8 @@ const MUTATION_LOCK = 'source-block:mutations';
 type Writer = {
   actorId: string;
   authorize?: (record?: SourceBlockRecord) => Promise<void>;
-  activate: (block: NormalizedSourceBlock, dashboardId: string) => Promise<{ settingId: number; created: boolean }>;
-  deactivate: (settingId: number, block: NormalizedSourceBlock) => Promise<{ deleted: boolean }>;
+  activate: (block: NormalizedSourceBlock, dashboardId: string, beforeWrite?: () => Promise<void>) => Promise<{ settingId: number; created: boolean }>;
+  deactivate: (settingId: number, block: NormalizedSourceBlock, beforeWrite?: () => Promise<void>) => Promise<{ deleted: boolean }>;
 };
 type Commit<T, P = unknown> = (value: T, previous?: P) => Promise<unknown>;
 type DeactivationCommit = (value: SourceBlockRecord, previous: SourceBlockRecord) => Promise<unknown>;
@@ -73,11 +74,21 @@ async function restoreRecord(store: SecurityStore, key: string, previous: Source
   else await store.delete(key);
 }
 
+type PendingMutation = SourceBlockRecord & {revision: string; owner: string};
+async function restorePreventedMutation(store: SecurityStore, key: string, pending: PendingMutation, previous: SourceBlockRecord | null) {
+  // A lease may have been taken over during provider reads. Never overwrite the successor's state.
+  let restored = false;
+  try { restored = previous ? await store.replaceIfRevision(key, pending.revision, previous) : await store.deleteIfOwner(key, pending.owner); }
+  catch { throw rollbackFailed('Lokaler Zustand konnte nach verhinderter Änderung nicht sicher wiederhergestellt werden'); }
+  if (!restored) throw rollbackFailed('Lokaler Zustand wurde zwischenzeitlich geändert; Nachfolgezustand blieb unverändert');
+}
+
 async function activateSourceBlockUnlocked(
   store: SecurityStore,
   input: SourceBlockInput,
   writer: Writer,
   commit?: Commit<SourceBlockRecord, SourceBlockRecord | null>,
+  beforeWrite?: () => Promise<void>,
 ): Promise<ActivationOutcome> {
   const block = normalizeSourceBlockInput(input),
     key = sourceBlockStoreKey(block),
@@ -92,8 +103,11 @@ async function activateSourceBlockUnlocked(
     reasonCategory = isSourceBlockReasonCategory(input.reasonCategory) ? input.reasonCategory : previous?.reasonCategory,
     // Referenz zum Sperrzeitpunkt (Etappe 4): nur eine gültige, vom Aufrufer (Route, serverseitig) berechnete Struktur; nie vom Vorgänger-Record geerbt.
     metricsAtBlock = isSourceBlockMetricsAtBlock(input.metricsAtBlock) ? input.metricsAtBlock : undefined,
-    pending: SourceBlockRecord = {
+    revision = crypto.randomUUID(),
+    pending: PendingMutation = {
       ...block,
+      revision,
+      owner: revision,
       id,
       status: 'pending',
       effectiveAt: now,
@@ -108,7 +122,11 @@ async function activateSourceBlockUnlocked(
       ...(metricsAtBlock ? { metricsAtBlock } : {}),
     };
   await store.set(key, pending);
-  const external = await writer.activate(block, id).catch(async (activationError: unknown) => {
+  const external = await writer.activate(block, id, beforeWrite).catch(async (activationError: unknown) => {
+    if (activationError instanceof SourceBlockWritePreventedError) {
+      await restorePreventedMutation(store, key, pending, previous);
+      throw activationError.cause;
+    }
     if (activationError instanceof SourceBlockActivationCompensatedError) {
       try {
         await restoreRecord(store, key, previous);
@@ -163,7 +181,7 @@ async function activateSourceBlockUnlocked(
 }
 
 export async function activateSourceBlock(store: SecurityStore, input: SourceBlockInput, writer: Writer, commit?: Commit<SourceBlockRecord, SourceBlockRecord | null>) {
-  return withSecurityLock(store, MUTATION_LOCK, async () => { await writer.authorize?.(); return (await activateSourceBlockUnlocked(store, input, writer, commit)).record; });
+  return withSecurityLock(store, MUTATION_LOCK, async lease => { await writer.authorize?.(); return (await activateSourceBlockUnlocked(store, input, writer, commit, async () => { await writer.authorize?.(); await lease.assertOwned(); })).record; });
 }
 
 async function deactivateSourceBlockUnlocked(
@@ -171,6 +189,7 @@ async function deactivateSourceBlockUnlocked(
   fresh: SourceBlockRecord,
   writer: Writer,
   commit?: DeactivationCommit,
+  beforeWrite?: () => Promise<void>,
 ) {
   const key = sourceBlockStoreKey(fresh);
   if (fresh.status === 'inactive') {
@@ -178,8 +197,10 @@ async function deactivateSourceBlockUnlocked(
     return fresh;
   }
   if (!fresh.everflowSettingId) throw new Error('Everflow-Setting der Sperre fehlt');
-  const pending: SourceBlockRecord = {
+  const revision = crypto.randomUUID(), pending: PendingMutation = {
     ...fresh,
+    revision,
+    owner: revision,
     status: 'pending',
     updatedAt: new Date().toISOString(),
     updatedBy: writer.actorId,
@@ -187,9 +208,13 @@ async function deactivateSourceBlockUnlocked(
   };
   await store.set(key, pending);
   try {
-    const removed = await writer.deactivate(fresh.everflowSettingId, fresh);
+    const removed = await writer.deactivate(fresh.everflowSettingId, fresh, beforeWrite);
     if (!removed.deleted) throw new Error('Everflow-Setting konnte nicht verifiziert gelöscht werden');
   } catch (deactivationError) {
+    if (deactivationError instanceof SourceBlockWritePreventedError) {
+      await restorePreventedMutation(store, key, pending, fresh);
+      throw deactivationError.cause;
+    }
     const message = deactivationError instanceof Error ? deactivationError.message : 'Everflow-Deaktivierung konnte nicht verifiziert werden';
     await throwUncertain(store, key, fresh, message);
   }
@@ -238,13 +263,13 @@ async function deactivateSourceBlockUnlocked(
 }
 
 export async function deactivateSourceBlock(store: SecurityStore, id: string, writer: Writer, commit?: DeactivationCommit) {
-  return withSecurityLock(store, MUTATION_LOCK, async () => {
+  return withSecurityLock(store, MUTATION_LOCK, async lease => {
     const match = (await listSourceBlocks(store)).find((item) => item.id === id);
     if (!match) throw new Error('Quellen-Sperre nicht gefunden');
     const freshRaw = await store.get(sourceBlockStoreKey(match));
     if (!isRecord(freshRaw) || freshRaw.id !== id) throw new Error('Quellen-Sperre nicht gefunden');
     await writer.authorize?.(freshRaw);
-    return deactivateSourceBlockUnlocked(store, freshRaw, writer, commit);
+    return deactivateSourceBlockUnlocked(store, freshRaw, writer, commit, async () => { await writer.authorize?.(freshRaw); await lease.assertOwned(); });
   });
 }
 
@@ -254,12 +279,12 @@ export async function activateSourceBlocksAtomically(
   writer: Writer,
   commit?: Commit<SourceBlockRecord[], Array<SourceBlockRecord | null>>,
 ) {
-  return withSecurityLock(store, MUTATION_LOCK, async () => {
+  return withSecurityLock(store, MUTATION_LOCK, async lease => {
     await writer.authorize?.();
     const outcomes: ActivationOutcome[] = [];
     let commitFailed = false;
     try {
-      for (const input of inputs) outcomes.push(await activateSourceBlockUnlocked(store, input, writer));
+      for (const input of inputs) outcomes.push(await activateSourceBlockUnlocked(store, input, writer, undefined, async () => { await writer.authorize?.(); await lease.assertOwned(); }));
       const records = outcomes.map((outcome) => outcome.record);
       if (commit) {
         try {
