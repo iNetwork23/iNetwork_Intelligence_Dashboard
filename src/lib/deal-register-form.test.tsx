@@ -49,3 +49,21 @@ it('still permits an explicit edit of the existing partner rule',async()=>{
  expect(host.querySelector('[role="alert"]')).toBeNull();expect([...host.querySelectorAll('tbody tr')].find(item=>item.firstElementChild?.textContent==='436')!.textContent).toContain('90 SOIs');
  expect(button(host,'Register speichern').disabled).toBe(false);expect(fetch).not.toHaveBeenCalled();
 });
+it('associates invalid input with its message and focuses the field without changing the draft register',async()=>{
+ const host=await mount();await fill(host,'Partner-ID','6');await fill(host,'Testquote (SOIs)','-1');
+ await act(async()=>host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ const input=[...host.querySelectorAll('label')].find(item=>item.textContent?.startsWith('Testquote (SOIs)'))!.querySelector('input')!;
+ expect(input.getAttribute('aria-invalid')).toBe('true');expect(document.activeElement).toBe(input);
+ expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toContain('zwischen 1 und 10000');
+ expect(host.querySelectorAll('tbody tr')).toHaveLength(DEFAULT_DEAL_RULES.length);expect(fetch).not.toHaveBeenCalled();
+ await fill(host,'Testquote (SOIs)','25');expect(input.getAttribute('aria-invalid')).not.toBe('true');
+ await act(async()=>host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ expect(host.querySelector('[role="alert"]')).toBeNull();expect(host.querySelectorAll('tbody tr')).toHaveLength(3);
+});
+it('prevents a save from silently omitting a rule still in the editor',async()=>{
+ const host=await mount();await act(async()=>button(host,'Standardregeln übernehmen').click());
+ await fill(host,'Partner-ID','6');await fill(host,'Testquote (SOIs)','25');
+ expect(button(host,'Register speichern').disabled).toBe(true);await act(async()=>button(host,'Register speichern').click());expect(fetch).not.toHaveBeenCalled();
+ expect(host.textContent).toContain('Regel im Formular zuerst übernehmen oder verwerfen.');
+ await act(async()=>button(host,'Abbrechen').click());expect(button(host,'Register speichern').disabled).toBe(false);
+});
