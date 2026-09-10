@@ -13,4 +13,15 @@ describe('Everflow campaign status writer',()=>{
  ] as const)('rejects an invalid documented optional field %s before PUT',(field,value)=>{const kpi={...campaign,redirect_routing_type:'kpi',metric:'profit',run_frequency:'24_hours',data_lookback_window:'24_hours',optimization_goal:1,data_collection_threshold:100,[field]:value};expect(()=>buildCampaignStatusPayload(kpi,'paused')).toThrow('Campaign-Snapshot')});
  it('fails closed and restores the exact original payload when read-back changes routing',async()=>{let state=campaign,puts=0;const fetcher=vi.fn(async(_url:string|URL|Request,init?:RequestInit)=>{if(init?.method==='PUT'){puts++;const body=JSON.parse(String(init.body));state=puts===1?{...campaign,campaign_status:'paused',relationship:{...campaign.relationship,redirects:{entries:[{...campaign.relationship.redirects.entries[0],routing_value:100}]}}}:{...campaign,campaign_status:body.campaign_status};return response({ok:true})}return response(state)});await expect(setEverflowCampaignStatus(135,'paused','secret',fetcher)).rejects.toThrow('wiederhergestellt');const putBodies=fetcher.mock.calls.filter(call=>call[1]?.method==='PUT').map(call=>JSON.parse(String(call[1]?.body)));expect(putBodies).toHaveLength(2);expect(putBodies[1]).toEqual(buildCampaignStatusPayload(campaign,'active'))});
  it('never revives a deleted Campaign',async()=>{const fetcher=vi.fn(async()=>response({...campaign,campaign_status:'deleted'}));await expect(setEverflowCampaignStatus(135,'active','secret',fetcher)).rejects.toThrow('Gelöschte');expect(fetcher).toHaveBeenCalledTimes(1)});
+ it('checks authorization after the provider GET and prevents the PUT after revocation',async()=>{
+  const events:string[]=[],fetcher=vi.fn(async(_url:string|URL|Request,init?:RequestInit)=>{events.push(init?.method||'GET');return response(campaign)});
+  await expect(setEverflowCampaignStatus(135,'paused','secret',fetcher,async()=>{events.push('authorize');throw new Error('revoked')})).rejects.toThrow('revoked');
+  expect(events).toEqual(['GET','authorize']);
+ });
+ it('still completes a required rollback if authorization is withdrawn after the intended PUT',async()=>{
+  let puts=0;const authorize=vi.fn(async()=>{if(puts)throw new Error('revoked')});
+  const fetcher=vi.fn(async(_url:string|URL|Request,init?:RequestInit)=>{if(init?.method==='PUT'){puts++;return response({ok:true})}return response(puts===1?{...campaign,campaign_status:'paused',campaign_name:'unexpected'}:campaign)});
+  await expect(setEverflowCampaignStatus(135,'paused','secret',fetcher,authorize)).rejects.toThrow('wiederhergestellt');
+  expect(puts).toBe(2);expect(authorize).toHaveBeenCalledTimes(1);
+ });
 });

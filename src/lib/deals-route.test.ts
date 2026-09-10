@@ -8,7 +8,7 @@ vi.mock('server-only',()=>({}));
 vi.mock('next/cache',()=>({unstable_cache:(load:()=>unknown)=>load,revalidateTag:()=>{}}));
 const state=vi.hoisted(()=>({store:null as unknown,audits:[]as Array<Record<string,unknown>>,user:null as unknown}));
 vi.mock('./access-store',()=>({securityStore:()=>state.store,audit:async(event:Record<string,unknown>)=>{state.audits.push(event);return event},requestEvidence:()=>({ip:'127.0.0.1',userAgent:'vitest'})}));
-vi.mock('./session',()=>({requirePermission:async(permission:string)=>{const user=state.user as null|{access:ReturnType<typeof parseAccessMetadata>;actorId:string};if(!user)return{ok:false,status:401,user:null};const {can}=await import('./rbac');if(!can(user.access,permission as never))return{ok:false,status:403,user};return{ok:true,status:200,user}}}));
+vi.mock('./session',()=>({resolveCurrentUserUncached:async()=>state.user,requirePermission:async(permission:string)=>{const user=state.user as null|{access:ReturnType<typeof parseAccessMetadata>;actorId:string};if(!user)return{ok:false,status:401,user:null};const {can}=await import('./rbac');if(!can(user.access,permission as never))return{ok:false,status:403,user};return{ok:true,status:200,user}}}));
 import {GET,PUT} from '../app/api/deals/route';
 const store=new MemorySecurityStore();state.store=store;
 const admin={id:'u1',email:'a@b.c',access:parseAccessMetadata({role:'super_admin'}),actorId:'admin-1',impersonating:false};
@@ -46,7 +46,7 @@ describe('/api/deals',()=>{
  });
  it('mirrors the security shape of the other mutation routes',()=>{
   const route=read('src/app/api/deals/route.ts');
-  for(const marker of["requirePermission('settings.manage')","auth.user.access.role==='partner'",'checkCsrf(request,origin)','parseBoundedJson(request,131_072)',"action:'deal_register.update'",'saveDealRegister(input.rules,actorId,input.expectedRevision,securityStore())',"export const dynamic='force-dynamic'"])expect(route).toContain(marker);
+  for(const marker of["requirePermission('settings.manage')","auth.user.access.role==='partner'",'checkCsrf(request,origin)','parseBoundedJson(request,131_072)',"action:'deal_register.update'",'saveDealRegister(input.rules,actorId,input.expectedRevision,securityStore(),',"export const dynamic='force-dynamic'"])expect(route).toContain(marker);
   expect(route).not.toContain('everflow');
  });
  it('rejects a second editor saving the same revision without losing the first edit',async()=>{
@@ -57,5 +57,14 @@ describe('/api/deals',()=>{
   expect(stale.status).toBe(409);
   expect(await(await GET()).json()).toMatchObject({rules:[{affiliateId:10,testQuotaSois:25}]});
   expect(state.audits.filter(event=>event.action==='deal_register.update')).toHaveLength(1);
+ });
+ it.each(['revoked','permission','partner','identity','actor'] as const)('does not save when %s changes during the register read',async(change)=>{
+  const opened=await revision(),read=store.get.bind(store);
+  const spy=vi.spyOn(store,'get').mockImplementation(async key=>{
+   const value=await read(key);
+   if(key===DEAL_REGISTER_STORE_KEY)state.user=change==='revoked'?null:change==='permission'?{...admin,access:parseAccessMetadata({role:'analyst'})}:change==='partner'?{...admin,access:parseAccessMetadata({role:'partner',grants:['settings.manage']})}:change==='identity'?{...admin,id:'other'}:{...admin,actorId:'other'};
+   return value;
+  });
+  try{expect((await put({expectedRevision:opened,rules:[{affiliateId:10,testQuotaSois:25}]})).status).toBe(403);expect(store.values.has(DEAL_REGISTER_STORE_KEY)).toBe(false);expect(state.audits.some(event=>event.action==='deal_register.update')).toBe(false)}finally{spy.mockRestore()}
  });
 });

@@ -553,7 +553,7 @@ export const translations = {
   "Serverkonfiguration ungültig": "Server configuration invalid",
   "Anfrage abgelehnt": "Request rejected",
   "Ungültige Anfrage": "Invalid request",
-  "Berechtigung wurde zwischenzeitlich geändert. Bitte neu anmelden.": "Authorization has since been changed. Please register again.",
+  "Berechtigung wurde zwischenzeitlich geändert. Bitte neu anmelden.": "Your permissions changed. Please sign in again.",
   "Keine aktive Impersonation": "No active impersonation",
   "Akteur nicht verfügbar": "Actor not available",
   "Benutzer nicht gefunden": "User not found",
