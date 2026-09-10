@@ -1,5 +1,9 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Bitte ein gültiges Von- und Bis-Datum auswählen.": "Select a valid start and end date.",
+  "Conversion-Daten für diesen Zeitraum unvollständig": "Conversion data is incomplete for this period",
+  "Für den gewählten Zeitraum oder aktive Stops fehlt bestätigte Conversion-Abdeckung. Risikosummen, Coin-Kohorten und Stop-Verstöße bleiben unbekannt. Wähle einen kürzeren Zeitraum oder prüfe den Importstatus.": "Verified conversion coverage is missing for the selected period or active stops. Risk totals, coin cohorts and stop violations remain unknown. Select a shorter period or check the import status.",
+  "Conversion-Abdeckung fehlt": "Conversion coverage is missing",
   "Ergebnis": "Result",
   "· Entscheidung": "· Decision",
   "Tage": "days",
