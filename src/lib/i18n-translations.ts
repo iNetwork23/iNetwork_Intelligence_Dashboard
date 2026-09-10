@@ -1,5 +1,6 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Ergebnis": "Result",
   "· Entscheidung": "· Decision",
   "Tage": "days",
   "Min.": "min",
