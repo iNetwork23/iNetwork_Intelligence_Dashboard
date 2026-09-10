@@ -1,4 +1,5 @@
 import 'server-only';
+import {boundedUpsert} from './bounded-upsert';
 import {berlinRangeUtcBounds} from './reporting-day';
 import {randomUUID}from'node:crypto';
 import {createClient,type SupabaseClient} from '@supabase/supabase-js';
@@ -27,11 +28,7 @@ export function getSupabasePasswordAuth(){
 const throwIfError=(error:{message:string}|null,operation:string)=>{if(error)throw new Error(`Supabase ${operation}: ${error.message}`)};
 async function upsertBatches(table:'conversions'|'daily_metrics',rows:ConversionCacheRow[]|DailyMetricRow[]){
   const supabase=getSupabaseAdmin();
-  for(let start=0;start<rows.length;start+=500){
-    const batch=rows.slice(start,start+500);
-    const {error}=await supabase.from(table).upsert(batch as never[],{onConflict:'id'});
-    throwIfError(error,`${table} upsert`);
-  }
+  await boundedUpsert<ConversionCacheRow|DailyMetricRow>(rows,batch=>supabase.from(table).upsert(batch as never[],{onConflict:'id'}),`${table} upsert`);
 }
 const nextDay=(day:string)=>new Date(Date.parse(`${day}T12:00:00Z`)+86_400_000).toISOString().slice(0,10);
 

@@ -505,7 +505,7 @@ export default function AccessConsole() {
       .map((u) => ({
         level: "neutral",
         title: "Einrichtung noch offen",
-        text: `${u.email} hat sich noch nie angemeldet.`,
+        text: locale==='en'?`${u.email} has never signed in.`:`${u.email} hat sich noch nie angemeldet.`,
         target: "users" as View,
       })),
     ...users
@@ -517,7 +517,7 @@ export default function AccessConsole() {
       .map((u) => ({
         level: "warning",
         title: "Partner ohne Datenfreigabe",
-        text: `${u.email} sieht aufgrund des leeren Scopes keine Partnerdaten.`,
+        text: locale==='en'?`${u.email} cannot see partner data because the scope is empty.`:`${u.email} sieht aufgrund des leeren Scopes keine Partnerdaten.`,
         target: "users" as View,
       })),
     ...users
@@ -525,7 +525,7 @@ export default function AccessConsole() {
       .map((u) => ({
         level: "danger",
         title: "Benutzer gesperrt",
-        text: `${u.email} kann sich aktuell nicht anmelden.`,
+        text: locale==='en'?`${u.email} cannot sign in at present.`:`${u.email} kann sich aktuell nicht anmelden.`,
         target: "users" as View,
       })),
   ].slice(0, 8);
@@ -741,7 +741,7 @@ export default function AccessConsole() {
                             scopes,
                           },
                         },
-                        `Rechte von ${user.email} wirklich ändern? Alle bestehenden Sitzungen werden sofort beendet.`,
+                        locale==='en'?`Change permissions for ${user.email}? All existing sessions will end immediately.`:`Rechte von ${user.email} wirklich ändern? Alle bestehenden Sitzungen werden sofort beendet.`,
                       );
                     }}
                   >
@@ -852,7 +852,7 @@ export default function AccessConsole() {
                         onClick={() =>
                           void act(
                             { action: "impersonate", userId: user.id },
-                            `Zur Ansicht von ${user.email} wechseln? Aktionen erfolgen im Namen dieses Benutzers.`,
+                            locale==='en'?`View as ${user.email}? Actions will be performed on behalf of this user.`:`Zur Ansicht von ${user.email} wechseln? Aktionen erfolgen im Namen dieses Benutzers.`,
                           )
                         }
                       >
@@ -882,8 +882,8 @@ export default function AccessConsole() {
                               expectedVersion: user.access.version,
                             },
                             user.status !== "active"
-                              ? `${user.email} wieder aktivieren?`
-                              : `${user.email} sofort sperren? Bestehende Sitzungen werden beendet.`,
+                              ? (locale==='en'?`Reactivate ${user.email}?`:`${user.email} wieder aktivieren?`)
+                              : (locale==='en'?`Block ${user.email} immediately? Existing sessions will end.`:`${user.email} sofort sperren? Bestehende Sitzungen werden beendet.`),
                           )
                         }
                       >
@@ -901,7 +901,7 @@ export default function AccessConsole() {
                                 userId: user.id,
                                 expectedVersion: user.access.version,
                               },
-                              `${user.email} wirklich deaktivieren? Der Zugang bleibt gesperrt, bis ein Administrator ihn reaktiviert.`,
+                              locale==='en'?`Disable ${user.email}? Access remains disabled until an administrator reactivates it.`:`${user.email} wirklich deaktivieren? Der Zugang bleibt gesperrt, bis ein Administrator ihn reaktiviert.`,
                             )
                           }
                         >

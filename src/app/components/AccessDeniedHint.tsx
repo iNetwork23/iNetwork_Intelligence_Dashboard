@@ -1,5 +1,6 @@
 import InstantLink from '../affiliates/InstantLink';
+import LocalizedRoot from './LocalizedRoot';
 
 export default function AccessDeniedHint({permission}:{permission?:string}){
- return <>{permission&&<p>Fehlende Berechtigung: {permission}</p>}<InstantLink href="/">← Zurück zum Account Monitor</InstantLink></>;
+ return <>{permission&&<LocalizedRoot><p>Fehlende Berechtigung: {permission}</p></LocalizedRoot>}<InstantLink href="/">← Zurück zum Account Monitor</InstantLink></>;
 }
