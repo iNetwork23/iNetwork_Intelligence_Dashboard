@@ -91,9 +91,9 @@ export async function getAffiliateSourceScopeRows(affiliateId:string,range:{from
  if(foreignScopeRequested(access,{affiliate:affiliateId}))throw new Error('403 · Fremde Affiliate-ID');
  assertScopesSupported(access,['affiliate','offer','campaign','source','sub_source']);
  if(!range.from||!range.to)throw new Error('Auswertungszeitraum fehlt');
- const[rows,freshness]=await Promise.all([loadAffiliateSourceRowsRangeFromCache(range,affiliateId).then(items=>sourceRowsForAccess(items,access)),freshnessWindow(range)]);
+ const freshness=await freshnessWindow(range);
  if(!sourceScopeCoverageComplete(range,freshness))throw new Error('Source-Historie ist unvollständig. Keine Änderung durchgeführt.');
- return rows;
+ return sourceRowsForAccess(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId),access);
 }
 
 export async function getAffiliateSourceFreshness(range:{from:string;to:string}){

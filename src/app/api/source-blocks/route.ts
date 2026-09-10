@@ -50,7 +50,10 @@ async function resolveFailedBlock(input:Record<string,unknown>,fallback:string,s
 export async function GET(request:Request){const auth=await requirePermission('api.manage');if(!auth.ok)return json({error:auth.status===401?'Nicht angemeldet':'Keine Berechtigung'},auth.status);if(!mayManage(auth.user.access))return json({error:'Keine Berechtigung'},403);const money=<T,>(value:T)=>stripFinance(value,can(auth.user.access,'finance.view'));try{const url=new URL(request.url),action=url.searchParams.get('action'),store=securityStore();
  if(action==='preview_provider'){
   const input=Object.fromEntries(url.searchParams) as unknown as SourceBlockInput;
-  await assertVisibleSource(input,auth.user.access);
+  try{await assertVisibleSource(input,auth.user.access)}catch(error){
+   if(error instanceof Error&&error.message==='Source-Historie ist unvollständig. Keine Änderung durchgeführt.')return json({error:error.message,code:'source_history_incomplete'},400);
+   throw error;
+  }
   try{return json({preview:await previewEverflowSourceBlock(normalizeSourceBlockInput(input),process.env.EVERFLOW_API_KEY||'')})}
   catch(error){console.error('Source block provider preview failed',error);return json({error:'Providerzustand konnte nicht vollständig geprüft werden. Es wurde nichts geändert.'},503)}
  }

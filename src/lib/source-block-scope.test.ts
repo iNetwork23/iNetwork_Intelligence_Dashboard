@@ -46,6 +46,10 @@ describe('provider preview access and side effects',()=>{
  it('refuses a tuple absent from the server snapshot before provider access',async()=>{
   mocks.scopeRows.mockResolvedValue([]);const{GET}=await import('@/app/api/source-blocks/route');expect((await GET(request())).status).toBe(400);expect(mocks.provider).not.toHaveBeenCalled();
  });
+ it('reports incomplete source history distinctly without calling the provider',async()=>{
+  mocks.scopeRows.mockRejectedValue(new Error('Source-Historie ist unvollständig. Keine Änderung durchgeführt.'));
+  const{GET}=await import('@/app/api/source-blocks/route');const result=await GET(request());expect(result.status).toBe(400);expect(await result.json()).toMatchObject({code:'source_history_incomplete'});expect(mocks.provider).not.toHaveBeenCalled();
+ });
  it('returns an actionable generic failure without exposing provider response details',async()=>{
   mocks.scopeRows.mockResolvedValue(rows);mocks.provider.mockRejectedValue(new Error('private-provider-detail'));const log=vi.spyOn(console,'error').mockImplementation(()=>{});
   try{const{GET}=await import('@/app/api/source-blocks/route');const result=await GET(request());expect(result.status).toBe(503);expect(await result.text()).not.toContain('private-provider-detail');expect(mocks.activate).not.toHaveBeenCalled();expect(mocks.audit).not.toHaveBeenCalled()}finally{log.mockRestore()}
