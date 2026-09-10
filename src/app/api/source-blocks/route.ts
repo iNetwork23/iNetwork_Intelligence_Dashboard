@@ -1,7 +1,7 @@
 import {NextResponse} from 'next/server';
 import {revalidateTag} from 'next/cache';
 import {audit,requestEvidence,securityStore} from '@/lib/access-store';
-import {activateEverflowSourceBlock,deactivateEverflowSourceBlock} from '@/lib/everflow-source-blocks';
+import {activateEverflowSourceBlock,deactivateEverflowSourceBlock,previewEverflowSourceBlock} from '@/lib/everflow-source-blocks';
 import {activateSourceBlock,activateSourceBlocksAtomically,deactivateSourceBlock,listSourceBlocks,SourceBlockStateUncertainError} from '@/lib/source-block-service';
 import {normalizeSourceBlockInput,sourceBlockIdentityKey,sourceBlockMetricsFromSnapshotRows,sourceBlockOfferSummariesFromSnapshotRows,sourceBlockOffersFromSnapshotRows,sourceBlockRequiredConfirmation,sourceBlockStoreKey,sourceBlockVisibleInSnapshotRows,type SourceBlockInput,type SourceBlockRecord} from '@/lib/source-blocks';
 import {isSourceBlockReasonCategory,listSourceBlockHistory,recordSourceBlockHistory,SOURCE_BLOCK_REASON_CATEGORIES,type SourceBlockReasonCategory} from '@/lib/source-block-history';
@@ -48,6 +48,12 @@ async function resolveFailedBlock(input:Record<string,unknown>,fallback:string,s
  }catch{return{blockId:fallback,identityKey:fallback}}
 }
 export async function GET(request:Request){const auth=await requirePermission('api.manage');if(!auth.ok)return json({error:auth.status===401?'Nicht angemeldet':'Keine Berechtigung'},auth.status);if(!mayManage(auth.user.access))return json({error:'Keine Berechtigung'},403);const money=<T,>(value:T)=>stripFinance(value,can(auth.user.access,'finance.view'));try{const url=new URL(request.url),action=url.searchParams.get('action'),store=securityStore();
+ if(action==='preview_provider'){
+  const input=Object.fromEntries(url.searchParams) as unknown as SourceBlockInput;
+  await assertVisibleSource(input,auth.user.access);
+  try{return json({preview:await previewEverflowSourceBlock(normalizeSourceBlockInput(input),process.env.EVERFLOW_API_KEY||'')})}
+  catch(error){console.error('Source block provider preview failed',error);return json({error:'Providerzustand konnte nicht vollständig geprüft werden. Es wurde nichts geändert.'},503)}
+ }
  if(action==='preview_across_offers'){const input=Object.fromEntries(url.searchParams) as unknown as SourceBlockInput,{block,offers}=await resolveProductWideOffers(input,auth.user.access),index=await loadBlockIndex(store);return json(stripFinance({offers:offers.map(offer=>({...offer,blocked:index.get(sourceBlockIdentityKey({...block,offerId:Number(offer.offerId)}))?.status==='active'})),requiredConfirmation:sourceBlockRequiredConfirmation(block)},can(auth.user.access,'finance.view')));}
  if(action==='history'){const id=String(url.searchParams.get('id')||'').trim().slice(0,100);if(!id)return json({error:'Sperr-ID fehlt'},400);const record=(await listSourceBlocks(store)).find(block=>block.id===id&&sourceBlockInScope(block,auth.user.access));if(!record)return json({error:'Sperre nicht gefunden'},404);return json(money({events:await listSourceBlockHistory(id,store)}))}
  if(url.searchParams.get('effects')==='1'){const from=String(url.searchParams.get('from')||''),to=String(url.searchParams.get('to')||''),affiliateId=String(url.searchParams.get('affiliateId')||'').trim();if(!isDay(from)||!isDay(to)||from>to)return json({error:'Zeitraum fehlt oder ist ungültig (from/to als JJJJ-MM-TT)'},400);if(affiliateId&&!/^\d+$/.test(affiliateId))return json({error:'Affiliate-ID ist ungültig'},400);const finance=can(auth.user.access,'finance.view'),[allBlocks,allEffects]=await Promise.all([listSourceBlocks(store),loadBlockEffects({from,to},affiliateId||undefined)]),blocks=scopeSourceBlocks(allBlocks,auth.user.access),effects=allEffects.filter(effect=>sourceBlockInScope(effect.record,auth.user.access));return json(stripFinance({blocks,effects:finance?effects:effects.map(effect=>({...effect,balance:null}))},finance))}

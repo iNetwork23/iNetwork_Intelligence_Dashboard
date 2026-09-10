@@ -2,6 +2,7 @@ import type {SourceBlockReasonCategory} from './source-block-reasons';
 export type SourceTrafficMode='tracked'|'api';
 export type SourceBlockLevel='main_source'|'sub_source';
 export type EverflowBlockVariable={variable:string;variable_value:string;variable_secondary_value:string;comparison_method:'exact_match'|'not_present'};
+export type SourceBlockProviderPreview={checkedAt:string;operation:'create'|'reuse';matchingSettingIds:number[];affiliateId:number;offerId:number;trafficMode:SourceTrafficMode;level:SourceBlockLevel;variables:EverflowBlockVariable[];payoutAmount:0;postbackDisabled:true};
 /** Referenzwerte der Identität zum Sperrzeitpunkt (Etappe 4): Summen der letzten windowDays Tage, serverseitig aus Snapshot-Zeilen berechnet – nie aus Client-Werten. */
 export type SourceBlockMetricsAtBlock={windowDays:number;clicks:number;sois:number;payout:number;revenue:number;capturedAt:string};
 export type SourceBlockInput={affiliateId:string;affiliateName:string;offerId:string;offerName:string;campaignId?:string;trafficMode:SourceTrafficMode;level:SourceBlockLevel;mainValue?:string|null;subValue?:string|null;reason?:string;reasonCategory?:SourceBlockReasonCategory;metricsAtBlock?:SourceBlockMetricsAtBlock};
