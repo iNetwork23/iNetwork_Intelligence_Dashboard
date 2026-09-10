@@ -20,6 +20,8 @@ it('reads bounded snapshot pages and retains exact totals across chunks, days an
  expect(result.evaluations.find(row=>row.affiliateId==='2')?.metrics.sois).toBe(104);
  expect(result.coverage.sourceComplete).toBe(true);
  expect(result.coverage.cutoverReady).toBe(false);
+ expect(result.totals.highRisk).toBeNull();
+ expect(result.totals.suspicious).toBeNull();
  expect(result.stopCompliance).toEqual([]);
  expect(state.reads.every(size=>size<=8)).toBe(true);
  expect(result.writesPerformed).toBe(0);
