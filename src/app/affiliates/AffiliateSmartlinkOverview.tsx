@@ -1,3 +1,4 @@
+import LocalizedRoot from '../components/LocalizedRoot';
 import LiveCampaignDeepDiveLink from './LiveCampaignDeepDiveLink';
 import type {CampaignAffiliateMapping} from '@/lib/affiliate-smartlinks';
 import {buildAffiliateCampaignDecision,sortCampaignDecisions} from '@/lib/affiliate-campaign-decision';
@@ -32,7 +33,7 @@ export default function AffiliateSmartlinkOverview({affiliateId,mappings,insight
   const critical=campaigns.filter(item=>item.action==='stoppen'||item.attention.severity==='critical').length;
   const review=campaigns.filter(item=>item.action==='prüfen'||item.action==='stoppen'||item.attention.severity==='critical'||item.attention.severity==='warning').length;
   const status=critical?`${critical} dringend prüfen`:review?`${review} Campaign${review===1?'':'s'} mit Prüfhinweis`:'Keine Campaign mit Prüfhinweis';
-  return <section className={styles.overview} aria-labelledby="smartlink-actions-title">
+  return <LocalizedRoot><section className={styles.overview} aria-labelledby="smartlink-actions-title">
     <header><div><span>SMARTLINK-ERGEBNIS · {rangeLabel}</span><h2 id="smartlink-actions-title">Ergebnis und nächste Maßnahme</h2></div><strong className={critical?styles.critical:review?styles.notice:styles.clear}>{status}</strong></header>
     <div className={styles.portfolioKpis} aria-label="Gesamtergebnis Smartlinks">
       <span><small>Umsatz</small><b>{euro(totals.revenue)}</b></span>
@@ -45,12 +46,12 @@ export default function AffiliateSmartlinkOverview({affiliateId,mappings,insight
       const href=affiliateCampaignHref({campaignId:mapping.campaignId,affiliateId,currentHref:returnTo}),eventTotals=insight?.selectedRange?.eventCoverageComplete===true?insight.selectedRange.attribution.total:undefined,saleRate=eventTotals?.sois?100*eventTotals.firstSales/eventTotals.sois:null;
       const revenueWithoutFirstSale=Boolean(eventTotals&&eventTotals.firstSales===0&&eventTotals.revenue>0&&(eventTotals.rebills>0||eventTotals.coinSpend>0));
       return <article key={mapping.campaignId} className={`${styles.campaignRow} ${styles[financialStatus]}`}>
-        <div className={styles.identity}><span>CAMPAIGN #{mapping.campaignId} · {mapping.status}</span><h3>{mapping.campaign}</h3><small>{insight?.currentSlots.length||0} aktive LPs · {insight?.legacySlots.length||0} Frühere LPs · Offer {insight?.identity.offerIds.map(id=>`#${id}`).join(', ')||'nicht zugeordnet'}</small></div>
+        <div className={styles.identity}><span>CAMPAIGN #{mapping.campaignId} · {mapping.status}</span><h3 data-no-translate>{mapping.campaign}</h3><small>{insight?.currentSlots.length||0} aktive LPs · {insight?.legacySlots.length||0} Frühere LPs · Offer {insight?.identity.offerIds.map(id=>`#${id}`).join(', ')||'nicht zugeordnet'}</small></div>
         <div className={styles.statusCell}><small>STATUS</small><b>{statusLabel}</b><span>Ausgewählter Zeitraum · {rangeLabel}</span></div>
         <div className={styles.resultCell}><small>ERGEBNIS</small><b className={mapping.profit30>=0?styles.up:styles.down}>{euro(mapping.profit30)}</b><span>{euro(mapping.revenue30)} Umsatz · {euro(mapping.payout30)} Payout</span><span>{num(mapping.sois30)} SOIs{eventTotals?` · ${num(eventTotals.firstSales)} First-Sales · ${num(eventTotals.rebills)} Rebills · ${num(eventTotals.coinSpend)} Coin-Spend-Events`:''}</span>{eventTotals&&<span>{saleRate===null?'First-Sale-Rate nicht berechenbar':`${saleRate.toFixed(2).replace('.',',')} % First-Sales je SOI`}</span>}</div>
         <div className={styles.actionCell}><small>NÄCHSTE MASSNAHME</small><b>{actionLabel}</b><strong>{euro(mapping.profit30)} bei {num(mapping.sois30)} SOIs</strong><span>{reason}</span>{attention.detail!==reason&&<span>{attention.detail}</span>}{revenueWithoutFirstSale&&eventTotals&&<span className={styles.explanation}>Im gleichen Zeitraum wurden {eventTotals.rebills?`${num(eventTotals.rebills)} Rebills`:''}{eventTotals.rebills&&eventTotals.coinSpend?' und ':''}{eventTotals.coinSpend?`${num(eventTotals.coinSpend)} Coin-Spend-Events`:''} erfasst. Diese Events können Umsatz erklären; eine direkte Umsatzzuordnung liegt hier nicht vor.</span>}</div>
         <LiveCampaignDeepDiveLink campaignId={mapping.campaignId} affiliateId={affiliateId} initialHref={href} label="Campaign öffnen"/>
       </article>;
     })}</div>
-  </section>;
+  </section></LocalizedRoot>;
 }

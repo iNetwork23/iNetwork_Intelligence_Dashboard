@@ -10,6 +10,14 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Stand (\d{2}:\d{2})$/,'Updated $1',/^Updated (\d{2}:\d{2})$/,'Stand $1'],
+ [/^(\d+) Partner verfügbar$/,'$1 partners available',/^(\d+) partners available$/,'$1 Partner verfügbar'],
+ [/^(\d+) gespeicherte Smartlinks$/,'$1 saved smartlinks',/^(\d+) saved smartlinks$/,'$1 gespeicherte Smartlinks'],
+ [/^(\d+) Campaign(s?) mit Prüfhinweis$/,'$1 campaign$2 to review',/^(\d+) campaign(s?) to review$/,'$1 Campaign$2 mit Prüfhinweis'],
+ [/^(\d+) dringend prüfen$/,'$1 urgent reviews',/^(\d+) urgent reviews$/,'$1 dringend prüfen'],
+ [/^\((\d+) ausgeblendet\)$/,'($1 hidden)',/^\((\d+) hidden\)$/,'($1 ausgeblendet)'],
+ [/^· (\d+) Pfade$/,'· $1 paths',/^· (\d+) paths$/,'· $1 Pfade'],
+ [/^Top 3: ([\d.,]+) % der SOIs · (\d+) Partner mit SOIs$/,'Top 3: $1 % of SOIs · $2 partners with SOIs',/^Top 3: ([\d.,]+) % of SOIs · (\d+) partners with SOIs$/,'Top 3: $1 % der SOIs · $2 Partner mit SOIs'],
  [/^Dry Run: Entscheidung Halten \(([a-z_]+)\) · (\d+) Writes$/,'Dry run: Decision hold ($1) · $2 writes',/^Dry run: Decision hold \(([a-z_]+)\) · (\d+) writes$/,'Dry Run: Entscheidung Halten ($1) · $2 Writes'],
  [/^Halten \(([a-z_]+)\)$/,'Hold ($1)',/^Hold \(([a-z_]+)\)$/,'Halten ($1)'],
  [/^(\d+(?:[.,]\d+)?) Tage$/,'$1 days',/^(\d+(?:[.,]\d+)?) days$/,'$1 Tage'],

@@ -44,6 +44,14 @@ const statusLabels: Record<string, string> = {
   invited: "Eingeladen",
 };
 const permissionLabels: Record<string, string> = {
+  "dashboard.view": "Dashboard ansehen",
+  "partners.view": "Partner ansehen",
+  "landingpages.view": "Landingpages ansehen",
+  "landingpages.manage": "Landingpages verwalten",
+  "settings.manage": "Einstellungen verwalten",
+  "smartlinks.edit": "Smartlinks bearbeiten",
+  "automations.manage": "Automatisierungen verwalten",
+  "automations.live": "Live-Automatisierungen ausführen",
   "statistics.view": "Statistiken ansehen",
   "finance.view": "Finanzkennzahlen ansehen",
   "affiliates.view": "Affiliates ansehen",
@@ -69,7 +77,7 @@ export function permissionGroup(permission: string) {
   if (permission.startsWith("roles")) return "Rollenverwaltung";
   if (permission.startsWith("smartlinks") || permission.startsWith("campaigns"))
     return "Smartlinks & Kampagnen";
-  if (permission.startsWith("affiliate")) return "Affiliates & Partner";
+  if (permission.startsWith("affiliate") || permission.startsWith("partners")) return "Affiliates & Partner";
   if (permission.startsWith("automation")) return "Automatisierung";
   if (permission.startsWith("export")) return "Exporte";
   if (permission.startsWith("api") || permission.startsWith("audit"))
