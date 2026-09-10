@@ -1445,4 +1445,8 @@ export const translations = {
   "Ausbauen": "Scale up",
   "Alle Partner ·": "All partners ·",
   "Partner nicht zugeordnet ·": "Unassigned partner ·",
+  "Übersicht kopiert": "Report copied",
+  "nach Profit sortiert": "sorted by profit",
+  "nach SOIs sortiert": "sorted by SOIs",
+  "Noch keine belastbare Stop- oder Scale-Evidenz.": "There is not enough evidence to stop or scale yet.",
 } as const;

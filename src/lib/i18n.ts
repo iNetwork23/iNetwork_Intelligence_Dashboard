@@ -10,6 +10,9 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^([\d.,]+) % First-Sales je SOI$/,'$1 % first sales per SOI',/^([\d.,]+)% first sales per SOI$/,'$1 % First-Sales je SOI'],
+ [/^(-?[\d.,]+\s*€) bei ([\d.,]+) SOIs(\.?)$/,'$1 from $2 SOIs$3',/^(-?€[\d.,]+) from ([\d.,]+) SOIs(\.?)$/,'$1 bei $2 SOIs$3'],
+ [/^([\d.,]+) SOIs · noch keine belastbare Mindestmenge\.$/,'$1 SOIs · minimum sample size not yet reached.',/^([\d.,]+) SOIs · minimum sample size not yet reached\.$/,'$1 SOIs · noch keine belastbare Mindestmenge.'],
  [/^Stand (\d{2}:\d{2})$/,'Updated $1',/^Updated (\d{2}:\d{2})$/,'Stand $1'],
  [/^(\d+) Partner verfügbar$/,'$1 partners available',/^(\d+) partners available$/,'$1 Partner verfügbar'],
  [/^(\d+) gespeicherte Smartlinks$/,'$1 saved smartlinks',/^(\d+) saved smartlinks$/,'$1 gespeicherte Smartlinks'],
