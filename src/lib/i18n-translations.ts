@@ -1449,4 +1449,10 @@ export const translations = {
   "nach Profit sortiert": "sorted by profit",
   "nach SOIs sortiert": "sorted by SOIs",
   "Noch keine belastbare Stop- oder Scale-Evidenz.": "There is not enough evidence to stop or scale yet.",
+  "Firmen suchen": "Search companies",
+  "Firma oder Affiliate-ID": "Company or affiliate ID",
+  "Keine Firma gefunden": "No company found",
+  "Suchbegriff oder Affiliate-ID prüfen.": "Check the search term or affiliate ID.",
+  "Keine aktiven Firmen": "No active companies",
+  "Für diesen Zeitraum liegen keine aktiven Firmen vor.": "There are no active companies in this period.",
 } as const;
