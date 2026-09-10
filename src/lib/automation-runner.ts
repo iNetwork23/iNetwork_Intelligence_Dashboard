@@ -7,7 +7,7 @@ type ApplyResult={verified:boolean;writesPerformed:number;afterFingerprint:strin
 type Dependencies={
  loadMetrics:(config:StoredAutomationConfiguration)=>Promise<AutomationVariantMetrics[]>;
  preflight:(config:StoredAutomationConfiguration)=>Promise<Preflight>;
- applyRouting:(input:{config:StoredAutomationConfiguration;evaluation:AutomationEvaluation;expectedFingerprint:string})=>Promise<ApplyResult>;
+ applyRouting:(input:{config:StoredAutomationConfiguration;evaluation:AutomationEvaluation;expectedFingerprint:string;beforeWrite:()=>Promise<void>})=>Promise<ApplyResult>;
  compensateRouting?:(input:{config:StoredAutomationConfiguration;expectedFingerprint:string})=>Promise<ApplyResult>;
  authorize:(config:StoredAutomationConfiguration)=>Promise<void>;
  beforeWrite:(input:{config:StoredAutomationConfiguration;evaluation:AutomationEvaluation;actorId:string})=>Promise<void>;
@@ -30,7 +30,7 @@ export async function executeAutomationRun(store:SecurityStore,id:string,mode:'d
     const preflight=await deps.preflight(config);if(!preflight.verified||!preflight.fingerprint)throw new Error(`Live-Preflight fehlgeschlagen: ${preflight.blockers.join(' ')}`);if(preflight.fingerprint!==config.acceptedBaselineFingerprint)throw new Error('Campaign-Baseline hat sich seit der Live-Freigabe geändert.');
     if(evaluation.writesPlanned){
      await deps.beforeWrite({config,evaluation,actorId});await deps.authorize(config);await lease.assertOwned();
-     const applied=await deps.applyRouting({config,evaluation,expectedFingerprint:preflight.fingerprint});providerMutated=applied.writesPerformed>0;afterFingerprint=applied.afterFingerprint;
+     const applied=await deps.applyRouting({config,evaluation,expectedFingerprint:preflight.fingerprint,beforeWrite:async()=>{await deps.authorize(original);await lease.assertOwned()}});providerMutated=applied.writesPerformed>0;afterFingerprint=applied.afterFingerprint;
      if(!applied.verified||applied.writesPerformed!==1)throw new Error('Everflow-Write wurde nicht vollständig verifiziert.');
      await lease.assertOwned();config=await commitAutomationTarget(store,id,config.version,evaluation.targetSlots,applied.afterFingerprint,actorId,lease);writesPerformed=1;
      if(deps.afterWrite)await deps.afterWrite({config,evaluation,actorId,afterFingerprint:applied.afterFingerprint});
