@@ -6,4 +6,12 @@ describe('automation access policy',()=>{
  it('enforces every populated resource scope for non-partner delegated roles too',()=>{const scoped=parseAccessMetadata({role:'employee',grants:['automations.manage'],scopes:{affiliate:['436'],campaign:['146'],offer:['57','50']}});expect(automationScopeAllowed(scoped,{affiliateId:436,campaignId:146,offerIds:[57,50]})).toBe(true);expect(automationScopeAllowed(scoped,{affiliateId:436,campaignId:2,offerIds:[57]})).toBe(false);expect(automationScopeAllowed(scoped,{affiliateId:436,campaignId:146,offerIds:[8]})).toBe(false)});
  it('filters offer search results before disclosure for offer-scoped users',()=>{const scoped=parseAccessMetadata({role:'employee',scopes:{offer:['57']}}),offers=[{offerId:57,name:'Allowed'},{offerId:99,name:'Secret'}];expect(filterAutomationOffersByScope(scoped,offers)).toEqual([{offerId:57,name:'Allowed'}]);expect(filterAutomationOffersByScope(parseAccessMetadata({role:'admin'}),offers)).toEqual(offers)});
  it('allows unscoped admins but fails closed for empty partner scopes',()=>{expect(automationScopeAllowed(parseAccessMetadata({role:'admin'}),{affiliateId:436,campaignId:146,offerIds:[57]})).toBe(true);expect(automationScopeAllowed(parseAccessMetadata({role:'partner',grants:['automations.manage'],scopes:{}}),{affiliateId:436,campaignId:146,offerIds:[57]})).toBe(false)});
+ it.each(['affiliate','offer','account','source','sub_source'] as const)('does not authorize whole-campaign live routing through a %s scope',dimension=>{
+  const access=parseAccessMetadata({role:'employee',grants:['automations.manage','automations.live','campaigns.edit','api.manage'],scopes:{[dimension]:['10']}});
+  expect(mayRunLiveAutomation(access)).toBe(false);expect(mayConfigureAutomation(access)).toBe(true);
+ });
+ it('retains campaign-only live authorization while checking the exact campaign separately',()=>{
+  const access=parseAccessMetadata({role:'employee',grants:['automations.manage','automations.live','campaigns.edit','api.manage'],scopes:{campaign:['146']}});
+  expect(mayRunLiveAutomation(access)).toBe(true);expect(automationScopeAllowed(access,{affiliateId:436,campaignId:146,offerIds:[57]})).toBe(true);expect(automationScopeAllowed(access,{affiliateId:436,campaignId:2,offerIds:[57]})).toBe(false);
+ });
 });
