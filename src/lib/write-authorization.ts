@@ -3,7 +3,7 @@ import {scopeFingerprint,type AccessMetadata} from './rbac';
 import {resolveCurrentUserUncached,type CurrentUser} from './session';
 
 export class WriteAuthorizationError extends Error {
- constructor(){super('Keine Berechtigung. Bitte neu anmelden und die Änderung erneut prüfen.')}
+ constructor(){super('Berechtigung wurde zwischenzeitlich geändert. Bitte neu anmelden.')}
 }
 
 /** Re-read the session after slow reads, immediately before the intended write. */
