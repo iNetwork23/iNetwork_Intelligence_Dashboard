@@ -104,7 +104,7 @@ export function filterAccessUsers(
 }
 export function auditDescription(event: AuditSummary, targetLabel?: string, locale:'de'|'en'='de') {
   const target = targetLabel || event.targetId || (locale==='en'?'the affected user':'den betroffenen Benutzer');
-  const action=event.action==='user.update_user'?'user.update':event.action;
+  const action=({'user.update_user':'user.update','role.create_role':'role.create','role.update_role':'role.update'} as Record<string,string>)[event.action]||event.action;
   const messages: Record<string, string> = locale==='en'?{
     "user.create": `${event.actorId} created the account ${target}.`,
     "user.invite": `${event.actorId} invited ${target}.`,
