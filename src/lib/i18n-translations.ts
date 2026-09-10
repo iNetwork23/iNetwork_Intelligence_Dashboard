@@ -426,6 +426,8 @@ export const translations = {
   "Jahr auswählen": "Select year",
   "Monat auswählen": "Select month",
   "BEOBACHTEN": "WATCH",
+  "BEOBACHTEN / WEITER TESTEN": "WATCH / KEEP TESTING",
+  "Veränderung": "Change",
   "keine Sub-Source (Source-Fallback)": "no sub-source (source fallback)",
   "Keine": "None",
   "Abschalt-": "shutdown",

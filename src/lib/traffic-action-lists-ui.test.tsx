@@ -3,7 +3,7 @@ import{describe,expect,it,vi}from'vitest';
 import{renderToStaticMarkup}from'react-dom/server';
 vi.mock('next/navigation',()=>({usePathname:()=>'/affiliates',useSearchParams:()=>new URLSearchParams(''),useRouter:()=>({push:vi.fn()})}));
 import TrafficActionLists from'@/app/affiliates/TrafficActionLists';
-import{CANDIDATE_TOP_N}from'@/app/affiliates/CandidateTopN';
+import{CANDIDATE_TOP_N}from'@/lib/candidate-list';
 import type{ConversionMetric,SourceBreakdownRow}from'@/lib/source-breakdown';
 import{sourceRowBlockKeys,type SourceBlockMarkerIndex}from'@/lib/source-block-markers';
 
