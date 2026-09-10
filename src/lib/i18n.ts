@@ -10,6 +10,12 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+) von (\d+) SOIs reif \(Schwelle (\d+)\)$/,'$1 of $2 SOIs mature (threshold $3)',/^(\d+) of (\d+) SOIs mature \(threshold (\d+)\)$/,'$1 von $2 SOIs reif (Schwelle $3)'],
+ [/^([\d.,]+) % der Sale-Ereignisse$/,'$1 % of sale events',/^([\d.,]+)\s*% of sale events$/,'$1 % der Sale-Ereignisse'],
+ [/^(-?[\d.,]+\s*€) Umsatz je SOI$/,'$1 revenue per SOI',/^(-?€[\d.,]+) revenue per SOI$/,'$1 Umsatz je SOI'],
+ [/^([\d.,]+ %) CVR · ([\d.,]+) SOIs aus ([\d.,]+) Klicks · ([\d.,]+) First-Sales$/,'$1 CVR · $2 SOIs from $3 clicks · $4 First-Sales',/^([\d.,]+\s*%) CVR · ([\d.,]+) SOIs from ([\d.,]+) clicks · ([\d.,]+) First-Sales$/,'$1 CVR · $2 SOIs aus $3 Klicks · $4 First-Sales'],
+ [/^([\d.,]+) SOIs · keine Klicks · ([\d.,]+) First-Sales$/,'$1 SOIs · no clicks · $2 First-Sales',/^([\d.,]+) SOIs · no clicks · ([\d.,]+) First-Sales$/,'$1 SOIs · keine Klicks · $2 First-Sales'],
+ [/^First-Sale-Rate auch optimistisch unter ([\d.,]+ %) \(halber Vergleichswert\) bei negativem Profit\.$/,'First-sale rate is below $1 (half the benchmark) even optimistically, with negative profit.',/^First-sale rate is below ([\d.,]+\s*%) \(half the benchmark\) even optimistically, with negative profit\.$/,'First-Sale-Rate auch optimistisch unter $1 (halber Vergleichswert) bei negativem Profit.'],
  [/^(\d+) direkte Landingpages$/,'$1 direct landing pages',/^(\d+) direct landing pages$/,'$1 direkte Landingpages'],
  [/^Letzter Lead (\d{2})\.(\d{2})\.$/,'Last lead $1/$2',/^Last lead (\d{2})\/(\d{2})$/,'Letzter Lead $1.$2.'],
  [/^Mehr anzeigen · (\d+) weitere$/,'Show more · $1 more',/^Show more · (\d+) more$/,'Mehr anzeigen · $1 weitere'],
@@ -73,6 +79,13 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^LTV-Kohorten (\d{2}:\d{2})$/,'LTV cohorts $1',/^LTV cohorts (\d{2}:\d{2})$/,'LTV-Kohorten $1'],
 ];
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ // Split only recognized evidence sentences, never arbitrary business labels.
+ const evidence=locale==='en'
+  ?/^(?:(?:\d+ von \d+ SOIs reif(?: \(Schwelle \d+\))?|Konfidenz: nicht berechnet) · Rate |\d+ Rebills · |Latenz (?:hoch|mittel|niedrig|keine Daten) · p75 )/
+  :/^(?:(?:\d+ of \d+ SOIs mature(?: \(threshold \d+\))?|Confidence: not computed) · Rate |\d+ Rebills · |Latency (?:high|medium|low|no data) · p75 )/;
+ if(evidence.test(text))return text.split(' · ').map(part=>translateText(part,locale)).join(' · ');
+ const latency=locale==='en'?text.match(/^(Latenz p75|p75) (–|\d+(?:,\d+)? h|\d+(?:,\d+)? Tage)$/):text.match(/^(Latency p75|p75) (–|\d+(?:\.\d+)? h|\d+(?:\.\d+)? days)$/);
+ if(latency)return `${latency[1]==='p75'?'p75':locale==='en'?'Latency p75':'Latenz p75'} ${locale==='en'?latency[2].replace(',','.').replace('Tage','days'):latency[2].replace('.',',').replace('days','Tage')}`;
  const rule=locale==='en'?text.match(/^Regel (\d+): (.+)$/):text.match(/^Rule (\d+): (.+)$/);
  if(rule){const translated=translateText(rule[2],locale);if(translated!==rule[2])return `${locale==='en'?'Rule':'Regel'} ${rule[1]}: ${translated}`}
  const dealField=locale==='en'
