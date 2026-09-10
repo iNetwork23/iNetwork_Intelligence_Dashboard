@@ -26,13 +26,14 @@ async function readEditableSnapshot(store:SecurityStore):Promise<{raw:StoredDeal
 }
 export async function readEditableDealRegister(store:SecurityStore=securityStore()):Promise<EditableDealRegister>{return(await readEditableSnapshot(store)).state}
 /** Vollständiger Ersatz nur für den gelesenen Stand, einschließlich der ersten Speicherung eines alten Registers. */
-export async function saveDealRegister(rules:unknown,actor:string,expectedRevision:unknown,store:SecurityStore=securityStore(),now=new Date()):Promise<{before:DealRegisterState;after:DealRule[];revision:string}>{
+export async function saveDealRegister(rules:unknown,actor:string,expectedRevision:unknown,store:SecurityStore=securityStore(),now=new Date(),authorize?:()=>Promise<unknown>):Promise<{before:DealRegisterState;after:DealRule[];revision:string}>{
  const checked=validateDealRules(rules);if(!checked.ok)throw new DealRegisterValidationError(checked.error);
  if(typeof expectedRevision!=='string'||!expectedRevision||expectedRevision.length>160)throw new DealRegisterConflictError();
  const {raw,state}=await readEditableSnapshot(store);if(state.revision!==expectedRevision)throw new DealRegisterConflictError();
  const before:DealRegisterState={rules:state.rules,source:state.source},previous=before.source==='stored'?before.rules:[],stamp=now.toISOString(),actorId=actor.trim().slice(0,100)||'unbekannt';
  const after:DealRule[]=checked.rules.map(rule=>{const match=previous.find(item=>sameDealRuleValues(item,rule));return match?{...rule,updatedAt:match.updatedAt,updatedBy:match.updatedBy}:{...rule,updatedAt:stamp,updatedBy:actorId}});
  const revision=randomUUID(),record:StoredDealRegister={version:1,revision,rules:after,updatedAt:stamp,updatedBy:actorId};
+ await authorize?.();
  const saved=raw===null?await store.setIfAbsent(DEAL_REGISTER_STORE_KEY,record):await store.replaceIfRevision(DEAL_REGISTER_STORE_KEY,raw.revision??null,record);
  if(!saved)throw new DealRegisterConflictError();
  expireDealRegisterCache();return{before,after,revision};
