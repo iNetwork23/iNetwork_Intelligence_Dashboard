@@ -483,7 +483,7 @@ export default function AccessConsole() {
     (event) =>
       (auditAction === "all" || event.action === auditAction) &&
       (!auditQuery ||
-        auditDescription(event, userById.get(event.targetId || ""))
+        auditDescription(event, userById.get(event.targetId || ""), locale)
           .toLocaleLowerCase("de")
           .includes(auditQuery.toLocaleLowerCase("de"))),
   );
@@ -1131,6 +1131,7 @@ export default function AccessConsole() {
                     {auditDescription(
                       event,
                       userById.get(event.targetId || ""),
+                      locale,
                     )}
                   </b>
                   <small>{new Date(event.at).toLocaleString("de-DE")}</small>
