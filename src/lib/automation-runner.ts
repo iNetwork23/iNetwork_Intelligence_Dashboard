@@ -25,11 +25,11 @@ export async function executeAutomationRun(store:SecurityStore,id:string,mode:'d
   if(mode==='live'&&(config.status!=='active'||!config.writeEnabled||!config.acceptedBaselineFingerprint))throw new Error('Automation ist nicht live freigegeben.');
   const original=config,runId=crypto.randomUUID(),startedAt=new Date().toISOString();let providerMutated=false,afterFingerprint:string|undefined,evaluation:AutomationEvaluation|undefined,writesPerformed=0;
   try{
-   const metrics=await deps.loadMetrics(config);evaluation=evaluateAutomation(config,metrics);
+   const metrics=await deps.loadMetrics(config);await deps.authorize(config);evaluation=evaluateAutomation(config,metrics);
    if(mode==='live'){
     const preflight=await deps.preflight(config);if(!preflight.verified||!preflight.fingerprint)throw new Error(`Live-Preflight fehlgeschlagen: ${preflight.blockers.join(' ')}`);if(preflight.fingerprint!==config.acceptedBaselineFingerprint)throw new Error('Campaign-Baseline hat sich seit der Live-Freigabe geändert.');
     if(evaluation.writesPlanned){
-     await deps.beforeWrite({config,evaluation,actorId});await lease.assertOwned();
+     await deps.beforeWrite({config,evaluation,actorId});await deps.authorize(config);await lease.assertOwned();
      const applied=await deps.applyRouting({config,evaluation,expectedFingerprint:preflight.fingerprint});providerMutated=applied.writesPerformed>0;afterFingerprint=applied.afterFingerprint;
      if(!applied.verified||applied.writesPerformed!==1)throw new Error('Everflow-Write wurde nicht vollständig verifiziert.');
      await lease.assertOwned();config=await commitAutomationTarget(store,id,config.version,evaluation.targetSlots,applied.afterFingerprint,actorId,lease);writesPerformed=1;
