@@ -102,9 +102,25 @@ export function filterAccessUsers(
         (filters.mfa === "enabled" ? user.mfaEnabled : !user.mfaEnabled)),
   );
 }
-export function auditDescription(event: AuditSummary, targetLabel?: string) {
-  const target = targetLabel || event.targetId || "den betroffenen Benutzer";
-  const messages: Record<string, string> = {
+export function auditDescription(event: AuditSummary, targetLabel?: string, locale:'de'|'en'='de') {
+  const target = targetLabel || event.targetId || (locale==='en'?'the affected user':'den betroffenen Benutzer');
+  const action=({'user.update_user':'user.update','role.create_role':'role.create','role.update_role':'role.update'} as Record<string,string>)[event.action]||event.action;
+  const messages: Record<string, string> = locale==='en'?{
+    "user.create": `${event.actorId} created the account ${target}.`,
+    "user.invite": `${event.actorId} invited ${target}.`,
+    "user.update": `${event.actorId} changed permissions for ${target}.`,
+    "user.block": `${event.actorId} blocked ${target}.`,
+    "user.reactivate": `${event.actorId} reactivated ${target}.`,
+    "user.deactivate": `${event.actorId} disabled ${target}.`,
+    "user.password_reset": `${event.actorId} sent a password reset for ${target}.`,
+    "user.mfa_reset": `${event.actorId} reset two-factor authentication for ${target}.`,
+    "session.revoke_all": `${event.actorId} ended all sessions for ${target}.`,
+    "impersonation.start": `${event.actorId} started viewing as ${target}.`,
+    "impersonation.exit": `${event.actorId} left the impersonated user view.`,
+    "role.create": `${event.actorId} created a role.`,
+    "role.update": `${event.actorId} changed a role.`,
+    "role.delete": `${event.actorId} deleted a role.`,
+  }:{
     "user.create": `${event.actorId} hat das Benutzerkonto ${target} angelegt.`,
     "user.invite": `${event.actorId} hat ${target} eingeladen.`,
     "user.update": `${event.actorId} hat die Rechte von ${target} geändert.`,
@@ -121,8 +137,8 @@ export function auditDescription(event: AuditSummary, targetLabel?: string) {
     "role.delete": `${event.actorId} hat eine Rolle gelöscht.`,
   };
   return (
-    messages[event.action] ||
-    `${event.actorId} hat „${event.action}“ für ${target} ausgeführt.`
+    messages[action] ||
+    (locale==='en'?`${event.actorId} performed “${event.action}” for ${target}.`:`${event.actorId} hat „${event.action}“ für ${target} ausgeführt.`)
   );
 }
 export const actionResultMessage = (action: string) =>

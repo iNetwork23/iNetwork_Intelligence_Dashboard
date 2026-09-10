@@ -121,4 +121,13 @@ describe("professional access-console presentation model", () => {
       ),
     ).toBe("ergin hat das Benutzerkonto neu@firma.de angelegt.");
   });
+  it("describes the actual persisted rights-change action in both languages",()=>{
+    const event={action:'user.update_user',actorId:'operator',targetId:'qa'};
+    expect(auditDescription(event,'QA','de')).toBe('operator hat die Rechte von QA geändert.');
+    expect(auditDescription(event,'QA','en')).toBe('operator changed permissions for QA.');
+    expect(auditDescription({...event,action:'impersonation.start'},'QA','en')).toBe('operator started viewing as QA.');
+    expect(auditDescription({...event,action:'role.create_role'},'QA','en')).toBe('operator created a role.');
+    expect(auditDescription({...event,action:'role.update_role'},'QA','en')).toBe('operator changed a role.');
+  });
+
 });
