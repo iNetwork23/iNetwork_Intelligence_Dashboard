@@ -104,7 +104,7 @@ export class AutomationCampaignMutationError extends Error{
  readonly compensationAttempted=true;
  constructor(message:string,readonly compensationVerified:boolean,readonly originalFailure:unknown,readonly compensationFailure?:unknown){super(message);this.name='AutomationCampaignMutationError'}
 }
-export async function applyAutomationRouting(input:{campaignId:number;affiliateId:number;targetSlots:AutomationSlot[];expectedFingerprint:string;apiKey:string;fetcher?:Fetcher}){
+export async function applyAutomationRouting(input:{campaignId:number;affiliateId:number;targetSlots:AutomationSlot[];expectedFingerprint:string;apiKey:string;fetcher?:Fetcher;beforeWrite?:()=>Promise<void>}){
  const fetcher=input.fetcher||fetch;
  if(!input.apiKey)throw new Error('EVERFLOW_API_KEY fehlt');
  assertTarget(input.targetSlots);
@@ -112,6 +112,8 @@ export async function applyAutomationRouting(input:{campaignId:number;affiliateI
  if(beforeFingerprint!==input.expectedFingerprint)throw new Error('Fremdänderung erkannt; Campaign-Baseline stimmt nicht überein');
  const url=`${BASE}/networks/campaigns/${input.campaignId}`,init=(body:unknown):RequestInit=>({method:'PUT',headers:headers(input.apiKey),body:JSON.stringify(body)});
  const payload=buildAutomationCampaignPayload(before,input.targetSlots),rollbackPayload=buildAutomationCampaignPayload(before,slotsFrom(before)),expectedAfter=campaignAutomationFingerprint(intendedCampaign(before,input.targetSlots));
+ // Reject before entering the mutation/compensation block: no PUT has happened yet.
+ await input.beforeWrite?.();
  let originalFailure:unknown;
  try{
   await writeCampaign(fetcher,url,init(payload));
