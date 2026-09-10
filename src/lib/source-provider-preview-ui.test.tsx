@@ -20,6 +20,10 @@ it('clears an old successful preview when a refresh fails and allows a retry',as
  await act(async()=>host.querySelector('button')!.click());vi.mocked(fetch).mockResolvedValueOnce({ok:false,json:async()=>({error:'internal detail'})} as Response);
  await act(async()=>host.querySelector('button')!.click());expect(host.querySelector('[role=status]')).toBeNull();expect(host.querySelector('[role=alert]')?.textContent).toContain('Retry before confirming.');expect(host.textContent).not.toContain('internal detail');expect(host.querySelector('button')?.disabled).toBe(false);
 });
+it('explains the reporting prerequisite separately from a provider failure',async()=>{
+ vi.mocked(fetch).mockResolvedValueOnce({ok:false,json:async()=>({code:'source_history_incomplete'})} as Response);
+ await act(async()=>host.querySelector('button')!.click());expect(host.querySelector('[role=alert]')?.textContent).toContain('Complete the history import');expect(host.textContent).not.toContain('The provider state could not be fully checked');expect(host.querySelector('[role=status]')).toBeNull();
+});
 it('shows existing rule IDs in German and cancels the read when leaving the panel',async()=>{
  language.locale='de';vi.mocked(fetch).mockResolvedValueOnce({ok:true,json:async()=>({preview:{...preview,operation:'reuse',matchingSettingIds:[777]}})} as Response);
  await act(async()=>{root.render(<Preview identity={identity}/>)});await act(async()=>host.querySelector('button')!.click());expect(host.textContent).toContain('Vorhandene Setting-IDs: 777');expect(host.textContent).toContain('keine neue Testregel');

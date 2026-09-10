@@ -123,8 +123,20 @@ describe('gateAffiliateAnalysis',()=>{
 
 describe('source-block preview data integrity',()=>{
  it('rejects unreadable source history even when all generation markers are complete',async()=>{
+  loadFreshness.mockResolvedValue({complete:true,availableDays:30,expectedDays:30,minDate:range.from,maxDate:range.to,generatedAt:now.toISOString()});
   loadRows.mockRejectedValue(new Error('Supabase source snapshots: invalid snapshot'));
   const{getAffiliateSourceScopeRows}=await import('./affiliate-optimizer-service');
   await expect(getAffiliateSourceScopeRows('376',range,access)).rejects.toThrow('invalid snapshot');
+ });
+ it('rejects missing coverage before reading the large snapshot payload',async()=>{
+  loadFreshness.mockResolvedValue({complete:false,availableDays:3,expectedDays:30,minDate:'2026-09-02',maxDate:range.to,generatedAt:now.toISOString()});
+  const{getAffiliateSourceScopeRows}=await import('./affiliate-optimizer-service');
+  await expect(getAffiliateSourceScopeRows('376',range,access)).rejects.toThrow('Source-Historie ist unvollständig');expect(loadRows).not.toHaveBeenCalled();
+ });
+ it('still reads and filters the real rows when coverage is complete',async()=>{
+  loadFreshness.mockResolvedValue({complete:true,availableDays:30,expectedDays:30,minDate:range.from,maxDate:range.to,generatedAt:now.toISOString()});
+  const own=rRow('a','b',{cv:1}),foreign={...own,columns:own.columns.map(column=>column.column_type==='affiliate'?{...column,id:'412'}:column)};loadRows.mockResolvedValue([own,foreign]);
+  const{getAffiliateSourceScopeRows}=await import('./affiliate-optimizer-service');const scoped=parseAccessMetadata({role:'admin',scopes:{affiliate:['376']}});
+  expect(await getAffiliateSourceScopeRows('376',range,scoped)).toEqual([own]);expect(loadRows).toHaveBeenCalledWith(range,'376');
  });
 });
