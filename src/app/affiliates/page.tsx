@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
 import { can, foreignScopeRequested } from "@/lib/rbac";
+import { campaignWriteScopeAllowed } from "@/lib/campaign-write-scope";
 import {
   getAffiliateLastLeadDates,
   getAffiliateOptimizationsWithTrend,
@@ -714,7 +715,8 @@ export default async function AffiliateOptimizerPage({
                 canManageCampaigns={
                   user.access.role !== "partner" &&
                   can(user.access, "campaigns.edit") &&
-                  can(user.access, "api.manage")
+                  can(user.access, "api.manage") &&
+                  campaignWriteScopeAllowed(user.access)
                 }
                 />
               </>
