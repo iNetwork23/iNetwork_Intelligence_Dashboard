@@ -1,4 +1,4 @@
-import{SourceBlockActivationCompensatedError,type NormalizedSourceBlock,type EverflowBlockVariable}from'./source-blocks';
+import{SourceBlockActivationCompensatedError,type NormalizedSourceBlock,type EverflowBlockVariable,type SourceBlockProviderPreview}from'./source-blocks';
 const BASE='https://api.eflow.team/v1';
 type Fetcher=typeof fetch;
 type EverflowPayload=ReturnType<typeof buildEverflowBlockPayload>;
@@ -18,10 +18,24 @@ const isDangerousGeneralSetting=(detail:SettingDetail)=>detail.network_offer_pay
 const priorityRuleset=(details:SettingDetail[])=>{const dangerous=details.filter(isDangerousGeneralSetting),bySignature=new Map(dangerous.map(detail=>[rulesetSignature(detail.relationship?.ruleset),cleanRuleset(detail.relationship?.ruleset)]));if(bySignature.size>1)throw new Error('Mehrere vergütete Everflow-Targetingsegmente können mit einer einzelnen Quellen-Sperre nicht sicher übersteuert werden. Keine Änderung durchgeführt.');return bySignature.values().next().value??cleanRuleset(emptyRuleset)};
 async function setting(fetcher:Fetcher,id:number,apiKey:string){return json<SettingDetail>(fetcher,`${BASE}/networks/custom/payoutrevenue/${id}?relationship=all`,{headers:headers(apiKey)})}
 async function deleteSettingVerified(fetcher:Fetcher,id:number,apiKey:string){await json(fetcher,`${BASE}/networks/custom/payoutrevenue/${id}`,{method:'DELETE',headers:headers(apiKey)});const check=await fetcher(`${BASE}/networks/custom/payoutrevenue/${id}?relationship=all`,{headers:headers(apiKey),signal:AbortSignal.timeout(30_000)});if(check.status!==404)throw new Error(`Everflow-Regel ${id} ist nach DELETE weiterhin vorhanden (HTTP ${check.status})`)}
-async function exactSettings(block:NormalizedSourceBlock,apiKey:string,fetcher:Fetcher){const rows:SettingSummary[]=[];for(let page=1;;page++){const result=await json<{custom_payout_revenue_settings?:SettingSummary[];paging?:{total_count?:number}}>(fetcher,`${BASE}/networks/custom/payoutrevenuetable?page=${page}&page_size=100&relationship=all`,{method:'POST',headers:headers(apiKey),body:JSON.stringify({search_terms:[],filters:{network_affiliate_ids:[block.affiliateId],network_offer_ids:[block.offerId]}})}),batch=(result.custom_payout_revenue_settings||[]).filter(row=>row.network_offer_id===block.offerId&&(row.is_apply_all_affiliates===true||(row.network_affiliate_ids||[]).includes(block.affiliateId)));rows.push(...batch);if((result.custom_payout_revenue_settings||[]).length<100||rows.length>=Number(result.paging?.total_count||0))break}return rows}
+async function exactSettings(block:NormalizedSourceBlock,apiKey:string,fetcher:Fetcher){
+ const rows:SettingSummary[]=[],seen=new Set<number>();let readCount=0;
+ for(let page=1;page<=100;page++){
+  const result=await json<{custom_payout_revenue_settings?:SettingSummary[];paging?:{total_count?:number|string}}>(fetcher,`${BASE}/networks/custom/payoutrevenuetable?page=${page}&page_size=100&relationship=all`,{method:'POST',headers:headers(apiKey),body:JSON.stringify({search_terms:[],filters:{network_affiliate_ids:[block.affiliateId],network_offer_ids:[block.offerId]}})});
+  if(!Array.isArray(result.custom_payout_revenue_settings))throw new Error('Everflow-Regelliste ist unvollständig. Keine Änderung durchgeführt.');
+  const batch=result.custom_payout_revenue_settings,rawTotal=result.paging?.total_count,total=rawTotal===undefined?undefined:typeof rawTotal==='number'||(typeof rawTotal==='string'&&/^\d+$/.test(rawTotal))?Number(rawTotal):NaN;
+  if(total!==undefined&&(!Number.isSafeInteger(total)||total<0))throw new Error('Everflow-Regelanzahl ist ungültig. Keine Änderung durchgeführt.');
+  for(const row of batch){const id=row.network_custom_payout_revenue_setting_id;if(!Number.isSafeInteger(id)||id<=0||seen.has(id))throw new Error('Everflow-Regelliste ist nicht eindeutig. Keine Änderung durchgeführt.');seen.add(id)}
+  readCount+=batch.length;
+  if(total!==undefined&&(readCount>total||(!batch.length&&readCount<total)))throw new Error('Everflow-Regelliste ist unvollständig. Keine Änderung durchgeführt.');
+  rows.push(...batch.filter(row=>row.network_offer_id===block.offerId&&(row.is_apply_all_affiliates===true||(row.network_affiliate_ids||[]).includes(block.affiliateId))));
+  if(total!==undefined?readCount===total:batch.length<100)return rows;
+ }
+ throw new Error('Everflow-Regelliste überschreitet das sichere Leselimit. Keine Änderung durchgeführt.');
+}
 function exactBlockScope(detail:SettingDetail,block:NormalizedSourceBlock){const affiliates=detail.network_affiliate_ids||[],offerUrls=detail.network_offer_url_ids||[];return detail.is_apply_all_affiliates===false&&affiliates.length===1&&affiliates[0]===block.affiliateId&&detail.is_apply_specific_offer_urls===false&&offerUrls.length===0&&!String(detail.date_valid_from??'').trim()&&!String(detail.date_valid_to??'').trim()}
 function verify(detail:SettingDetail,block:NormalizedSourceBlock){return detail.network_offer_id===block.offerId&&exactBlockScope(detail,block)&&detail.network_offer_payout_revenue_id===0&&detail.custom_setting_status==='active'&&detail.is_custom_payout_enabled===true&&detail.payout_type==='cpa'&&Number(detail.payout_amount)===0&&Number(detail.payout_percentage)===0&&detail.is_postback_disabled===true&&variablesEqual(detail.relationship?.variables?.entries,block.variables)}
-export async function activateEverflowSourceBlock(block:NormalizedSourceBlock,dashboardId:string,apiKey:string,fetcher:Fetcher=fetch){
+async function readSourceBlockPlan(block:NormalizedSourceBlock,apiKey:string,fetcher:Fetcher){
  if(!apiKey)throw new Error('EVERFLOW_API_KEY fehlt');
  const matches=await exactSettings(block,apiKey,fetcher),details:SettingDetail[]=[];
  for(const summary of matches)details.push(await setting(fetcher,summary.network_custom_payout_revenue_setting_id,apiKey));
@@ -30,8 +44,18 @@ export async function activateEverflowSourceBlock(block:NormalizedSourceBlock,da
   const allConsistent=matching.every(detail=>verify(detail,block)&&rulesetSignature(detail.relationship?.ruleset)===rulesetSignature(requiredRuleset));
   if(!allConsistent)throw new Error('Für diese Quellenkombination existiert bereits eine widersprüchliche Everflow-Regel. Keine Änderung durchgeführt.');
   const existing=[...matching].sort((left,right)=>left.network_custom_payout_revenue_setting_id-right.network_custom_payout_revenue_setting_id)[0];
-  return{settingId:existing.network_custom_payout_revenue_setting_id,created:false};
+  return{existing,requiredRuleset,matchingIds:[...matchingIds].sort((a,b)=>a-b)};
  }
+ return{existing:null,requiredRuleset,matchingIds:[] as number[]};
+}
+/** Provider search and detail reads only; never creates, adopts, deletes or persists a rule. */
+export async function previewEverflowSourceBlock(block:NormalizedSourceBlock,apiKey:string,fetcher:Fetcher=fetch):Promise<SourceBlockProviderPreview>{
+ const plan=await readSourceBlockPlan(block,apiKey,fetcher);
+ return{checkedAt:new Date().toISOString(),operation:plan.existing?'reuse':'create',matchingSettingIds:plan.matchingIds,affiliateId:block.affiliateId,offerId:block.offerId,trafficMode:block.trafficMode,level:block.level,variables:block.variables.map(variable=>({...variable})),payoutAmount:0,postbackDisabled:true};
+}
+export async function activateEverflowSourceBlock(block:NormalizedSourceBlock,dashboardId:string,apiKey:string,fetcher:Fetcher=fetch){
+ const {existing,requiredRuleset}=await readSourceBlockPlan(block,apiKey,fetcher);
+ if(existing)return{settingId:existing.network_custom_payout_revenue_setting_id,created:false};
  const payload=buildEverflowBlockPayload(block,dashboardId,requiredRuleset),created=await json<{network_custom_payout_revenue_setting_id?:number}>(fetcher,`${BASE}/networks/custom/payoutrevenue`,{method:'POST',headers:headers(apiKey),body:JSON.stringify(payload)}),id=Number(created.network_custom_payout_revenue_setting_id);
  if(!Number.isSafeInteger(id)||id<=0)throw new Error('Everflow hat keine gültige Setting-ID zurückgegeben');
  try{

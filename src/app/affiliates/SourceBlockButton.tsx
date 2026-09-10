@@ -18,6 +18,7 @@ import {
 } from "@/lib/source-block-reasons";
 import type { SourceBlockHistoryEvent } from "@/lib/source-block-history";
 import { sourceBlockHistoryActionLabel } from "@/lib/source-block-history-labels";
+import SourceBlockProviderPreviewPanel from './SourceBlockProviderPreview';
 
 /** Kennzahlen, die der Aufrufer vor der Bestätigung zeigt; fehlen sie, entfällt der Block im Dialog. */
 export type SourceBlockDialogMetrics = {
@@ -70,6 +71,7 @@ type HistoryState = {
 let sharedLoad: Promise<SourceBlockRecord[]> | null = null;
 let sharedLoadedAt = 0;
 const SHARED_TTL_MS = 60_000;
+const invalidateSharedBlockLoad = () => { sharedLoad = null; sharedLoadedAt = 0; };
 
 /** Modulweit geteilt, aber höchstens 60 s alt – Sperren anderer Nutzer erscheinen ohne Reload. */
 const load = () =>
@@ -295,7 +297,7 @@ export default function SourceBlockButton(props: Props) {
       if (!response.ok) {
         throw new Error(body.error || "Sperre konnte nicht aktiviert werden");
       }
-      sharedLoad = null;
+      invalidateSharedBlockLoad();
       const changed:SourceBlockRecord[]=body.blocks||[body.block];
       setBlocks((current) => [...changed,...current.filter((item)=>!changed.some(block=>block.id===item.id))]);
       props.onBlocked?.(changed);
@@ -328,7 +330,7 @@ export default function SourceBlockButton(props: Props) {
           body.error || "Quelle konnte nicht reaktiviert werden",
         );
       }
-      sharedLoad = null;
+      invalidateSharedBlockLoad();
       setBlocks((current) =>
         current.map((item) =>
           item.id === body.block.id ? body.block : item,
@@ -442,6 +444,7 @@ export default function SourceBlockButton(props: Props) {
               ? "Diese besonders geschützte Aktion setzt Payout und SOI-/Lead-Postback für die Quelle in allen serverseitig gefundenen Offers dieses Affiliates auf aus. Bei einem Teilfehler werden neu angelegte Regeln zurückgerollt."
               : "Ab Bestätigung werden Vergütung und Partner-Postback für diese Auswahl bei diesem Affiliate und Offer gesperrt – campaignübergreifend. Eingehenden Traffic kann nur der Partner selbst stoppen."}
         </p>
+        {!productWide && activating && <SourceBlockProviderPreviewPanel key={JSON.stringify(identity)} identity={identity} disabled={busy}/>}
         {recovering && (
           <p className="sourceBlockImpact sourceBlockUnclear" role="alert">
             {`Zustand unklar: ${recoverable?.error || "unbekannt"}. Vorher in Everflow prüfen, ob das Setting existiert. Diese Aktion löscht nur ein exakt passendes Setting und setzt den lokalen Datensatz auf inaktiv.`}
