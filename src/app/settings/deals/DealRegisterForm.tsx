@@ -1,15 +1,18 @@
 'use client';
 import LocalizedRoot from '../../components/LocalizedRoot';
+import {useHydratedLocale} from '../../components/LanguageProvider';
+import {localeTag,type DashboardLocale} from '@/lib/i18n';
 import{useId,useMemo,useRef,useState}from'react';
 import{DEAL_RULE_LIMITS,dealRuleKey,sameDealRuleValues,validateDealRules,type DealRule,type DealRuleInput,type DealRuleField}from'@/lib/deal-register';
 type Props={initialRevision?:string;initialRules:DealRule[];initialSource:'stored'|'defaults';defaults:readonly DealRule[];loadError?:string};
 type Draft={affiliateId:string;campaignId:string;testQuotaSois:string;maturityHours:string;cvrFloorPct:string;note:string};
 const emptyDraft=():Draft=>({affiliateId:'',campaignId:'',testQuotaSois:'',maturityHours:'',cvrFloorPct:'',note:''});
 const toDraft=(rule:DealRule):Draft=>({affiliateId:String(rule.affiliateId),campaignId:rule.campaignId===undefined?'':String(rule.campaignId),testQuotaSois:rule.testQuotaSois===undefined?'':String(rule.testQuotaSois),maturityHours:rule.maturityHours===undefined?'':String(rule.maturityHours),cvrFloorPct:rule.cvrFloorPct===undefined?'':String(rule.cvrFloorPct),note:rule.note});
-const stamp=(value:string)=>{if(!value)return'–';const date=new Date(value);return Number.isNaN(date.getTime())?'–':date.toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'})};
+const stamp=(value:string,locale:DashboardLocale)=>{if(!value)return'–';const date=new Date(value);return Number.isNaN(date.getTime())?'–':date.toLocaleString(localeTag(locale),{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'})};
 const num=(value:number|undefined,unit='')=>value===undefined?'–':`${new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(value)}${unit}`;
 const PENDING='pending';
 export default function DealRegisterForm({initialRevision,initialRules,initialSource,defaults,loadError}:Props){
+ const locale=useHydratedLocale();
  const[rules,setRules]=useState<DealRule[]>(initialRules),[source,setSource]=useState(initialSource),[draft,setDraft]=useState<Draft>(emptyDraft()),[editingKey,setEditingKey]=useState<string|null>(null),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(loadError||''),[notice,setNotice]=useState('');
  const[revision,setRevision]=useState(initialRevision),[conflict,setConflict]=useState(false);
  const [invalidFields,setInvalidFields]=useState<DealRuleField[]>([]),errorId=useId(),form=useRef<HTMLFormElement>(null);
@@ -35,7 +38,7 @@ export default function DealRegisterForm({initialRevision,initialRules,initialSo
   <div className="dealRegisterTableWrap">
    <table className="dealRegisterTable">
     <thead><tr><th>Partner</th><th>Campaign</th><th>Testquote</th><th>Reife</th><th>CVR-Untergrenze</th><th>Notiz</th><th>Geändert von</th><th>Geändert am</th><th>Aktionen</th></tr></thead>
-    <tbody>{sorted.length?sorted.map(rule=><tr key={dealRuleKey(rule)} className={editingKey===dealRuleKey(rule)?'editing':undefined}><td>{rule.affiliateId}</td><td>{rule.campaignId??'alle'}</td><td>{num(rule.testQuotaSois,' SOIs')}</td><td>{num(rule.maturityHours,' h')}</td><td>{num(rule.cvrFloorPct,' %')}</td><td className="dealRegisterNote" data-no-translate>{rule.note||'–'}</td><td>{rule.updatedBy===PENDING?'ungespeichert':rule.updatedBy==='system'?'Standard':rule.updatedBy}</td><td>{rule.updatedAt===PENDING?'–':rule.updatedBy==='system'?'–':stamp(rule.updatedAt)}</td><td className="dealRegisterActions"><button type="button" onClick={()=>edit(rule)} disabled={busy||unavailable}>Bearbeiten</button><button type="button" className="danger" onClick={()=>remove(rule)} disabled={busy||unavailable}>Löschen</button></td></tr>):<tr><td colSpan={9} className="dealRegisterEmpty">Keine Regeln – es gelten die allgemeinen Schwellen der Engine.</td></tr>}</tbody>
+    <tbody>{sorted.length?sorted.map(rule=><tr key={dealRuleKey(rule)} className={editingKey===dealRuleKey(rule)?'editing':undefined}><td>{rule.affiliateId}</td><td>{rule.campaignId??'alle'}</td><td>{num(rule.testQuotaSois,' SOIs')}</td><td>{num(rule.maturityHours,' h')}</td><td>{num(rule.cvrFloorPct,' %')}</td><td className="dealRegisterNote" data-no-translate>{rule.note||'–'}</td><td>{rule.updatedBy===PENDING?'ungespeichert':rule.updatedBy==='system'?'Standard':rule.updatedBy}</td><td>{rule.updatedAt===PENDING?'–':rule.updatedBy==='system'?'–':<time dateTime={rule.updatedAt} data-no-translate>{stamp(rule.updatedAt,locale)}</time>}</td><td className="dealRegisterActions"><button type="button" onClick={()=>edit(rule)} disabled={busy||unavailable}>Bearbeiten</button><button type="button" className="danger" onClick={()=>remove(rule)} disabled={busy||unavailable}>Löschen</button></td></tr>):<tr><td colSpan={9} className="dealRegisterEmpty">Keine Regeln – es gelten die allgemeinen Schwellen der Engine.</td></tr>}</tbody>
    </table>
   </div>
   <form ref={form} className="dealRegisterForm" onSubmit={upsert} aria-label={editingKey?'Regel ändern':'Regel anlegen'}>
