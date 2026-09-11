@@ -88,7 +88,18 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^Letzter erfolgreicher Sync vor (\d+) (h|min) – Zahlen können veraltet sein$/,'Last successful sync $1 $2 ago – figures may be outdated',/^Last successful sync (\d+) (h|min) ago – figures may be outdated$/,'Letzter erfolgreicher Sync vor $1 $2 – Zahlen können veraltet sein'],
  [/^LTV-Kohorten (\d{2}:\d{2})$/,'LTV cohorts $1',/^LTV cohorts (\d{2}:\d{2})$/,'LTV-Kohorten $1'],
 ];
+const cohortMonthNames={de:['Jan.','Feb.','März','Apr.','Mai','Juni','Juli','Aug.','Sept.','Okt.','Nov.','Dez.'],en:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec']} as const;
+function translateCohortMonths(text:string,locale:DashboardLocale):string|undefined{
+ const from=cohortMonthNames[locale==='en'?'de':'en'],to=cohortMonthNames[locale];
+ const token=`(?:${from.map(name=>name.replaceAll('.','\\.')).join('|')}) \\d{4}`;
+ const convert=(value:string)=>{const split=value.lastIndexOf(' ');return`${to[from.findIndex(name=>name===value.slice(0,split))]}${value.slice(split)}`};
+ const range=text.match(new RegExp(`^(${token}) ${locale==='en'?'bis':'to'} (${token})((?: · (?:Source|Sub-Source) [\\s\\S]+)?)$`));
+ if(range)return`${convert(range[1])} ${locale==='en'?'to':'bis'} ${convert(range[2])}${range[3]}`;
+ if(new RegExp(`^${token}(?:, ${token})*$`).test(text))return text.split(', ').map(convert).join(', ');
+ return undefined;
+}
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const months=translateCohortMonths(text,locale);if(months!==undefined)return months;
  const ltvLabel=locale==='en'?text.match(/^LTV je Registrierung über (noch kein reifes Fenster|(?:30|60|90|180|365) Tage(?:, (?:30|60|90|180|365) Tage)*)$/):text.match(/^LTV per registration over (no mature window yet|(?:30|60|90|180|365) days(?:, (?:30|60|90|180|365) days)*)$/);
  if(ltvLabel)return locale==='en'?`LTV per registration over ${ltvLabel[1]==='noch kein reifes Fenster'?'no mature window yet':ltvLabel[1].replaceAll('Tage','days')}`:`LTV je Registrierung über ${ltvLabel[1]==='no mature window yet'?'noch kein reifes Fenster':ltvLabel[1].replaceAll('days','Tage')}`;
  // Split only recognized evidence sentences, never arbitrary business labels.
