@@ -1,5 +1,10 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Historie · Campaign gesamt": "History · entire campaign",
+  "Historie · 14 Tage rollierend": "History · rolling 14 days",
+  "Historisches 14-Tage-Fenster · genaue Grenzen nicht verfügbar": "Historical 14-day window · exact bounds unavailable",
+  "Kurztrend und 14-Tage-Historie sind getrennte Zeitfenster. Historische LP-Werte sind nicht auf die aktuelle Rotation begrenzt.": "Short-term trend and 14-day history are separate windows. Historical landing-page figures are not limited to the current rotation.",
+  "Keine frühere Landingpage mit Traffic oder Events im historischen 14-Tage-Fenster.": "No previous landing page with traffic or events in the historical 14-day window.",
   "Ohne Landingpage-Zuordnung": "No landing-page assignment",
   "Keine Landingpage-ID übermittelt": "No landing-page ID supplied",
   "Profitstärkster Direktpfad": "Direct path with the highest profit",

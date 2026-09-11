@@ -68,7 +68,7 @@ describe('zentraler Affiliate Optimizer',()=>{
     expect(page).toContain('query.refresh === "1"');
     expect(details).toContain('title={data.windows.traffic}');
     expect(details).toContain('title={data.windows.economics}');
-    expect(details).toContain('title={data.windows.maturity}');
+    expect(details).toContain('title={historyWindow}');
     expect(details).toContain('TAGESBASIS · LETZTE 14 KALENDERTAGE');
     expect(details).toContain('Datenstand');
     expect(watchlist).toContain('baseHref');
