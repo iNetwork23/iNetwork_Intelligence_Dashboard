@@ -43,11 +43,18 @@ export async function runFraudConversionSync(now=new Date()){
   const invalidated=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:invalidateFraudBackfillState(state,window)},{onConflict:'key'});if(invalidated.error)throw new Error(`Supabase Fraud-Backfill-Invalidierung: ${invalidated.error.message}`);
   try{
   expireFraudCaches();
-  const raw=await source.loadConversions(window.from,window.to),loadConversions=async()=>raw;
+  // Prepare both required provider inputs under the source's shared limiter.
+  // Waiting for conversions and their writes before starting reports consumed
+  // most of the 300-second runtime during a large rolling refresh.
+  const [conversionRead,reportRead]=await Promise.allSettled([source.loadConversions(window.from,window.to),source.loadReports(window.from,window.to)]);
+  if(conversionRead.status==='rejected')throw conversionRead.reason;
+  if(reportRead.status==='rejected')throw reportRead.reason;
+  const raw=conversionRead.value,loadConversions=async()=>raw,loadReports=async()=>reportRead.value;
   progress('conversions_read',raw.length);
+  progress('reports_read',reportRead.value.base.length);
   const result=await refreshConversionRange({store:dailyReplacementStore(store),from:window.from,to:window.to,loadConversions});
   progress('conversions_replaced');
-  const reportResult=await refreshHistoryRange({store,from:window.from,to:window.to,persistConversions:false,loadConversions,loadReports:source.loadReports});
+  const reportResult=await refreshHistoryRange({store,from:window.from,to:window.to,persistConversions:false,loadConversions,loadReports});
   progress('reports_replaced',reportResult.metrics.length);
   const reportHasActivity=reportResult.metrics.some(row=>row.sois>0||row.first_sales>0||row.rebills>0||row.coin_spend>0);
   const stored=await storedEvidence(window.from,window.to),parity=buildFraudBackfillParity({from:window.from,to:window.to,expected:{typeCounts:result.typeCounts,identityDigest:result.identityDigest},stored,reportHasActivity}),next=advanceFraudBackfillState(state,window,now,parity),saved=await client.from('sync_state').upsert({key:FRAUD_BACKFILL_KEY,value:next},{onConflict:'key'});
