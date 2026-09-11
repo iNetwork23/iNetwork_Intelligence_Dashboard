@@ -36,6 +36,17 @@ it('hydrates a fresh deep link into the requested landing page without a mismatc
  expect(onRecoverableError).not.toHaveBeenCalled();
 });
 
+it('scrolls only after the requested landing-page detail has committed',async()=>{
+ const original=HTMLElement.prototype.scrollIntoView,scroll=vi.fn();
+ Object.defineProperty(HTMLElement.prototype,'scrollIntoView',{value:scroll,configurable:true});
+ vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{callback(0);return 1});
+ try{
+  history.replaceState(history.state,'','/affiliates'+query+'#lp-detail-7-27');
+  await mount();
+  expect(scroll.mock.instances.map(element=>(element as HTMLElement).id)).toContain('lp-detail-7-27');
+ }finally{Object.defineProperty(HTMLElement.prototype,'scrollIntoView',{value:original,configurable:true})}
+});
+
 it('puts an intentional LP selection in history and preserves all scope parameters',async()=>{
  await mount();const push=vi.spyOn(history,'pushState');
  await act(async()=>host.querySelector<HTMLButtonElement>('[aria-controls="lp-detail-7-27"]')!.click());
