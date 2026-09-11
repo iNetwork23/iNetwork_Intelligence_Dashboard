@@ -15,6 +15,12 @@ const gate:VerdictGate={matureSois:42,totalSois:60,requiredSois:50,maturityReach
 const render=(list:PriorityItem[],props:Partial<Parameters<typeof TrendList>[0]>={})=>renderToStaticMarkup(<TrendList kicker="PRIORITÄT" title="Liste" items={list} emptyReason="x" rangeParams="period=30d" {...props}/>);
 
 describe('TrendList = die eine priorisierte Liste',()=>{
+  it('identifies unassigned landing-page trend charts by their real offer',()=>{
+    const item={...items([row('0',-5,{offerUrl:'N/A',offerUrlId:'0',offerId:'9'})])[0],daily:[1,2]};
+    const html=renderToStaticMarkup(<PriorityRow item={item} rangeParams="period=30d"/>);
+    expect(html).toContain('aria-label="Tagesverlauf Offer #9 · Ohne Landingpage-Zuordnung"');
+    expect(html).not.toContain('Tagesverlauf N/A');
+  });
   it('renders the Top-10 with a client toggle for the rest (D10) and keeps the full count in the header',()=>{
     const rows=Array.from({length:37},(_,i)=>row(`v${String(i).padStart(2,'0')}`,-100-i));
     const html=render(prioritizeItems(items(rows)));

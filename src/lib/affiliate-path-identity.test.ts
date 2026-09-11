@@ -3,6 +3,11 @@ import { variantIdentityLine, variantLabel } from '@/app/affiliates/affiliate-fo
 import { translateText } from './i18n';
 
 describe('direct path identity', () => {
+  it('translates complete trend chart labels while preserving real business names',()=>{
+    for(const [de,en] of [['Tagesverlauf Offer #9 · Ohne Landingpage-Zuordnung','Daily trend Offer #9 · No landing-page assignment'],['Tagesverlauf Default campaign – N/A test · Offer #9 · URL #27','Daily trend Default campaign – N/A test · Offer #9 · URL #27']]){
+      expect(translateText(de,'en')).toBe(en);expect(translateText(en,'de')).toBe(de);
+    }
+  });
   it('translates the complete unassigned identity and path counts without replacing business names',()=>{
     for(const [de,en] of [['Offer #9 · Ohne Landingpage-Zuordnung','Offer #9 · No landing-page assignment'],['1 Direktpfad','1 direct path'],['3 Direktpfade','3 direct paths']]){
       expect(translateText(de,'en')).toBe(en);expect(translateText(en,'de')).toBe(de);
