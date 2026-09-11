@@ -4,6 +4,7 @@ import {useEffect,useMemo,useRef,useState,useTransition} from 'react';
 import {usePathname,useRouter,useSearchParams} from 'next/navigation';
 import {filterAffiliateChoices,parseAffiliatePins,sortAffiliateChoices,toggleAffiliatePin,type AffiliateTrafficFilter} from '@/lib/affiliate-pins';
 import {isSameRouteTarget} from '@/lib/navigation-target';
+import {useHydratedLocale} from '@/app/components/LanguageProvider';
 
 export type AffiliatePickerPartner={id:string;name:string;hasDirect:boolean;directCount:number;campaignCount:number;profit:number};
 const STORAGE_KEY='wlx-affiliate-pins';
@@ -13,11 +14,11 @@ const euro=(value:number)=>new Intl.NumberFormat('de-DE',{style:'currency',curre
 function PinIcon({active}:{active:boolean}){return <svg viewBox="0 0 24 24" aria-hidden="true" className={active?'active':''}><path d="M12 17v5"/><path d="M5 17h14"/><path d="M7 17l2-6V5L7 3h10l-2 2v6l2 6"/></svg>}
 
 export default function AffiliatePartnerPicker({partners,currentId,rangeParams}:{partners:AffiliatePickerPartner[];currentId?:string;rangeParams:string}){
- const router=useRouter(),pathname=usePathname(),searchParams=useSearchParams(),rootRef=useRef<HTMLDivElement>(null),searchRef=useRef<HTMLInputElement>(null),[open,setOpen]=useState(false),[query,setQuery]=useState(''),[trafficFilter,setTrafficFilter]=useState<AffiliateTrafficFilter>('all'),[pins,setPins]=useState<string[]>([]),[pendingPartner,setPendingPartner]=useState<AffiliatePickerPartner|null>(null),[pendingTarget,setPendingTarget]=useState(''),[navigationTimedOut,setNavigationTimedOut]=useState(false),[timedOutTarget,setTimedOutTarget]=useState(''),[,startTransition]=useTransition();
+ const locale=useHydratedLocale(),triggerRef=useRef<HTMLButtonElement>(null),router=useRouter(),pathname=usePathname(),searchParams=useSearchParams(),rootRef=useRef<HTMLDivElement>(null),searchRef=useRef<HTMLInputElement>(null),[open,setOpen]=useState(false),[query,setQuery]=useState(''),[trafficFilter,setTrafficFilter]=useState<AffiliateTrafficFilter>('all'),[pins,setPins]=useState<string[]>([]),[pendingPartner,setPendingPartner]=useState<AffiliatePickerPartner|null>(null),[pendingTarget,setPendingTarget]=useState(''),[navigationTimedOut,setNavigationTimedOut]=useState(false),[timedOutTarget,setTimedOutTarget]=useState(''),[,startTransition]=useTransition();
  const routeKey=`${pathname}?${searchParams.toString()}`;
  useEffect(()=>setPins(parseAffiliatePins(window.localStorage.getItem(STORAGE_KEY))),[]);
  useEffect(()=>{if(open)requestAnimationFrame(()=>searchRef.current?.focus())},[open]);
- useEffect(()=>{const outside=(event:PointerEvent)=>{if(!rootRef.current?.contains(event.target as Node))setOpen(false)},key=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(false)};document.addEventListener('pointerdown',outside);window.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',outside);window.removeEventListener('keydown',key)}},[]);
+ useEffect(()=>{const outside=(event:PointerEvent)=>{if(!rootRef.current?.contains(event.target as Node))setOpen(false)},key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&open&&rootRef.current?.contains(document.activeElement)){setOpen(false);triggerRef.current?.focus()}};document.addEventListener('pointerdown',outside);window.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',outside);window.removeEventListener('keydown',key)}},[open]);
  useEffect(()=>{if(pendingPartner&&isSameRouteTarget(pendingTarget,routeKey)){setPendingPartner(null);setPendingTarget('');setTimedOutTarget('');setNavigationTimedOut(false)}},[pendingPartner,pendingTarget,routeKey]);
  useEffect(()=>{if(timedOutTarget&&isSameRouteTarget(timedOutTarget,routeKey)){setTimedOutTarget('');setNavigationTimedOut(false)}},[routeKey,timedOutTarget]);
  useEffect(()=>{if(!pendingPartner)return;const watchdog=window.setTimeout(()=>{setPendingPartner(null);setTimedOutTarget(pendingTarget);setPendingTarget('');setNavigationTimedOut(true)},8_000);return()=>window.clearTimeout(watchdog)},[pendingPartner,pendingTarget]);
@@ -29,11 +30,11 @@ export default function AffiliatePartnerPicker({partners,currentId,rangeParams}:
   <button type="button" className="affiliatePickerSelect" onClick={()=>select(partner)} aria-current={partner.id===currentId?'true':undefined}>
    <span className="affiliatePickerAvatar">{partner.name.slice(0,1).toUpperCase()}</span><span><strong>{partner.name}</strong><small>Affiliate #{partner.id} · {partner.directCount} direkte LPs · {partner.campaignCount} Smartlinks</small></span><em className={partner.profit>=0?'up':'down'}>{euro(partner.profit)}</em>
   </button>
-  <button type="button" className={`affiliatePinButton ${pins.includes(partner.id)?'pinned':''}`} onClick={()=>togglePin(partner.id)} aria-label={pins.includes(partner.id)?`${partner.name} lösen`:`${partner.name} anpinnen`} title={pins.includes(partner.id)?'Nicht mehr anpinnen':'Oben anpinnen'}><PinIcon active={pins.includes(partner.id)}/></button>
+  <button type="button" className={`affiliatePinButton ${pins.includes(partner.id)?'pinned':''}`} onClick={()=>togglePin(partner.id)} aria-label={locale==='en'?`${pins.includes(partner.id)?'Unpin':'Pin'} ${partner.name}`:pins.includes(partner.id)?`${partner.name} lösen`:`${partner.name} anpinnen`} title={pins.includes(partner.id)?'Nicht mehr anpinnen':'Oben anpinnen'}><PinIcon active={pins.includes(partner.id)}/></button>
  </div>;
  return <div className="affiliatePicker" ref={rootRef}>
   <label>Affiliate-Partner</label>
-  <button type="button" className={`affiliatePickerTrigger${pendingPartner?' affiliatePickerTriggerPending':''}`} aria-expanded={open} aria-controls="affiliate-picker-menu" aria-busy={Boolean(pendingPartner)} onClick={()=>setOpen(value=>!value)}>
+  <button ref={triggerRef} type="button" className={`affiliatePickerTrigger${pendingPartner?' affiliatePickerTriggerPending':''}`} aria-expanded={open} aria-controls="affiliate-picker-menu" aria-busy={Boolean(pendingPartner)} onClick={()=>setOpen(value=>!value)}>
    <span className="affiliatePickerAvatar">{displayPartner?.name.slice(0,1).toUpperCase()||'A'}</span><span><small>{pendingPartner?'Affiliate wird geöffnet':displayPartner?`Affiliate #${displayPartner.id}`:`${partners.length} Partner verfügbar`}</small><strong>{displayPartner?.name||'Affiliate auswählen'}</strong></span>{pendingPartner?<span className="affiliatePickerPending" role="status" aria-live="polite"><i/>Lädt …</span>:displayPartner&&pins.includes(displayPartner.id)&&<PinIcon active/>}<i aria-hidden="true">⌄</i>
   </button>
   {navigationTimedOut&&<p className="affiliatePickerTimeout" role="status">Das Laden dauert länger. Bitte Affiliate erneut auswählen.</p>}
