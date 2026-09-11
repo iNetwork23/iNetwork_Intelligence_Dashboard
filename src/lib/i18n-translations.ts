@@ -1,5 +1,7 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "LP-Profit": "Landing-page profit",
+  "Anderer Zeitraum als der Campaign-Profit · nicht addieren": "Different period from campaign profit · do not add",
   "Historie · Campaign gesamt": "History · entire campaign",
   "Historie · 14 Tage rollierend": "History · rolling 14 days",
   "Historisches 14-Tage-Fenster · genaue Grenzen nicht verfügbar": "Historical 14-day window · exact bounds unavailable",
@@ -478,7 +480,7 @@ export const translations = {
   "Nachlaufende Monetarisierung entfernter LPs": "Trailing monetization of removed LPs",
   "Ohne verwertbare LP-ID": "Without usable LP ID",
   "FRÜHERE LANDINGPAGES · NICHT MEHR AKTIV": "PREVIOUS LANDING PAGES · NO LONGER ACTIVE",
-  "Landingpages · nach aktuellem Beitrag sortiert": "Landing pages sorted by current post",
+  "Landingpages · nach aktuellem Beitrag sortiert": "Landing pages sorted by current contribution",
   "zeigt aktuelle Nachläufer; die Historie nutzt das Reifefenster.": "shows current followers; history uses the maturity window.",
   "NACHLAUFENDER UMSATZ": "DELAYED REVENUE",
   "First-Sales ·": "First sales ·",

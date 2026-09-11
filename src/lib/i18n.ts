@@ -134,6 +134,10 @@ function translateCohortMonths(text:string,locale:DashboardLocale):string|undefi
  return undefined;
 }
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const cvrFloor=locale==='en'?text.match(/^([\d.,]+)-%-CVR schützen$/):text.match(/^Protect the ([\d.,]+)% CVR floor$/);
+ if(cvrFloor)return locale==='en'?`Protect the ${germanNumberToEnglish(cvrFloor[1])}% CVR floor`:`${englishNumberToGerman(cvrFloor[1])}-%-CVR schützen`;
+ const hours=locale==='en'?text.match(/^([\d.,]+) Std\.$/):text.match(/^([\d.,]+) hours$/);
+ if(hours)return locale==='en'?`${germanNumberToEnglish(hours[1])} hours`:`${englishNumberToGerman(hours[1])} Std.`;
  const sourceSort=locale==='en'
   ?text.match(/^Nach (Klicks|SOIs|CVR|First-Sales|Rebills|Coin-Spend|Umsatz|Payout|Profit) sortieren: (höchste zuerst|derzeit (niedrigste zuerst|höchste zuerst); klicken für (niedrigste zuerst|höchste zuerst))$/)
   :text.match(/^Sort by (Clicks|SOIs|CVR|First sales|Rebills|Coin spend|Revenue|Payout|Profit): (highest first|currently (lowest first|highest first); click for (lowest first|highest first))$/);
