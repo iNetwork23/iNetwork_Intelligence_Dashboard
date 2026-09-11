@@ -9,7 +9,7 @@ import{berlinRangeUtcBounds}from'./reporting-day';
  * statt Maps), damit der Index als Prop in Client-Bausteine wandern kann.
  */
 export const LEAD_MATURITY_FALLBACK_HOURS=72;
-export type LeadMaturityIdentity={offerId:string;offerUrlId:string;trafficMode:'api'|'tracked';mainValue:string|null;subValue:string|null};
+export type LeadMaturityIdentity={offerId:string;offerUrlId:string;trafficMode:'api'|'tracked'|'unknown';mainValue:string|null;subValue:string|null};
 export type LeadMaturityIndex={byLeaf:Record<string,LeadMaturityInput>;byUrl:Record<string,LeadMaturityInput>;confidence:LeadMaturityInput['confidence'];p75Hours:number;fallbackUsed:boolean;range:{from:string;to:string};generatedAt:string};
 const PLACEHOLDERS=['N/A','Ohne Source-ID','Ohne Sub-Source','Nicht übermittelt'];
 /** Gleiche Normalisierung wie normalizeSourceBlockInput: trimmen, Platzhalter → null. */

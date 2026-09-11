@@ -42,6 +42,7 @@ import DataReloadButton from'./DataReloadButton';
 import InstantLink from "./InstantLink";
 import LazyDetails from "./LazyDetails";
 import SourceBreakdown from "./SourceBreakdown";
+import UnknownSourceEvidence from "./UnknownSourceEvidence";
 import { sourceRebillKey } from "@/lib/source-rebill-key";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import DataStatusBar from "../components/DataStatusBar";
@@ -1044,6 +1045,7 @@ export default async function AffiliateOptimizerPage({
                 </span>
               </div>
             </header>
+            {!sourceError&&<UnknownSourceEvidence rows={clientSourceRows.filter(row=>row.offerId===activeOffer.offerId)} rangeLabel={sourcePeriod.label} finance={finance}/>}
             <div className="urlTableHead">
               <span>Entscheidung / Landingpage</span>
               <span>CR · SOIs / Klicks</span>

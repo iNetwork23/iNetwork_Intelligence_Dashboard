@@ -4,7 +4,7 @@ import{STATE_WORDS}from'./verdict-vocabulary';
 export type SourceBlockMarker={id:string;status:SourceBlockRecord['status'];effectiveAt:string;affiliateId:string;offerId:string};
 export type SourceBlockMarkerIndex=Record<string,SourceBlockMarker>;
 /** Zeilenidentität in den Feldern, die SourceBlockButton für diese Zeile senden würde; subValue undefined/null = Hauptquellen-Ebene. */
-export type SourceRowBlockIdentity={affiliateId:string;offerId:string;trafficMode:'tracked'|'api';mainValue:string|null;subValue?:string|null};
+export type SourceRowBlockIdentity={affiliateId:string;offerId:string;trafficMode:'tracked'|'api'|'unknown';mainValue:string|null;subValue?:string|null};
 export const SOURCE_BLOCKS_HREF='/source-blocks';
 const PLACEHOLDERS=['N/A','Ohne Source-ID','Ohne Sub-Source','Nicht übermittelt'];
 /** Gleiche Normalisierung wie normalizeSourceBlockInput (source-blocks.ts): trimmen, Platzhalter → null. */
@@ -18,7 +18,7 @@ export function sourceBlockMarkerIndex(index:Map<string,SourceBlockRecord>|Itera
 /** Schlüssel der Zeile im Sperr-Index, eigene Ebene zuerst: [Unterquelle, Hauptquelle] bzw. [Hauptquelle]. Leer bei ungültigen IDs. */
 export function sourceRowBlockKeys(row:SourceRowBlockIdentity):string[]{
  const affiliateId=positiveId(row.affiliateId),offerId=positiveId(row.offerId);
- if(affiliateId===null||offerId===null)return[];
+ if(affiliateId===null||offerId===null||row.trafficMode==='unknown')return[];
  const mainField=row.trafficMode==='api'?'adv1':'source_id',subField=row.trafficMode==='api'?'adv2':'sub1',mainValue=normalizedValue(row.mainValue),subValue=normalizedValue(row.subValue),base={affiliateId,offerId,trafficMode:row.trafficMode,mainField,mainValue,subField} as const;
  const keys=[sourceBlockIdentityKey({...base,level:'main_source',subValue:null})];
  if(subValue!==null)keys.unshift(sourceBlockIdentityKey({...base,level:'sub_source',subValue}));
