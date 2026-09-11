@@ -1,6 +1,6 @@
 'use client';
 
-import {Fragment,useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
+import {Fragment,useId,useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
 import {groupSmartlinkSourcesByMain,latestLeadActivity,leadBadge,nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SmartlinkSourceGroup,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
 import {rankSourceMatches} from '../../lib/source-search';
 import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown,SmartlinkSourceCoverage} from '../../lib/smartlink';
@@ -12,6 +12,8 @@ import SourceSearchField from './SourceSearchField';
 import{buildCampaignSourceRows,type CampaignSourceRow}from'../../lib/smartlink-source-workspace';
 import{cvrTone,signTone,type Volume}from'../../lib/verdict-vocabulary';
 import{toneClass}from'../../lib/verdict-trust';
+import{useHydratedLocale}from'./LanguageProvider';
+import{localizeDisplayText,translateText}from'../../lib/i18n';
 
 /** Vorzeichenfarbe nur bei reifer Evidenz (D15): Volumen der Zeile/Gruppe entscheidet, ob ein Vorzeichen eine Farbe bekommt. */
 const volumeOf=(m:{clicks:number;sois:number}):Volume=>({clicks:m.clicks,sois:m.sois});
@@ -41,9 +43,10 @@ export function RecommendationBanner({recommendation,scope='Aktuelle BI-Empfehlu
 }
 
 export function StatusBadge({recommendation}:{recommendation?:SlotRecommendation}){
+ const locale=useHydratedLocale(),text=(value:string)=>localizeDisplayText(translateText(value,locale),locale);
  const rec=recommendation||{action:'hold',severity:'neutral',title:'Beobachten',detail:'Noch keine belastbare Empfehlung.'} as SlotRecommendation;
- const tip=`${rec.title}: ${rec.detail}`;
- return <span role="status" tabIndex={0} className={`sharedStatusBadge ${rec.severity}`} data-tooltip={tip} aria-label={`Empfehlung: ${statusActionLabel[rec.action]}. ${tip}`}>Empfehlung: {statusActionLabel[rec.action]}</span>;
+ const tip=`${text(rec.title)}: ${text(rec.detail)}`,label=`${locale==='en'?'Recommendation':'Empfehlung'}: ${text(statusActionLabel[rec.action])}`;
+ return <span data-no-translate role="status" tabIndex={0} className={`sharedStatusBadge ${rec.severity}`} data-tooltip={tip} aria-label={`${label}. ${tip}`}>{label}</span>;
 }
 
 const sourceSortOptions:[SourceMetricSort,string][]=[['clicks','Klicks'],['sois','SOIs'],['cvr','CVR'],['firstSales','First-Sales'],['rebills','Rebills'],['coinSpend','Coin-Spend'],['revenue','Umsatz'],['payout','Payout'],['profit','Profit']];
@@ -225,6 +228,8 @@ function CampaignSourceWorkspace({rows,selectedKey,onSelect,scope}:{rows:Campaig
 export function SmartlinkRotationCards({slots,recommendations,rotationLabel,windows,affiliateId,affiliateName,campaignId,canManage=false}:{slots:SmartSlot[];recommendations:SlotRecommendation[];rotationLabel:string;windows:Windows;affiliateId?:string;affiliateName?:string;campaignId?:string;canManage?:boolean}){
  const [sort,setSort]=useState<SmartlinkSort>('rotation');
  const [workspace,setWorkspace]=useState<'landingpages'|'sources'>('landingpages');
+ const workspaceId=useId(),landingpagesTabId=`${workspaceId}-landingpages-tab`,sourcesTabId=`${workspaceId}-sources-tab`,landingpagesPanelId=`${workspaceId}-landingpages-panel`,sourcesPanelId=`${workspaceId}-sources-panel`;
+ const onWorkspaceKeyDown=(event:KeyboardEvent<HTMLButtonElement>)=>{const next=nextAnalysisTab(workspace==='landingpages'?'overview':'sources',event.key);if(!next)return;event.preventDefault();setWorkspace(next==='overview'?'landingpages':'sources');document.getElementById(next==='overview'?landingpagesTabId:sourcesTabId)?.focus()};
  const [selectedId,setSelectedId]=useState(slots[0]?.id||'');
  const sorted=useMemo(()=>sortSmartlinkSlots(slots,sort),[slots,sort]);
  const cvrBenchmark=useMemo(()=>campaignCvrBenchmark(slots),[slots]);
@@ -234,12 +239,12 @@ export function SmartlinkRotationCards({slots,recommendations,rotationLabel,wind
  const selectedSlot=slots.find(slot=>slot.id===selectedId)||sorted[0];
  const select=(id:string)=>{setSelectedId(id);if(typeof document!=='undefined')requestAnimationFrame(()=>document.getElementById(`lp-detail-${smartlinkInstanceKey(campaignId,id)}`)?.scrollIntoView({behavior:'smooth',block:'start'}))};
  return <section className="sharedRotation">
-  <div className="campaignWorkspaceTabs" role="tablist" aria-label="Campaign-Analyse"><button type="button" role="tab" aria-selected={workspace==='landingpages'} aria-controls="campaign-workspace-landingpages" onClick={()=>setWorkspace('landingpages')}>Landingpages</button><button type="button" role="tab" aria-selected={workspace==='sources'} aria-controls="campaign-workspace-sources" onClick={()=>setWorkspace('sources')}>Sources über Landingpages <small>{sourceRows.length}</small></button></div>
-  <div id="campaign-workspace-landingpages" role="tabpanel" hidden={workspace!=='landingpages'}>
+  <div className="campaignWorkspaceTabs" role="tablist" aria-label="Campaign-Analyse"><button type="button" role="tab" id={landingpagesTabId} aria-selected={workspace==='landingpages'} aria-controls={landingpagesPanelId} tabIndex={workspace==='landingpages'?0:-1} onKeyDown={onWorkspaceKeyDown} onClick={()=>setWorkspace('landingpages')}>Landingpages</button><button type="button" role="tab" id={sourcesTabId} aria-selected={workspace==='sources'} aria-controls={sourcesPanelId} tabIndex={workspace==='sources'?0:-1} onKeyDown={onWorkspaceKeyDown} onClick={()=>setWorkspace('sources')}>Sources über Landingpages <small>{sourceRows.length}</small></button></div>
+  <div id={landingpagesPanelId} role="tabpanel" aria-labelledby={landingpagesTabId} hidden={workspace!=='landingpages'}>
    <div className="rotationToolbar"><div><span>AKTUELLE ROTATION</span><b>{slots.length} Landingpages</b><small>{rotationLabel}</small></div>{slots.length>1&&<div className="rotationSort" role="group" aria-label="Landingpages sortieren"><small>Sortieren nach</small>{([['rotation','Rotation'],['profit','Profit'],['cvr','CVR'],['sois','SOIs']] as const).map(([id,label])=><button type="button" key={id} className={sort===id?'active':''} aria-pressed={sort===id} onClick={()=>setSort(id)}>{label}</button>)}</div>}</div>
    <div className={`sharedLpGrid count-${slots.length}`}>{sorted.map(slot=><LandingpageOverviewCard key={slot.id} slot={slot} recommendation={byId.get(slot.id)} selected={slot.id===selectedSlot?.id} detailId={`lp-detail-${smartlinkInstanceKey(campaignId,slot.id)}`} onSelect={()=>select(slot.id)} windows={windows} cvrBenchmark={cvrBenchmark}/>)}</div>
    {selectedSlot&&<LandingpageDetail key={smartlinkInstanceKey(campaignId,selectedSlot.id)} slot={selectedSlot} recommendation={byId.get(selectedSlot.id)} windows={windows} affiliateId={affiliateId} affiliateName={affiliateName} campaignId={campaignId} canManage={canManage} cvrBenchmark={cvrBenchmark}/>}
   </div>
-  <div id="campaign-workspace-sources" role="tabpanel" hidden={workspace!=='sources'}><CampaignSourceWorkspace rows={sourceRows} selectedKey={selectedSourceKey} onSelect={setSelectedSourceKey} scope={windows.source||windows.maturity}/></div>
+  <div id={sourcesPanelId} role="tabpanel" aria-labelledby={sourcesTabId} hidden={workspace!=='sources'}><CampaignSourceWorkspace rows={sourceRows} selectedKey={selectedSourceKey} onSelect={setSelectedSourceKey} scope={windows.source||windows.maturity}/></div>
  </section>;
 }
