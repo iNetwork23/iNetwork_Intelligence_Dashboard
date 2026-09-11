@@ -256,6 +256,11 @@ export function SmartlinkRotationCards({slots,recommendations,rotationLabel,wind
  const sourceRows=useMemo(()=>buildCampaignSourceRows(slots),[slots]);
  const [selectedSourceKey,setSelectedSourceKey]=useState(sourceRows[0]?.key||'');
  const selectedSlot=slots.find(slot=>slot.id===selectedId)||sorted[0];
+ const selectedDetailId=selectedSlot?.id;
+ // A restored hash can arrive before React has mounted that LP's detail.
+ useEffect(()=>{
+  if(selectedDetailId&&workspace==='landingpages')scrollToSelection(selectedDetailId);
+ },[selectedDetailId,workspace,scrollToSelection]);
  const select=(id:string)=>{
   if(!slots.some(slot=>slot.id===id))return;
   const hash=`#lp-detail-${smartlinkInstanceKey(campaignId,id)}`;
