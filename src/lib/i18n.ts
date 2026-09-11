@@ -10,6 +10,9 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^(\d+) von (\d+) aktive Zeilen ·$/,'$1 of $2 active lines ·',/^(\d+) of (\d+) active lines ·$/,'$1 von $2 aktive Zeilen ·'],
+ [/^(\d+) aktive Zeilen ·$/,'$1 active lines ·',/^(\d+) active lines ·$/,'$1 aktive Zeilen ·'],
+ [/^(\d{2}[./]\d{2}[./]\d{4}–\d{2}[./]\d{2}[./]\d{4}) \(365 Tage\)$/,'$1 (365 days)',/^(\d{2}[./]\d{2}[./]\d{4}–\d{2}[./]\d{2}[./]\d{4}) \(365 days\)$/,'$1 (365 Tage)'],
  [/^Rollup ist (\d+) Stunden alt – der Rollups-Cron \(stündlich um :47\) hat seitdem nicht geschrieben\.$/,'The rollup is $1 hours old – the hourly rollup job at :47 has not updated it since.',/^The rollup is (\d+) hours old – the hourly rollup job at :47 has not updated it since\.$/,'Rollup ist $1 Stunden alt – der Rollups-Cron (stündlich um :47) hat seitdem nicht geschrieben.'],
  [/^Gespeichert · 1 Regel aktiv\.$/,'Saved · 1 rule active.',/^Saved · 1 rule active\.$/,'Gespeichert · 1 Regel aktiv.'],
  [/^Gespeichert · (\d+) Regeln aktiv\.$/,'Saved · $1 rules active.',/^Saved · (\d+) rules active\.$/,'Gespeichert · $1 Regeln aktiv.'],
