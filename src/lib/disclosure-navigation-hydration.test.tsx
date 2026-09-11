@@ -5,6 +5,7 @@ import {renderToString} from 'react-dom/server';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import LanguageProvider from '@/app/components/LanguageProvider';
 import LazyDetails from '@/app/affiliates/LazyDetails';
+import {KpiValue} from '@/app/components/SmartlinkPresentation';
 
 let root:Root|undefined;
 beforeEach(()=>{
@@ -61,4 +62,13 @@ it('hydrates a delayed disclosure summary before applying persisted English',asy
  expect(recoverable.mock.calls.map(args=>String(args[0]))).toEqual([]);
  expect(host.querySelector('summary strong')?.textContent).toBe('No landing-page assignment');
  expect(host.querySelector('summary small')?.textContent).toBe('€123.45');
+});
+
+it('localizes nested KPI components inside the protected disclosure summary',async()=>{
+ const tree=<LanguageProvider><LazyDetails id="campaign-7" summary={<KpiValue label="Umsatz" value="123,45 €" detail="2 SOIs aus 10 Klicks" scope="07.08.–20.08.2026"/>}>Fixture detail</LazyDetails></LanguageProvider>;
+ const host=document.createElement('div');host.innerHTML=renderToString(tree);document.body.append(host);
+ await act(async()=>{root=hydrateRoot(host,tree)});
+ expect(host.querySelector('.sharedKpi > span')?.textContent).toBe('Revenue');
+ expect(host.querySelector('.sharedKpi > strong')?.textContent).toBe('€123.45');
+ expect(host.querySelector('.sharedKpi > small')?.textContent).toBe('2 SOIs from 10 clicks');
 });
