@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import React,{act} from 'react';
-import {createRoot,type Root} from 'react-dom/client';
+import React,{act,Suspense,use} from 'react';
+import {createRoot,hydrateRoot,type Root} from 'react-dom/client';
+import {renderToString} from 'react-dom/server';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import AccessConsole from '../app/admin/access/AccessConsole';
 import PasswordSetup from '../app/auth/callback/page';
@@ -28,4 +29,18 @@ it.each(['provision','setup'])('%s keeps an existing native validation message a
  expect(document.documentElement.dataset.locale).toBe('en');expect(field.validationMessage).toContain('Password is too long');
  expect(untouched.validity.customError).toBe(false);
  await input(field,good);expect(field.validity.valid).toBe(true);expect(field.value).toBe(good);
+});
+it('hydrates the delayed password setup form before translating it and keeps missing-token submission disabled',async()=>{
+ history.replaceState(null,'','/auth/callback');document.documentElement.dataset.locale='en';
+ let delayed=false,resolve!:()=>void;const ready=new Promise<void>(done=>{resolve=done});
+ function Deferred(){if(delayed)use(ready);return <PasswordSetup/>}
+ const tree=<LanguageProvider><Suspense fallback={<p>Bitte warten</p>}><Deferred/></Suspense></LanguageProvider>;
+ host.innerHTML=renderToString(tree);delayed=true;const recoverable=vi.fn();
+ await act(async()=>{root=hydrateRoot(host,tree,{onRecoverableError:recoverable})});await act(async()=>resolve());
+ expect(recoverable.mock.calls.map(args=>String(args[0]))).toEqual([]);
+ expect(host.querySelector('h1')?.textContent).toBe('Set up password');
+ expect(host.querySelector('p')?.textContent).toBe('The link does not contain a valid access token.');
+ expect(host.querySelector<HTMLButtonElement>('form button')?.disabled).toBe(true);
+ expect([...host.querySelectorAll<HTMLInputElement>('input')].every(field=>field.value===''&&field.type==='password')).toBe(true);
+ expect(fetch).not.toHaveBeenCalled();
 });
