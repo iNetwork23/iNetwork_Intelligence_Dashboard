@@ -167,16 +167,20 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
         // Discover disjoint identities, move those exact dimensions to filters,
         // and restore their provider labels after reconciling each partition.
         const identityTypes=['affiliate','offer','campaign'],body=reportBody(day);
-        const discovery=await report({...body,columns:[...identityTypes,...(events?['event_name']:[])].map(column=>({column}))});
+        // Offer URL keeps discovery on the same granular reporting backend as
+        // source details; simple entity counters can differ on closed days.
+        // https://developers.everflow.io/user-guide/rate-limiting
+        const discovery=await report({...body,columns:[...identityTypes,'offer_url',...(events?['event_name']:[])].map(column=>({column}))});
         if(discovery.table!.length>=10_000)throw new Error(`Everflow report-only discovery reached the 10,000-row cap for ${day}`);
         const seen=new Set<string>(),partitionsByIdentity=new Map<string,{columns:ReportRow['columns'];reporting:Record<string,number>}>();
         for(const row of discovery.table!){
           const identity=identityTypes.map(type=>row.columns.find(column=>column.column_type===type));
           if(identity.some(column=>!column||!/^\d+$/.test(String(column.id))))throw new Error(`Everflow report-only partition identity missing for ${day}`);
           const columns=identity as ReportRow['columns'],key=JSON.stringify(columns.map(column=>String(column.id)));
-          const event=events?row.columns.find(column=>column.column_type==='event_name'):undefined;
+          const offerUrl=row.columns.find(column=>column.column_type==='offer_url'),event=events?row.columns.find(column=>column.column_type==='event_name'):undefined;
+          if(!offerUrl)throw new Error(`Everflow report-only offer URL identity missing for ${day}`);
           if(events&&!event)throw new Error(`Everflow report-only event identity missing for ${day}`);
-          const discoveryKey=JSON.stringify([key,event?.id,event?.label]);
+          const discoveryKey=JSON.stringify([key,offerUrl.id,event?.id,event?.label]);
           if(seen.has(discoveryKey))throw new Error(`Everflow report-only duplicate partition identity for ${day}`);
           seen.add(discoveryKey);
           const partition=partitionsByIdentity.get(key)||{columns,reporting:{}};
