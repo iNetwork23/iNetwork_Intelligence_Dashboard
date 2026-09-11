@@ -86,7 +86,7 @@ export function PriorityRow({
           </>
         )}
         {item.daily && item.daily.length > 1 && (
-          <span className="prioritySpark"><Sparkline points={item.daily} label={`Tagesverlauf ${item.kind === "source" ? item.subSource ?? item.sourceId : item.offerUrl}`} tone={tone} /></span>
+          <span className="prioritySpark"><Sparkline points={item.daily} label={`Tagesverlauf ${item.kind === "source" ? item.subSource ?? item.sourceId : variantIdentityLine(item)}`} tone={tone} /></span>
         )}
       </div>
       {markerText && (canManage ? <a className={markerClass} href={SOURCE_BLOCKS_HREF}>{markerText}</a> : <span className={markerClass}>{markerText}</span>)}
