@@ -1,5 +1,8 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Source-Kombinationen nach Zahlenwert sortieren": "Sort source combinations by metric",
+  "Vorläufige Quellen nach Zahlenwert sortieren": "Sort provisional sources by metric",
+  "Campaign-Analyse": "Campaign analysis",
   "Source, Sub1, ADV1 oder ADV2 suchen": "Search Source, Sub1, ADV1 or ADV2",
   "Source oder Sub1 in der Maßnahmenliste suchen": "Search Source or Sub1 in the action list",
   "ADV1 oder ADV2 suchen": "Search ADV1 or ADV2",

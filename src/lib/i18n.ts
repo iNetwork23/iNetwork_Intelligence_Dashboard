@@ -10,6 +10,8 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Keine Quelle passt zu „([\s\S]+)“\.$/,'No source matches “$1”.',/^No source matches “([\s\S]+)”\.$/,'Keine Quelle passt zu „$1“.'],
+ [/^Sales und Nachzahlungen für LP #(\d+)$/,'Sales and additional payments for LP #$1',/^Sales and additional payments for LP #(\d+)$/,'Sales und Nachzahlungen für LP #$1'],
  [/^1 Quellenkombination$/,'1 source combination',/^1 source combination$/,'1 Quellenkombination'],
  [/^(\d+) Quellenkombinationen$/,'$1 source combinations',/^(\d+) source combinations$/,'$1 Quellenkombinationen'],
  [/^als belastbare Source-Snapshots verfügbar · angefordert: ([\d./–]+)\.$/,'available as verified source snapshots · requested: $1.',/^available as verified source snapshots · requested: ([\d./–]+)\.$/,'als belastbare Source-Snapshots verfügbar · angefordert: $1.'],
@@ -123,6 +125,10 @@ function translateCohortMonths(text:string,locale:DashboardLocale):string|undefi
  return undefined;
 }
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const sourceSort=locale==='en'
+  ?text.match(/^Nach (Klicks|SOIs|CVR|First-Sales|Rebills|Coin-Spend|Umsatz|Payout|Profit) sortieren: (höchste zuerst|derzeit (niedrigste zuerst|höchste zuerst); klicken für (niedrigste zuerst|höchste zuerst))$/)
+  :text.match(/^Sort by (Clicks|SOIs|CVR|First sales|Rebills|Coin spend|Revenue|Payout|Profit): (highest first|currently (lowest first|highest first); click for (lowest first|highest first))$/);
+ if(sourceSort){const metric=translateText(sourceSort[1],locale),direction=(value:string)=>locale==='en'?(value==='niedrigste zuerst'?'lowest first':'highest first'):(value==='lowest first'?'niedrigste zuerst':'höchste zuerst');return locale==='en'?`Sort by ${metric}: ${sourceSort[3]?`currently ${direction(sourceSort[3])}; click for ${direction(sourceSort[4])}`:'highest first'}`:`Nach ${metric} sortieren: ${sourceSort[3]?`derzeit ${direction(sourceSort[3])}; klicken für ${direction(sourceSort[4])}`:'höchste zuerst'}`}
  const window=locale==='en'
   ?text.match(/^(?:(CVR|Umsatz|Payout|Profit|SOI-Vergütung) · )?(Heute · [\d./]+ · bis Datenstand|Kurztrend · [\d./–]+ · Teilmenge des Kampagnenzeitraums · heute bis Datenstand|Reifefenster · [\d./–]+ · (?:vollständige Kalendertage nach Campaign-Speichertag|letzte 14 Kalendertage)|Letzte 14 Kalendertage · [\d–-]+)( · nicht zum Campaign-Profit addieren)?$/)
   :text.match(/^(?:(CVR|Revenue|Payout|Profit|SOI payout) · )?(Today · [\d./]+ · through the latest data|Short-term trend · [\d./–]+ · subset of the campaign period · today through the latest data|Maturity window · [\d./–]+ · (?:full calendar days after the campaign save date|last 14 calendar days)|Last 14 calendar days · [\d–-]+)( · do not add to campaign profit)?$/);

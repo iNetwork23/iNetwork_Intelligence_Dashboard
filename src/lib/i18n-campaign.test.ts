@@ -28,3 +28,14 @@ it('translates the remaining native source-window messages without changing date
  for(const[de,en]of cases){expect(localizeDisplayText(translateText(de,'en'),'en')).toBe(en);expect(localizeDisplayText(translateText(en,'de'),'de')).toBe(de)}
  for(const name of['Quellenanalyse Media','2 Quellenkombinationen Partner','Source l23610'])expect(translateText(name,'en')).toBe(name);
 });
+it('translates native source sorting and empty-search messages while preserving the query',()=>{
+ const cases=[
+  ['Nach Klicks sortieren: höchste zuerst','Sort by Clicks: highest first'],
+  ['Nach Profit sortieren: derzeit niedrigste zuerst; klicken für höchste zuerst','Sort by Profit: currently lowest first; click for highest first'],
+  ['Nach Umsatz sortieren: derzeit höchste zuerst; klicken für niedrigste zuerst','Sort by Revenue: currently highest first; click for lowest first'],
+  ['Keine Quelle passt zu „WLX_QA_KEIN_TREFFER“.','No source matches “WLX_QA_KEIN_TREFFER”.'],
+  ['Sales und Nachzahlungen für LP #3052','Sales and additional payments for LP #3052'],
+ ];
+ for(const[de,en]of cases){expect(translateText(de,'en')).toBe(en);expect(translateText(en,'de')).toBe(de)}
+ expect(translateText('Nach Partner sortieren: höchste zuerst Media','en')).toBe('Nach Partner sortieren: höchste zuerst Media');
+});
