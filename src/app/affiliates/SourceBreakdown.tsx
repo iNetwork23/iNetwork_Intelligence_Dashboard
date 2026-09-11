@@ -323,7 +323,7 @@ export default function SourceBreakdown({
                 }
               >
                 <div>
-                  {canManage && identity && (
+                  {canManage && identity && identity.trafficMode!=="unknown" && (
                     <div className="sourceMainBlockAction">
                       <span>
                         <b>Gesamte Hauptquelle</b>
@@ -390,7 +390,7 @@ export default function SourceBreakdown({
                         </small>
                         <LeadActivity activity={leaf.activity} />
                         {marker && <BlockMarker marker={marker} link={canManage} />}
-                        {!marker && canManage && identity && leaf.subSource && leaf.subSource !== NO_SUB_SOURCE && (
+                        {!marker && canManage && identity && identity.trafficMode!=="unknown" && leaf.subSource && leaf.subSource !== NO_SUB_SOURCE && (
                           <SourceBlockButton
                             affiliateId={identity.affiliateId}
                             affiliateName={affiliateName}

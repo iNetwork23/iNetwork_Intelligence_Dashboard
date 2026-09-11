@@ -1,5 +1,7 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Quellendaten ohne bestätigten Trafficmodus": "Source data without a confirmed traffic mode",
+  "Diese gespeicherten Werte sind in der Offer-Auswertung enthalten. Eine Zuordnung zu Source/Sub1 oder ADV1/ADV2 ist nicht bestätigt; daraus werden keine Quellenaktionen abgeleitet.": "These stored values are included in the offer report. Assignment to Source/Sub1 or ADV1/ADV2 is unconfirmed; no source actions are derived from them.",
   "Campaign pausieren": "Pause campaign",
   "Campaign wieder aktivieren": "Reactivate campaign",
   "Campaign pausiert": "Campaign paused",
