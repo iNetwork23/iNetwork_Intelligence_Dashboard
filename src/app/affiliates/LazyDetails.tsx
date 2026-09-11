@@ -1,5 +1,5 @@
 'use client';
-import{startTransition,useEffect,useRef,useState,type ReactNode,type SyntheticEvent}from'react';
+import{startTransition,useEffect,useRef,useState,type ReactNode,type SyntheticEvent,type MouseEvent}from'react';
 import{useHydratedLocale}from'../components/LanguageProvider';
 import{localizeClientRoot}from'../components/LocalizedLinkContent';
 
@@ -25,6 +25,14 @@ export default function LazyDetails({summary,children,className,id,skeletonRows=
   anchorFrame.current=requestAnimationFrame(()=>scrollOpenedHashTarget(window.location,id,true,details.current));
   return()=>{if(anchorFrame.current!==null)cancelAnimationFrame(anchorFrame.current)};
  },[id,open,mounted]);
- const toggle=(event:SyntheticEvent<HTMLDetailsElement>)=>{const next=event.currentTarget.open;setOpen(next);if(id&&typeof globalThis.window!=='undefined'){const url=buildDisclosureUrl(globalThis.window.location,id,next);globalThis.history.replaceState({...globalThis.history.state},'',url)}if(!next){setOpening(false);return}if(mounted)return;setOpening(true);frame.current=requestAnimationFrame(()=>{startTransition(()=>{setMounted(true);setOpening(false)})})};
- return <details ref={details} id={id} open={open} className={`${className?`${className} `:''}expandableDetails`} onToggle={toggle}>{localizeClientRoot(<summary className="expandableSummary">{summary}<span className="expandChevron" aria-hidden="true">›</span></summary>,locale)}{mounted?children:opening?<div className="instantPanelSkeleton" aria-live="polite" aria-busy="true">{Array.from({length:skeletonRows},(_,i)=><i className="skeleton" key={i}/>)}</div>:null}</details>;
+ // Persist while the user is still on this route. Native toggle events are
+ // deferred and can also fire after programmatic restoration or navigation.
+ const summaryClick=(event:MouseEvent<HTMLElement>)=>{
+  if(!id||!details.current||event.defaultPrevented||event.button!==0)return;
+  if(event.target instanceof Element&&event.target.closest('a,button,input,select,textarea,[role="button"],[role="link"]'))return;
+  const url=buildDisclosureUrl(window.location,id,!details.current.open);
+  history.replaceState({...history.state},'',url);
+ };
+ const toggle=(event:SyntheticEvent<HTMLDetailsElement>)=>{const next=event.currentTarget.open;setOpen(next);if(!next){setOpening(false);return}if(mounted)return;setOpening(true);frame.current=requestAnimationFrame(()=>{startTransition(()=>{setMounted(true);setOpening(false)})})};
+ return <details ref={details} id={id} open={open} className={`${className?`${className} `:''}expandableDetails`} onToggle={toggle}>{localizeClientRoot(<summary className="expandableSummary" onClick={summaryClick}>{summary}<span className="expandChevron" aria-hidden="true">›</span></summary>,locale)}{mounted?children:opening?<div className="instantPanelSkeleton" aria-live="polite" aria-busy="true">{Array.from({length:skeletonRows},(_,i)=><i className="skeleton" key={i}/>)}</div>:null}</details>;
 }

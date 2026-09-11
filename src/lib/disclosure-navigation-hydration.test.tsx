@@ -36,6 +36,21 @@ it('follows Back/Forward URL state and preserves unrelated disclosure IDs and fi
  expect(params.get('sourceOpen')).toBe('source-9');expect(params.get('period')).toBe('7d');
 });
 
+it('does not write an outgoing disclosure into the destination route when a delayed toggle fires',async()=>{
+ const host=document.createElement('div');document.body.append(host);
+ await act(async()=>{root=createRoot(host);root.render(<LazyDetails id="url-27" defaultOpen summary="Fixture LP"><p>Fixture detail</p></LazyDetails>)});
+ await act(async()=>{history.replaceState({},'','/affiliates?period=30d');host.querySelector('details')!.dispatchEvent(new Event('toggle'))});
+ expect(location.search).toBe('?period=30d');
+});
+
+it('persists an intentional summary click while preserving the current scope',async()=>{
+ const host=document.createElement('div');document.body.append(host);
+ await act(async()=>{root=createRoot(host);root.render(<LazyDetails id="url-27" summary="Fixture LP"><p>Fixture detail</p></LazyDetails>)});
+ await act(async()=>host.querySelector('summary')!.click());
+ expect(new URLSearchParams(location.search).get('sourceOpen')).toBe('url-27');
+ expect(new URLSearchParams(location.search).get('affiliate')).toBe('42');
+});
+
 it('hydrates a delayed disclosure summary before applying persisted English',async()=>{
  let delayed=false,resolve!:()=>void;const ready=new Promise<void>(done=>{resolve=done});
  function Deferred(){if(delayed)use(ready);return <LazyDetails id="url-27" summary={<><b>BEOBACHTEN</b><strong>Ohne Landingpage-Zuordnung</strong><small>123,45 €</small></>}><p>Fixture detail</p></LazyDetails>}
