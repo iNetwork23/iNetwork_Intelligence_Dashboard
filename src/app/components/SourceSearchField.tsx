@@ -1,8 +1,11 @@
 'use client';
 
-import {useEffect} from 'react';
+import {useEffect,useId,useRef} from 'react';
+import {useHydratedLocale} from './LanguageProvider';
+import {localizeClientRoot} from './LocalizedLinkContent';
 
 export default function SourceSearchField({value,onChange,placeholder,scopeId}:{value:string;onChange:(value:string)=>void;placeholder:string;scopeId:string}){
+ const inputId=useId(),inputRef=useRef<HTMLInputElement>(null),locale=useHydratedLocale();
  const urlKey=`sourceQuery_${scopeId}`;
  useEffect(()=>{
   if(typeof window==='undefined')return;
@@ -17,10 +20,10 @@ export default function SourceSearchField({value,onChange,placeholder,scopeId}:{
   const query=params.toString();
   window.history.replaceState({...window.history.state},'',`${window.location.pathname}${query?`?${query}`:''}${window.location.hash}`);
  };
- return <label className="sourceSearchField" data-source-search={scopeId}>
+ return localizeClientRoot(<div className="sourceSearchField" data-source-search={scopeId}>
   <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-  <span className="srOnly">{placeholder}</span>
-  <input type="search" value={value} onChange={event=>update(event.currentTarget.value)} placeholder={placeholder} autoComplete="off" spellCheck={false}/>
-  {value&&<button type="button" onClick={()=>update('')} aria-label="Quellensuche zurücksetzen">×</button>}
- </label>;
+  <label className="srOnly" htmlFor={inputId}>{placeholder}</label>
+  <input id={inputId} ref={inputRef} type="search" value={value} onChange={event=>update(event.currentTarget.value)} placeholder={placeholder} autoComplete="off" spellCheck={false}/>
+  {value&&<button type="button" onClick={()=>{update('');inputRef.current?.focus()}} aria-label="Quellensuche zurücksetzen">×</button>}
+ </div>,locale);
 }
