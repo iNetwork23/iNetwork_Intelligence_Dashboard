@@ -10,6 +10,10 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^1 Quellenkombination$/,'1 source combination',/^1 source combination$/,'1 Quellenkombination'],
+ [/^(\d+) Quellenkombinationen$/,'$1 source combinations',/^(\d+) source combinations$/,'$1 Quellenkombinationen'],
+ [/^als belastbare Source-Snapshots verfügbar · angefordert: ([\d./–]+)\.$/,'available as verified source snapshots · requested: $1.',/^available as verified source snapshots · requested: ([\d./–]+)\.$/,'als belastbare Source-Snapshots verfügbar · angefordert: $1.'],
+ [/^Auswertung für LP #(\d+)$/,'Analysis for LP #$1',/^Analysis for LP #(\d+)$/,'Auswertung für LP #$1'],
  [/^Campaign #(\d+) verdient (-?[\d.,]+\s*€)$/,'Campaign #$1 earns $2',/^Campaign #(\d+) earns (-?€[\d.,]+)$/,'Campaign #$1 verdient $2'],
  [/^Campaign #(\d+) verliert (-?[\d.,]+\s*€)$/,'Campaign #$1 loses $2',/^Campaign #(\d+) loses (-?€[\d.,]+)$/,'Campaign #$1 verliert $2'],
  [/^Die aktuellen Landingpages liegen bei (-?[\d.,]+\s*€)\.$/,'The current landing pages have a balance of $1.',/^The current landing pages have a balance of (-?€[\d.,]+)\.$/,'Die aktuellen Landingpages liegen bei $1.'],

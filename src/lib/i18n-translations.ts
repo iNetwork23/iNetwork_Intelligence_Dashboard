@@ -1,5 +1,9 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "← Anderen Smartlink auswählen": "← Choose another smartlink",
+  "Quellenanalyse": "Source analysis",
+  "Datenabdeckung Quellenanalyse:": "Source analysis coverage:",
+  "Zusammenfassung Quellenanalyse": "Source analysis summary",
   "Ungültiger Zeitraum": "Invalid date range",
   "Eingabe prüfen": "Check input",
   "Was jetzt geprüft werden muss": "What needs to be checked now",
