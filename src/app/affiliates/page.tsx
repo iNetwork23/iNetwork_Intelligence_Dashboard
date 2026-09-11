@@ -58,7 +58,7 @@ import { sourceBlockMarkerIndex, type SourceBlockMarkerIndex } from "@/lib/sourc
 import CampaignPicker from "../smartlinks/CampaignPicker";
 import SmartlinkWatchlist from "../smartlinks/SmartlinkWatchlist";
 export const dynamic = "force-dynamic";
-import { cr, duration, eur, num, variantIdentityLine } from "./affiliate-format";
+import { cr, duration, eur, num, variantIdentityLine, variantLabel, directPathCount } from "./affiliate-format";
 import type { VariantWithTrend } from "@/lib/affiliate-trend";
 import { ProfitPeriod, SourceCacheNotice, UrlLeadMaturityPanel } from "./AffiliatePanels";
 
@@ -635,8 +635,7 @@ export default async function AffiliateOptimizerPage({
               <h2>{selectedWorkspace.affiliate}</h2>
               <p>
                 {selectedWorkspace.campaigns.length} Smartlinks ·{" "}
-                {selectedWorkspace.direct?.variants.length || 0} direkte
-                Landingpages · strikt getrennte Modi
+                {directPathCount(selectedWorkspace.direct?.variants.length || 0)} · strikt getrennte Modi
               </p>
             </div>
             <div>
@@ -659,7 +658,7 @@ export default async function AffiliateOptimizerPage({
                 href={`/affiliates?affiliate=${selectedWorkspace.affiliateId}&mode=direct&${rangeParams}`}
               >
                 Direktlinks{" "}
-                <small>{selectedWorkspace.direct.variants.length} LPs</small>
+                <small>{directPathCount(selectedWorkspace.direct.variants.length)}</small>
               </InstantLink>
             ) : (
               <span className="disabled">
@@ -791,7 +790,7 @@ export default async function AffiliateOptimizerPage({
               className="active"
               href={`/affiliates?affiliate=${selected.affiliateId}&mode=direct&${rangeParams}`}
             >
-              Direktlinks <small>{selected.variants.length} LPs</small>
+              Direktlinks <small>{directPathCount(selected.variants.length)}</small>
             </InstantLink>
             {selectedWorkspace?.campaigns.length && maySmartlinks ? (
               <InstantLink
@@ -810,7 +809,7 @@ export default async function AffiliateOptimizerPage({
             <a className="danger" href="#next-actions">
               <span>Direkt handeln</span>
               <strong>{stopVariants.length}</strong>
-              <small>Landingpages zum Ausschalten</small>
+              <small>Direktpfade zum Prüfen</small>
             </a>
             <article>
               <span>Erkennbares Sparpotenzial</span>
@@ -823,13 +822,13 @@ export default async function AffiliateOptimizerPage({
               <small>mit belastbarer Sales-Evidenz</small>
             </a>
             <article>
-              <span>Beste Landingpage</span>
+              <span>Profitstärkster Direktpfad</span>
               <strong
                 className={best ? toneClass(signTone(mv(best.days30.profit), best.days30)) : ""}
               >
                 {best ? money(best.days30.profit) : "–"}
               </strong>
-              <small>{best?.offerUrl || "Keine Daten"}</small>
+              <small>{best ? variantIdentityLine(best) : "Keine Daten"}</small>
             </article>
           </section>
           {(stopVariants.length > 0 || scaleVariants.length > 0) && (
@@ -850,9 +849,9 @@ export default async function AffiliateOptimizerPage({
                   >
                     <b>{v.recommendation.action}</b>
                     <span>
-                      <strong>{v.offerUrl !== "Default" ? v.offerUrl : v.offer}</strong>
+                      <strong>{variantLabel(v)}</strong>
                       <small>
-                        {variantIdentityLine(v)} · {num(v.days30.sois)} SOIs
+                        <span>{variantIdentityLine(v)}</span> · {num(v.days30.sois)} SOIs
                         {finance && v.days30.sois > 0 ? ` · ${money(v.days30.profit / v.days30.sois)} je SOI` : ""}
                       </small>
                     </span>
@@ -1015,12 +1014,11 @@ export default async function AffiliateOptimizerPage({
             <header>
               <div>
                 <span>
-                  2 · LANDINGPAGES VERGLEICHEN · OFFER #{activeOffer.offerId}
+                  2 · DIREKTPFADE VERGLEICHEN · OFFER #{activeOffer.offerId}
                 </span>
                 <h2>{activeOffer.offer}</h2>
                 <p>
-                  {activeOffer.variants.length} Offer-URLs – wichtigste
-                  Entscheidung steht oben
+                  {directPathCount(activeOffer.variants.length)} · wichtigste Entscheidung steht oben
                 </p>
               </div>
               <div>
@@ -1047,7 +1045,7 @@ export default async function AffiliateOptimizerPage({
             </header>
             {!sourceError&&<UnknownSourceEvidence rows={clientSourceRows.filter(row=>row.offerId===activeOffer.offerId)} rangeLabel={sourcePeriod.label} finance={finance}/>}
             <div className="urlTableHead">
-              <span>Entscheidung / Landingpage</span>
+              <span>Entscheidung / Direktpfad</span>
               <span>CR · SOIs / Klicks</span>
               <span>Profit · Zeitraum</span>
               <span>First-Sales</span>
@@ -1064,8 +1062,8 @@ export default async function AffiliateOptimizerPage({
                     <>
                       <span className="urlMain">
                         <b>{v.recommendation.action}</b>
-                        <strong>{v.offerUrl !== "Default" ? v.offerUrl : "API-Traffic · ohne LP-Aufteilung"}</strong>
-                        <small>{v.offerUrlId !== "0" ? `Landingpage · URL #${v.offerUrlId}` : "Offer-weit aggregiert"}</small>
+                        <strong>{variantLabel(v)}</strong>
+                        <small>{v.offerUrlId !== "0" ? `Landingpage · URL #${v.offerUrlId}` : "Keine Landingpage-ID übermittelt"}</small>
                       </span>
                       <span className="crAbsolute">
                         {cr(v.days30, v.trafficMode === "api")}
@@ -1260,8 +1258,8 @@ export default async function AffiliateOptimizerPage({
                   <h3>{a.affiliate}</h3>
                   <p>
                     {a.direct
-                      ? `${a.direct.variants.length} direkte Landingpages`
-                      : "Kein Multi-LP-Direkttraffic"}{" "}
+                      ? directPathCount(a.direct.variants.length)
+                      : "Kein Direkttraffic im gewählten Zeitraum"}{" "}
                     · {a.campaigns.length} Smartlink
                     {a.campaigns.length === 1 ? "" : "s"}
                   </p>

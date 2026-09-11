@@ -15,6 +15,15 @@ const access={role:'admin',status:'active',grants:[],denials:[],scopes:{affiliat
 describe('getAffiliateOptimizationsWithTrend',()=>{
   beforeEach(()=>{getDashboard.mockReset()});
 
+  it('keeps the matching previous path when its partner had only one path in that window',async()=>{
+    const {getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
+    getDashboard.mockResolvedValueOnce(portfolio([path('1',{clicks:400,sois:40,profit:300}),path('2',{clicks:400,sois:40,profit:50})]))
+      .mockResolvedValueOnce(portfolio([path('1',{clicks:400,sois:40,profit:100})]));
+    const result=await getAffiliateOptimizationsWithTrend('custom',{from:'2026-08-01',to:'2026-08-30'},access,{from:'2026-08-01',to:'2026-08-30'});
+    expect(result[0].variants.find(v=>v.offerUrlId==='1')?.trendVerdict).toMatchObject({status:'ok',profitDelta:200,previous:{profit:100}});
+    expect(result[0].variants.find(v=>v.offerUrlId==='2')?.trendVerdict.status).toBe('insufficient');
+  });
+
   it('loads the preceding equally long window and attaches a verdict',async()=>{
     const {getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
     getDashboard

@@ -27,6 +27,14 @@ beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(now);vi.cle
 afterEach(()=>{vi.useRealTimers()});
 
 describe('URL verdicts through the lead maturity gate (D3)',()=>{
+ it('keeps a singleton partner visible and holds its stop recommendation without maturity evidence',async()=>{
+  const{getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
+  const data=current();getDashboard.mockResolvedValue({...data,paths:[data.paths[0]]});
+  const result=await getAffiliateOptimizationsWithTrend('custom',range,access,range);
+  expect(result).toHaveLength(1);expect(result[0].variants).toHaveLength(1);
+  expect(result[0].variants[0].recommendation).toMatchObject({action:'BEOBACHTEN',gate:{latencyConfidence:'keine Daten'}});
+  expect(loadConversions).not.toHaveBeenCalled();
+ });
  it('fails closed for unselected affiliates without a valid summary and never loads their conversions',async()=>{
   const{getAffiliateOptimizationsWithTrend}=await import('./affiliate-optimizer-service');
   getDashboard.mockResolvedValue(current());
