@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
-vi.hoisted(async()=>{Object.assign(globalThis,{AsyncLocalStorage:(await import('node:async_hooks')).AsyncLocalStorage})});
+await vi.hoisted(async()=>{Object.assign(globalThis,{AsyncLocalStorage:(await import('node:async_hooks')).AsyncLocalStorage})});
 import {loadSourceCandidates} from './source-candidates';
 import {parseAccessMetadata} from './rbac';
 const db=vi.hoisted(()=>({read:vi.fn()}));

@@ -44,6 +44,12 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^Rollup vom ([\d.,/: ]+) · Zugewiesener Bereich$/,'Rollup from $1 · Assigned scope',/^Rollup from ([\d.,/: ]+) · Assigned scope$/,'Rollup vom $1 · Zugewiesener Bereich'],
  [/^Rollup vom ([\d.,/: ]+) · (\d+) von (\d+) Partnern$/,'Rollup from $1 · $2 of $3 partners',/^Rollup from ([\d.,/: ]+) · (\d+) of (\d+) partners$/,'Rollup vom $1 · $2 von $3 Partnern'],
  [/^(\d+) von (\d+) Partnern$/,'$1 of $2 partners',/^(\d+) of (\d+) partners$/,'$1 von $2 Partnern'],
+ [/^(\d+) von (\d+) Kohorten-Monaten für 365 Tage noch nicht reif$/,'$1 of $2 cohort months have not matured for 365 days',/^(\d+) of (\d+) cohort months have not matured for 365 days$/,'$1 von $2 Kohorten-Monaten für 365 Tage noch nicht reif'],
+ [/^keine SOIs in ([\d./– -]+)$/,'no SOIs in $1',/^no SOIs in ([\d./– -]+)$/,'keine SOIs in $1'],
+ [/^(-?[\d.,]+\s*€) Umsatz ÷ ([\d.,]+) SOIs · ([\d./– -]+)$/,'$1 revenue ÷ $2 SOIs · $3',/^(-?€[\d.,]+) revenue ÷ ([\d.,]+) SOIs · ([\d./– -]+)$/,'$1 Umsatz ÷ $2 SOIs · $3'],
+ [/^Break-even nach (\d+) Tagen · CPL (-?[\d.,]+\s*€) · LTV (\d+) Tage (-?[\d.,]+\s*€)$/,'Break-even after $1 days · CPL $2 · LTV $3 days $4',/^Break-even after (\d+) days · CPL (-?€[\d.,]+) · LTV (\d+) days (-?€[\d.,]+)$/,'Break-even nach $1 Tagen · CPL $2 · LTV $3 Tage $4'],
+ [/^Break-even nicht erreicht · CPL (-?[\d.,]+\s*€) · LTV (\d+) Tage (-?[\d.,]+\s*€)$/,'Break-even not reached · CPL $1 · LTV $2 days $3',/^Break-even not reached · CPL (-?€[\d.,]+) · LTV (\d+) days (-?€[\d.,]+)$/,'Break-even nicht erreicht · CPL $1 · LTV $2 Tage $3'],
+ [/^Break-even noch offen · CPL (-?[\d.,]+\s*€) · LTV (\d+) Tage (-?[\d.,]+\s*€) · Fenster ab (\d+) Tagen noch nicht reif$/,'Break-even pending · CPL $1 · LTV $2 days $3 · windows from $4 days are not mature yet',/^Break-even pending · CPL (-?€[\d.,]+) · LTV (\d+) days (-?€[\d.,]+) · windows from (\d+) days are not mature yet$/,'Break-even noch offen · CPL $1 · LTV $2 Tage $3 · Fenster ab $4 Tagen noch nicht reif'],
  [/^(\d+) von (\d+) Partnern wurden innerhalb des Zeitbudgets ausgewertet\. Quellen fehlender Partner sind nicht bewertet und fehlen in dieser Liste\.$/,'$1 of $2 partners were evaluated within the time budget. Sources from missing partners have not been evaluated and are absent from this list.',/^(\d+) of (\d+) partners were evaluated within the time budget\. Sources from missing partners have not been evaluated and are absent from this list\.$/,'$1 von $2 Partnern wurden innerhalb des Zeitbudgets ausgewertet. Quellen fehlender Partner sind nicht bewertet und fehlen in dieser Liste.'],
  [/^Auswahl für LP #(\d+)$/,'Selection for LP #$1',/^Selection for LP #(\d+)$/,'Auswahl für LP #$1'],
  [/^Familien-ID für LP #(\d+)$/,'Family ID for LP #$1',/^Family ID for LP #(\d+)$/,'Familien-ID für LP #$1'],
@@ -83,6 +89,8 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^LTV-Kohorten (\d{2}:\d{2})$/,'LTV cohorts $1',/^LTV cohorts (\d{2}:\d{2})$/,'LTV-Kohorten $1'],
 ];
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const ltvLabel=locale==='en'?text.match(/^LTV je Registrierung über (noch kein reifes Fenster|(?:30|60|90|180|365) Tage(?:, (?:30|60|90|180|365) Tage)*)$/):text.match(/^LTV per registration over (no mature window yet|(?:30|60|90|180|365) days(?:, (?:30|60|90|180|365) days)*)$/);
+ if(ltvLabel)return locale==='en'?`LTV per registration over ${ltvLabel[1]==='noch kein reifes Fenster'?'no mature window yet':ltvLabel[1].replaceAll('Tage','days')}`:`LTV je Registrierung über ${ltvLabel[1]==='no mature window yet'?'noch kein reifes Fenster':ltvLabel[1].replaceAll('days','Tage')}`;
  // Split only recognized evidence sentences, never arbitrary business labels.
  const evidence=locale==='en'
   ?/^(?:(?:\d+ von \d+ SOIs reif(?: \(Schwelle \d+\))?|Konfidenz: nicht berechnet) · Rate |\d+ Rebills · |Latenz (?:hoch|mittel|niedrig|keine Daten) · p75 )/
