@@ -10,6 +10,7 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Rollup ist (\d+) Stunden alt – der Rollups-Cron \(stündlich um :47\) hat seitdem nicht geschrieben\.$/,'The rollup is $1 hours old – the hourly rollup job at :47 has not updated it since.',/^The rollup is (\d+) hours old – the hourly rollup job at :47 has not updated it since\.$/,'Rollup ist $1 Stunden alt – der Rollups-Cron (stündlich um :47) hat seitdem nicht geschrieben.'],
  [/^Gespeichert · 1 Regel aktiv\.$/,'Saved · 1 rule active.',/^Saved · 1 rule active\.$/,'Gespeichert · 1 Regel aktiv.'],
  [/^Gespeichert · (\d+) Regeln aktiv\.$/,'Saved · $1 rules active.',/^Saved · (\d+) rules active\.$/,'Gespeichert · $1 Regeln aktiv.'],
  [/^(\d+) von (\d+) SOIs reif \(Schwelle (\d+)\)$/,'$1 of $2 SOIs mature (threshold $3)',/^(\d+) of (\d+) SOIs mature \(threshold (\d+)\)$/,'$1 von $2 SOIs reif (Schwelle $3)'],
