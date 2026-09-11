@@ -695,3 +695,9 @@ a.blockMarker:hover,a.blockMarker:focus-visible{background:var(--fill-hover);tex
 .dashboardRetry:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .mobileSidebarClose{display:none}
 @media(max-width:760px){.adminSidebar:not(.mobileOpen){visibility:hidden}.adminSidebar.mobileOpen{visibility:visible}.mobileSidebarClose{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;margin-left:auto;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);font-size:24px;cursor:pointer}.mobileSidebarClose:focus-visible{outline:2px solid var(--accent);outline-offset:2px}}
+
+/* Password setup is one compact form, without the login page’s marketing column. */
+.passwordSetupShell{grid-template-columns:minmax(0,1fr);padding:24px 16px}
+.passwordSetupShell .loginCard{width:min(100%,480px);min-height:0;margin:auto;padding:28px 24px;justify-content:flex-start;gap:16px;border:1px solid var(--border);border-radius:var(--radius-lg)}
+.passwordSetupShell .loginCard h1{font-size:32px;margin:0}
+.passwordSetupShell .loginCard>p{margin:0}
