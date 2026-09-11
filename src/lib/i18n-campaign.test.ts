@@ -14,3 +14,17 @@ it('translates the production Campaign drilldown windows and amounts as complete
 it('preserves unknown campaign and source names containing the same words',()=>{
  for(const name of['Heute Media','Umsatz Partner 11.09.2026','Kurztrend Source 25','Campaign #2 verdient Traffic'])expect(translateText(name,'en')).toBe(name);
 });
+it('translates the remaining native source-window messages without changing dates or source identities',()=>{
+ const cases=[
+  ['← Anderen Smartlink auswählen','← Choose another smartlink'],
+  ['Quellenanalyse','Source analysis'],
+  ['1 Quellenkombination','1 source combination'],
+  ['2 Quellenkombinationen','2 source combinations'],
+  ['als belastbare Source-Snapshots verfügbar · angefordert: 11.09.2026–11.09.2026.','available as verified source snapshots · requested: 11/09/2026–11/09/2026.'],
+  ['Datenabdeckung Quellenanalyse:','Source analysis coverage:'],
+  ['Zusammenfassung Quellenanalyse','Source analysis summary'],
+  ['Auswertung für LP #123','Analysis for LP #123'],
+ ];
+ for(const[de,en]of cases){expect(localizeDisplayText(translateText(de,'en'),'en')).toBe(en);expect(localizeDisplayText(translateText(en,'de'),'de')).toBe(de)}
+ for(const name of['Quellenanalyse Media','2 Quellenkombinationen Partner','Source l23610'])expect(translateText(name,'en')).toBe(name);
+});
