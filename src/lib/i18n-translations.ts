@@ -1,5 +1,7 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Ungültiger Zeitraum": "Invalid date range",
+  "Eingabe prüfen": "Check input",
   "Was jetzt geprüft werden muss": "What needs to be checked now",
   "Aktuelle Rotation weiter prüfen": "Continue reviewing the current rotation",
   "Nicht eindeutig zugeordnete Kosten prüfen": "Review unattributed costs",
