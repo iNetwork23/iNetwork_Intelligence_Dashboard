@@ -75,6 +75,19 @@ describe('account period recovery after a rejected data load',()=>{
     await mount({period:'custom',from:'invalid',to:'2026-09-02'});
     expect([...host.querySelectorAll('button')].some(button=>button.textContent==='Heute')).toBe(true);
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(host.textContent).toContain('Ungültiger Zeitraum');
+    expect(host.textContent).toContain('Bitte ein gültiges Von- und Bis-Datum auswählen.');
+    expect(host.textContent).not.toContain('Datenquelle ist vorübergehend nicht verfügbar');
+    expect(host.querySelector('[data-dashboard-retry]')).toBeNull();
+  });
+  it('identifies the reversed dates from the native Account test and preserves them for correction',async()=>{
+    fixture.failure=new Error('Ungültiger freier Zeitraum');
+    const query={period:'custom',from:'2026-09-11',to:'2026-09-09'};fixture.query=new URLSearchParams(query).toString();await mount(query);
+    expect(host.textContent).toContain('Ungültiger Zeitraum');
+    expect(host.querySelector<HTMLInputElement>('input[name="from"]')?.value).toBe(query.from);
+    expect(host.querySelector<HTMLInputElement>('input[name="to"]')?.value).toBe(query.to);
+    const month=[...host.querySelectorAll('button')].find(button=>button.textContent==='30 Tage')!;await act(async()=>month.click());
+    expect(fixture.push).toHaveBeenCalledWith('/?period=30d',{scroll:false});
   });
   it('keeps authentication and permission denial ahead of the recovery UI',async()=>{
     fixture.user=null;await expect(mount()).rejects.toThrow('REDIRECT /login');
