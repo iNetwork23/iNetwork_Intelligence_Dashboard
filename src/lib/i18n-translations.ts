@@ -44,6 +44,7 @@ export const translations = {
   "Entwurf speichern": "Save draft",
   "Entwurf": "Draft",
   "Entfernen": "Remove",
+  "weitere": "more",
   "KANONISCHE KONFIGURATIONEN": "CANONICAL CONFIGURATIONS",
   "Automationen, Fortschritt und Historie": "Automations, progress and history",
   "Noch keine Dashboard-Automation": "No dashboard automation yet",

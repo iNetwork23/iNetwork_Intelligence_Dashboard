@@ -65,7 +65,7 @@ export default function SourceCandidateList({rows:initialRows,range,openKey,init
    {!selection.rows.length&&<tr><td colSpan={colSpan} className="sourcesEmptyRow">{rows.length?'Keine Quelle passt zu diesem Filter.':'Keine Quelle mit Handlungsbedarf im Rollup.'}</td></tr>}
    </tbody></table></div>
   {openKey&&!openRow&&<p className="sourcesNotice" role="status">Die verlinkte Quelle ist in diesem Rollup nicht mehr enthalten – der Handlungsbedarf kann sich seit dem Link geändert haben.</p>}
-  {selection.hidden>0&&<button type="button" className="showMoreSources" onClick={()=>setLimit(current=>current+SOURCE_CANDIDATE_PAGE_SIZE)}>Weitere {integer(Math.min(SOURCE_CANDIDATE_PAGE_SIZE,selection.hidden))} von {integer(selection.hidden)} Quellen anzeigen</button>}
+  {selection.hidden>0&&<button type="button" className="showMoreSources" onClick={()=>setLimit(current=>current+SOURCE_CANDIDATE_PAGE_SIZE)}>{locale==='en'?`Show ${Math.min(SOURCE_CANDIDATE_PAGE_SIZE,selection.hidden).toLocaleString('en-US')} more sources (${selection.hidden.toLocaleString('en-US')} remaining)`:`Weitere ${integer(Math.min(SOURCE_CANDIDATE_PAGE_SIZE,selection.hidden))} von ${integer(selection.hidden)} Quellen anzeigen`}</button>}
   {bulkOpen&&selectedRows.length>0&&<SourceBulkBlockDialog rows={selectedRows.slice(0,BULK_BLOCK_LIMIT)} finance={finance} onClose={closeBulk} onBlocked={setBlock} onFinished={refreshBlocks}/>}
  </section>,locale);
 }

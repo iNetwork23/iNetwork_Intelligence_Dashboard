@@ -43,6 +43,8 @@ const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
  [/^(\d+) Min\.$/,'$1 min',/^(\d+) min$/,'$1 Min.'],
  [/^Rollup vom ([\d.,/: ]+) · Zugewiesener Bereich$/,'Rollup from $1 · Assigned scope',/^Rollup from ([\d.,/: ]+) · Assigned scope$/,'Rollup vom $1 · Zugewiesener Bereich'],
  [/^Rollup vom ([\d.,/: ]+) · (\d+) von (\d+) Partnern$/,'Rollup from $1 · $2 of $3 partners',/^Rollup from ([\d.,/: ]+) · (\d+) of (\d+) partners$/,'Rollup vom $1 · $2 von $3 Partnern'],
+ [/^(\d+) von (\d+) Partnern$/,'$1 of $2 partners',/^(\d+) of (\d+) partners$/,'$1 von $2 Partnern'],
+ [/^(\d+) von (\d+) Partnern wurden innerhalb des Zeitbudgets ausgewertet\. Quellen fehlender Partner sind nicht bewertet und fehlen in dieser Liste\.$/,'$1 of $2 partners were evaluated within the time budget. Sources from missing partners have not been evaluated and are absent from this list.',/^(\d+) of (\d+) partners were evaluated within the time budget\. Sources from missing partners have not been evaluated and are absent from this list\.$/,'$1 von $2 Partnern wurden innerhalb des Zeitbudgets ausgewertet. Quellen fehlender Partner sind nicht bewertet und fehlen in dieser Liste.'],
  [/^Auswahl für LP #(\d+)$/,'Selection for LP #$1',/^Selection for LP #(\d+)$/,'Auswahl für LP #$1'],
  [/^Familien-ID für LP #(\d+)$/,'Family ID for LP #$1',/^Family ID for LP #(\d+)$/,'Familien-ID für LP #$1'],
  [/^Familienname für LP #(\d+)$/,'Family name for LP #$1',/^Family name for LP #(\d+)$/,'Familienname für LP #$1'],
