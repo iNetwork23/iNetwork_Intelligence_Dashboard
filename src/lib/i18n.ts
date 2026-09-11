@@ -10,6 +10,10 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Campaign-Empfehlung · ([\d./–]+)$/,'Campaign recommendation · $1',/^Campaign recommendation · ([\d./–]+)$/,'Campaign-Empfehlung · $1'],
+ [/^Lead-Herkunft für LP #(\d+)$/,'Lead origin for LP #$1',/^Lead origin for LP #(\d+)$/,'Lead-Herkunft für LP #$1'],
+ [/^(Source|Sub1|ADV1|ADV2) ([\s\S]+) kopieren$/,'Copy $1 $2',/^Copy (Source|Sub1|ADV1|ADV2) ([\s\S]+)$/,'$1 $2 kopieren'],
+ [/^(-?[\d.,]+\s*€) Umsatz · (-?[\d.,]+\s*€) Payout · (-?[\d.,]+\s*€) Profit\.$/,'$1 revenue · $2 payout · $3 profit.',/^(-?€[\d.,]+) revenue · (-?€[\d.,]+) payout · (-?€[\d.,]+) profit\.$/,'$1 Umsatz · $2 Payout · $3 Profit.'],
  [/^Keine Quelle passt zu „([\s\S]+)“\.$/,'No source matches “$1”.',/^No source matches “([\s\S]+)”\.$/,'Keine Quelle passt zu „$1“.'],
  [/^Sales und Nachzahlungen für LP #(\d+)$/,'Sales and additional payments for LP #$1',/^Sales and additional payments for LP #(\d+)$/,'Sales und Nachzahlungen für LP #$1'],
  [/^1 Quellenkombination$/,'1 source combination',/^1 source combination$/,'1 Quellenkombination'],
