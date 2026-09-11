@@ -10,6 +10,22 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^Campaign #(\d+) verdient (-?[\d.,]+\s*€)$/,'Campaign #$1 earns $2',/^Campaign #(\d+) earns (-?€[\d.,]+)$/,'Campaign #$1 verdient $2'],
+ [/^Campaign #(\d+) verliert (-?[\d.,]+\s*€)$/,'Campaign #$1 loses $2',/^Campaign #(\d+) loses (-?€[\d.,]+)$/,'Campaign #$1 verliert $2'],
+ [/^Die aktuellen Landingpages liegen bei (-?[\d.,]+\s*€)\.$/,'The current landing pages have a balance of $1.',/^The current landing pages have a balance of (-?€[\d.,]+)\.$/,'Die aktuellen Landingpages liegen bei $1.'],
+ [/^([\d.,]+) SOIs aus ([\d.,]+) Klicks$/,'$1 SOIs from $2 clicks',/^([\d.,]+) SOIs from ([\d.,]+) clicks$/,'$1 SOIs aus $2 Klicks'],
+ [/^([\d.,]+) First-Sales aus ([\d.,]+) SOIs$/,'$1 first sales from $2 SOIs',/^([\d.,]+) first sales from ([\d.,]+) SOIs$/,'$1 First-Sales aus $2 SOIs'],
+ [/^([\d.,]+) vergütete SOIs$/,'$1 paid SOIs',/^([\d.,]+) paid SOIs$/,'$1 vergütete SOIs'],
+ [/^(-?[\d.,]+\s*€) Umsatz – (-?[\d.,]+\s*€) Payout$/,'$1 revenue – $2 payout',/^(-?€[\d.,]+) revenue – (-?€[\d.,]+) payout$/,'$1 Umsatz – $2 Payout'],
+ [/^(-?[\d.,]+\s*€) Profit bei ([\d.,]+) SOIs · keine belastbare Stop-Empfehlung\.$/,'$1 profit from $2 SOIs · insufficient evidence to recommend stopping.',/^(-?€[\d.,]+) profit from ([\d.,]+) SOIs · insufficient evidence to recommend stopping\.$/,'$1 Profit bei $2 SOIs · keine belastbare Stop-Empfehlung.'],
+ [/^(\d+) von (\d+) Tagen$/,'$1 of $2 days',/^(\d+) of (\d+) days$/,'$1 von $2 Tagen'],
+ [/^Kein Lead in (\d+) Tagen$/,'No lead in $1 days',/^No lead in (\d+) days$/,'Kein Lead in $1 Tagen'],
+ [/^Seit (\d+) Tagen keine neuen Leads$/,'No new leads for $1 days',/^No new leads for (\d+) days$/,'Seit $1 Tagen keine neuen Leads'],
+ [/^Frühere (\d+) LPs$/,'Previous $1 LPs',/^Previous (\d+) LPs$/,'Frühere $1 LPs'],
+ [/^Aktuelle (\d+) LPs$/,'Current $1 LPs',/^Current (\d+) LPs$/,'Aktuelle $1 LPs'],
+ [/^([\d./–]+) · vollständige Kontrollrechnung$/,'$1 · complete reconciliation',/^([\d./–]+) · complete reconciliation$/,'$1 · vollständige Kontrollrechnung'],
+ [/^(\d{4}-\d{2}-\d{2}) · tägliche Daten nicht minutengenau teilbar$/,'$1 · daily data cannot be split by minute',/^(\d{4}-\d{2}-\d{2}) · daily data cannot be split by minute$/,'$1 · tägliche Daten nicht minutengenau teilbar'],
+ [/^(Campaign #\d+ · )?Campaign zuletzt gespeichert am ([\d.,/: ]+) · als Rotationsreferenz verwendet$/,'$1Campaign last saved at $2 · used as the rotation reference',/^(Campaign #\d+ · )?Campaign last saved at ([\d.,/: ]+) · used as the rotation reference$/,'$1Campaign zuletzt gespeichert am $2 · als Rotationsreferenz verwendet'],
  [/^(\d+) von (\d+) aktive Zeilen ·$/,'$1 of $2 active lines ·',/^(\d+) of (\d+) active lines ·$/,'$1 von $2 aktive Zeilen ·'],
  [/^(\d+) aktive Zeilen ·$/,'$1 active lines ·',/^(\d+) active lines ·$/,'$1 aktive Zeilen ·'],
  [/^(\d{2}[./]\d{2}[./]\d{4}–\d{2}[./]\d{2}[./]\d{4}) \(365 Tage\)$/,'$1 (365 days)',/^(\d{2}[./]\d{2}[./]\d{4}–\d{2}[./]\d{2}[./]\d{4}) \(365 days\)$/,'$1 (365 Tage)'],
@@ -103,6 +119,12 @@ function translateCohortMonths(text:string,locale:DashboardLocale):string|undefi
  return undefined;
 }
 function translateStatus(text:string,locale:DashboardLocale):string|undefined{
+ const window=locale==='en'
+  ?text.match(/^(?:(CVR|Umsatz|Payout|Profit|SOI-Vergütung) · )?(Heute · [\d./]+ · bis Datenstand|Kurztrend · [\d./–]+ · Teilmenge des Kampagnenzeitraums · heute bis Datenstand|Reifefenster · [\d./–]+ · (?:vollständige Kalendertage nach Campaign-Speichertag|letzte 14 Kalendertage)|Letzte 14 Kalendertage · [\d–-]+)( · nicht zum Campaign-Profit addieren)?$/)
+  :text.match(/^(?:(CVR|Revenue|Payout|Profit|SOI payout) · )?(Today · [\d./]+ · through the latest data|Short-term trend · [\d./–]+ · subset of the campaign period · today through the latest data|Maturity window · [\d./–]+ · (?:full calendar days after the campaign save date|last 14 calendar days)|Last 14 calendar days · [\d–-]+)( · do not add to campaign profit)?$/);
+ if(window){let value=locale==='en'?window[2].replace(/(\d{2})\.(\d{2})\.(?=–)/g,'$1/$2'):window[2].replace(/(\d{2})\/(\d{2})(?=–)/g,'$1.$2.');const pairs=[['Heute','Today'],['bis Datenstand','through the latest data'],['Kurztrend','Short-term trend'],['Teilmenge des Kampagnenzeitraums','subset of the campaign period'],['heute','today'],['Reifefenster','Maturity window'],['vollständige Kalendertage nach Campaign-Speichertag','full calendar days after the campaign save date'],['letzte 14 Kalendertage','last 14 calendar days'],['Letzte 14 Kalendertage','Last 14 calendar days']];for(const[de,en]of pairs)value=value.replace(locale==='en'?de:en,locale==='en'?en:de);return`${window[1]?`${translateText(window[1],locale)} · `:''}${value}${window[3]?(locale==='en'?' · do not add to campaign profit':' · nicht zum Campaign-Profit addieren'):''}`}
+ const datedLabel=locale==='en'?text.match(/^(Umsatz|SOI-Vergütung) · ([\d./–]+)$/):text.match(/^(Revenue|SOI payout) · ([\d./–]+)$/);
+ if(datedLabel)return`${translateText(datedLabel[1],locale)} · ${datedLabel[2]}`;
  const months=translateCohortMonths(text,locale);if(months!==undefined)return months;
  const ltvLabel=locale==='en'?text.match(/^LTV je Registrierung über (noch kein reifes Fenster|(?:30|60|90|180|365) Tage(?:, (?:30|60|90|180|365) Tage)*)$/):text.match(/^LTV per registration over (no mature window yet|(?:30|60|90|180|365) days(?:, (?:30|60|90|180|365) days)*)$/);
  if(ltvLabel)return locale==='en'?`LTV per registration over ${ltvLabel[1]==='noch kein reifes Fenster'?'no mature window yet':ltvLabel[1].replaceAll('Tage','days')}`:`LTV je Registrierung über ${ltvLabel[1]==='no mature window yet'?'noch kein reifes Fenster':ltvLabel[1].replaceAll('days','Tage')}`;
