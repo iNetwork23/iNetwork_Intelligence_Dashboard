@@ -49,7 +49,7 @@ it('rejects a truncated detailed partition and a conflicting returned identity',
 
 it('rejects a partition whose detailed totals do not reconcile to discovery',async()=>{
  const fetcher=fixture(body=>body.columns.length<=4?undefined:json({table:[{columns:[],reporting:{...metric,revenue:14}}]}));
- await expect(createEverflowHistorySource('key',fetcher).loadReports('2025-09-11','2025-09-11',{includeEvents:true})).rejects.toThrow('partition totals mismatch for 2025-09-11: revenue; diagnostics={"report":"base","affiliate":"6","offer":"57","campaign":"2","expected":15,"actual":14,"rows":1}');
+ await expect(createEverflowHistorySource('key',fetcher).loadReports('2025-09-11','2025-09-11',{includeEvents:true})).rejects.toThrow('partition totals mismatch for 2025-09-11: revenue; diagnostics={"report":"base","affiliate":"6","offer":"57","campaign":"2","expected":15,"actual":14,"rows":1,"duplicates":0,"uniqueActual":14}');
 });
 
 it('advances expired history only after reconciled report rows have been written, without requesting expired conversions',async()=>{
@@ -61,5 +61,31 @@ it('advances expired history only after reconciled report rows have been written
   if(valid){await expect(pending).resolves.toMatchObject({backfillComplete:true,upsertedConversions:0,upsertedMetrics:2});expect(store.setState).toHaveBeenCalledWith(expect.objectContaining({phase:'rolling'}))}
   else{await expect(pending).rejects.toThrow('partition totals');expect(store.upsertMetrics).not.toHaveBeenCalled();expect(store.setState).not.toHaveBeenCalled()}
   expect(loadConversions).not.toHaveBeenCalled();
+ }
+});
+
+it('accepts exact duplicate aggregate rows only after a matching second read and reconciled unique totals',async()=>{
+ let confirmations=0;
+ const fetcher=fixture(body=>{
+  if(body.columns.length<=4)return undefined;
+  confirmations++;
+  const row={columns:body.columns.map(({column})=>dim(column,column==='event_name'?'sale':'value',column==='event_name'?'Sale':'value')),reporting:metric};
+  return json({table:[row,row]});
+ });
+ const result=await createEverflowHistorySource('key',fetcher).loadReports('2025-09-11','2025-09-11',{includeEvents:true});
+ expect(result.base).toHaveLength(2);expect(result.events).toHaveLength(2);expect(confirmations).toBe(8);
+ expect(metricRows(result.base,result.events).reduce((sum,row)=>sum+row.revenue,0)).toBe(30);
+});
+
+it('rejects duplicate recovery when confirmation changes or unique rows still disagree',async()=>{
+ for(const reason of ['changed','unreconciled']as const){
+  const counts=new Map<string,number>();
+  const fetcher=fixture(body=>{
+   if(body.columns.length<=4)return undefined;
+   const key=JSON.stringify(body);counts.set(key,(counts.get(key)||0)+1);
+   const row={columns:body.columns.map(({column})=>dim(column,'value')),reporting:{...metric,revenue:reason==='unreconciled'?14:15}};
+   return json({table:[row,{...row,reporting:reason==='changed'&&counts.get(key)!>1?{...metric,revenue:16}:row.reporting}]});
+  });
+  await expect(createEverflowHistorySource('key',fetcher).loadReports('2025-09-11','2025-09-11',{includeEvents:true})).rejects.toThrow(reason==='changed'?'duplicate confirmation changed':'partition totals');
  }
 });

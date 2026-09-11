@@ -184,16 +184,29 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
           partitionsByIdentity.set(key,partition);
         }
         const detailed=await mapBounded([...partitionsByIdentity.values()],4,async partition=>{
-          const result=await report({...body,columns:body.columns.filter(column=>!identityTypes.includes(column.column)),query:{...body.query,filters:partition.columns.map(column=>({resource_type:column.column_type,filter_id_value:String(column.id)}))}});
-          const table=result.table!;
+          const requestBody={...body,columns:body.columns.filter(column=>!identityTypes.includes(column.column)),query:{...body.query,filters:partition.columns.map(column=>({resource_type:column.column_type,filter_id_value:String(column.id)}))}};
+          const result=await report(requestBody);
+          let table=result.table!;
           if(table.length>=10_000)throw new Error(`Everflow report-only partition reached the 10,000-row cap for ${day}`);
           for(const row of table)for(const expected of partition.columns){const returned=row.columns.find(column=>column.column_type===expected.column_type);if(returned&&String(returned.id)!==String(expected.id))throw new Error(`Everflow report-only partition identity mismatch for ${day}`)}
-          for(const metric of ['total_click','cv','event','payout','revenue']){
-            const expected=Number(partition.reporting[metric]??0),values=table.map(row=>Number(row.reporting[metric]??0)),actual=values.reduce((sum,value)=>sum+value,0),tolerance=metric==='payout'||metric==='revenue'?0.005:0;
-            if(!Number.isFinite(expected)||values.some(value=>!Number.isFinite(value))||Math.abs(actual-expected)>tolerance){
+          const checkedMetrics=['total_click','cv','event','payout','revenue'];
+          const comparison=(rows:ReportRow[],metric:string)=>{const expected=Number(partition.reporting[metric]??0),values=rows.map(row=>Number(row.reporting[metric]??0)),actual=values.reduce((sum,value)=>sum+value,0),tolerance=metric==='payout'||metric==='revenue'?0.005:0;return{expected,actual,matches:Number.isFinite(expected)&&values.every(Number.isFinite)&&Math.abs(actual-expected)<=tolerance}};
+          const unique=[...new Map(table.map(row=>[canonicalJson(row),row])).values()],duplicates=table.length-unique.length;
+          if(duplicates&&checkedMetrics.every(metric=>comparison(unique,metric).matches)){
+            // A grouped row must not be counted twice. Recovery requires both
+            // discovery parity and a second complete, identical multiset read.
+            const confirmation=await report(requestBody);
+            const proof=(rows:ReportRow[])=>{const digest=createHash('sha256');for(const row of rows.map(canonicalJson).sort()){digest.update(row);digest.update('\n')}return digest.digest('hex')};
+            if(proof(table)!==proof(confirmation.table!))throw new Error(`Everflow report-only duplicate confirmation changed for ${day}`);
+            table=unique;
+            console.warn('Everflow verified duplicate aggregate rows',{day,report:events?'events':'base',duplicates,uniqueRows:unique.length});
+          }
+          for(const metric of checkedMetrics){
+            const {expected,actual,matches}=comparison(table,metric);
+            if(!matches){
               // Aggregate diagnostics only; never source values, provider rows or credentials.
               const identity=Object.fromEntries(partition.columns.map(column=>[column.column_type,String(column.id)]));
-              throw new Error(`Everflow report-only partition totals mismatch for ${day}: ${metric}; diagnostics=${JSON.stringify({report:events?'events':'base',...identity,expected,actual,rows:table.length})}`);
+              throw new Error(`Everflow report-only partition totals mismatch for ${day}: ${metric}; diagnostics=${JSON.stringify({report:events?'events':'base',...identity,expected,actual,rows:table.length,duplicates,uniqueActual:comparison(unique,metric).actual})}`);
             }
           }
           return table.map(row=>({...row,columns:[...partition.columns,...row.columns.filter(column=>!identityTypes.includes(column.column_type))]}));
