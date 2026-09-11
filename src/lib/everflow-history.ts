@@ -161,6 +161,41 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
     const reportBody=(day:string,affiliate?:string,offer?:string)=>{const body=everflowEntityReportBody(day,day,affiliate,offer);return {...body,columns:[...body.columns,...(full?[{column:'adv1'},{column:'adv2'}]:[]),...(events?[{column:'event_name'}]:[])]}};
     const report=async(body:unknown)=>{const result=await call<{table?:ReportRow[];incomplete_results?:boolean}>(`${BASE}/networks/reporting/entity/table`,body);if(!Array.isArray(result.table))throw new Error('Everflow entity report missing table');if(result.incomplete_results===true&&result.table.length<10_000)throw new Error('Everflow entity report incomplete_results');return result};
     const rows=await loadDailyReportSlices(from,to,async day=>{
+      if(full){
+        // Expired conversions require report-only attribution: twelve source
+        // dimensions plus the event type exceed Everflow's ten-column cap.
+        // Discover disjoint identities, move those exact dimensions to filters,
+        // and restore their provider labels after reconciling each partition.
+        const identityTypes=['affiliate','offer','campaign'],body=reportBody(day);
+        const discovery=await report({...body,columns:[...identityTypes,...(events?['event_name']:[])].map(column=>({column}))});
+        if(discovery.table!.length>=10_000)throw new Error(`Everflow report-only discovery reached the 10,000-row cap for ${day}`);
+        const seen=new Set<string>(),partitionsByIdentity=new Map<string,{columns:ReportRow['columns'];reporting:Record<string,number>}>();
+        for(const row of discovery.table!){
+          const identity=identityTypes.map(type=>row.columns.find(column=>column.column_type===type));
+          if(identity.some(column=>!column||!/^\d+$/.test(String(column.id))))throw new Error(`Everflow report-only partition identity missing for ${day}`);
+          const columns=identity as ReportRow['columns'],key=JSON.stringify(columns.map(column=>String(column.id)));
+          const event=events?row.columns.find(column=>column.column_type==='event_name'):undefined;
+          if(events&&!event)throw new Error(`Everflow report-only event identity missing for ${day}`);
+          const discoveryKey=JSON.stringify([key,event?.id,event?.label]);
+          if(seen.has(discoveryKey))throw new Error(`Everflow report-only duplicate partition identity for ${day}`);
+          seen.add(discoveryKey);
+          const partition=partitionsByIdentity.get(key)||{columns,reporting:{}};
+          for(const metric of ['total_click','cv','event','payout','revenue']){const value=Number(row.reporting[metric]??0);if(!Number.isFinite(value))throw new Error(`Everflow report-only partition totals invalid for ${day}: ${metric}`);partition.reporting[metric]=(partition.reporting[metric]??0)+value}
+          partitionsByIdentity.set(key,partition);
+        }
+        const detailed=await mapBounded([...partitionsByIdentity.values()],4,async partition=>{
+          const result=await report({...body,columns:body.columns.filter(column=>!identityTypes.includes(column.column)),query:{...body.query,filters:partition.columns.map(column=>({resource_type:column.column_type,filter_id_value:String(column.id)}))}});
+          const table=result.table!;
+          if(table.length>=10_000)throw new Error(`Everflow report-only partition reached the 10,000-row cap for ${day}`);
+          for(const row of table)for(const expected of partition.columns){const returned=row.columns.find(column=>column.column_type===expected.column_type);if(returned&&String(returned.id)!==String(expected.id))throw new Error(`Everflow report-only partition identity mismatch for ${day}`)}
+          for(const metric of ['total_click','cv','event','payout','revenue']){
+            const expected=Number(partition.reporting[metric]??0),values=table.map(row=>Number(row.reporting[metric]??0)),actual=values.reduce((sum,value)=>sum+value,0),tolerance=metric==='payout'||metric==='revenue'?0.005:0;
+            if(!Number.isFinite(expected)||values.some(value=>!Number.isFinite(value))||Math.abs(actual-expected)>tolerance)throw new Error(`Everflow report-only partition totals mismatch for ${day}: ${metric}`);
+          }
+          return table.map(row=>({...row,columns:[...partition.columns,...row.columns.filter(column=>!identityTypes.includes(column.column_type))]}));
+        });
+        return datedRows(day,detailed.flat());
+      }
       const result=await report(reportBody(day));
       const unpartitioned=result.table||[];
       if(unpartitioned.length<10_000)return datedRows(day,unpartitioned);
