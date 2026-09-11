@@ -190,7 +190,11 @@ export function createEverflowHistorySource(apiKey:string,fetcher:Fetcher=fetch)
           for(const row of table)for(const expected of partition.columns){const returned=row.columns.find(column=>column.column_type===expected.column_type);if(returned&&String(returned.id)!==String(expected.id))throw new Error(`Everflow report-only partition identity mismatch for ${day}`)}
           for(const metric of ['total_click','cv','event','payout','revenue']){
             const expected=Number(partition.reporting[metric]??0),values=table.map(row=>Number(row.reporting[metric]??0)),actual=values.reduce((sum,value)=>sum+value,0),tolerance=metric==='payout'||metric==='revenue'?0.005:0;
-            if(!Number.isFinite(expected)||values.some(value=>!Number.isFinite(value))||Math.abs(actual-expected)>tolerance)throw new Error(`Everflow report-only partition totals mismatch for ${day}: ${metric}`);
+            if(!Number.isFinite(expected)||values.some(value=>!Number.isFinite(value))||Math.abs(actual-expected)>tolerance){
+              // Aggregate diagnostics only; never source values, provider rows or credentials.
+              const identity=Object.fromEntries(partition.columns.map(column=>[column.column_type,String(column.id)]));
+              throw new Error(`Everflow report-only partition totals mismatch for ${day}: ${metric}; diagnostics=${JSON.stringify({report:events?'events':'base',...identity,expected,actual,rows:table.length})}`);
+            }
           }
           return table.map(row=>({...row,columns:[...partition.columns,...row.columns.filter(column=>!identityTypes.includes(column.column_type))]}));
         });

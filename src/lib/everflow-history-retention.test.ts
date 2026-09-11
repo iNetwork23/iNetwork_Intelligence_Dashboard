@@ -49,7 +49,7 @@ it('rejects a truncated detailed partition and a conflicting returned identity',
 
 it('rejects a partition whose detailed totals do not reconcile to discovery',async()=>{
  const fetcher=fixture(body=>body.columns.length<=4?undefined:json({table:[{columns:[],reporting:{...metric,revenue:14}}]}));
- await expect(createEverflowHistorySource('key',fetcher).loadReports('2025-09-11','2025-09-11',{includeEvents:true})).rejects.toThrow('partition totals');
+ await expect(createEverflowHistorySource('key',fetcher).loadReports('2025-09-11','2025-09-11',{includeEvents:true})).rejects.toThrow('partition totals mismatch for 2025-09-11: revenue; diagnostics={"report":"base","affiliate":"6","offer":"57","campaign":"2","expected":15,"actual":14,"rows":1}');
 });
 
 it('advances expired history only after reconciled report rows have been written, without requesting expired conversions',async()=>{
