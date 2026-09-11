@@ -132,6 +132,14 @@ describe('AffiliateCockpit',()=>{
 });
 
 describe('Deep-Links öffnen die Zielzeile',()=>{
+  it('identifies a path without a landing-page assignment while keeping URL 0 as the drilldown target',()=>{
+    const html=render(items([row('0',90,{offerUrl:'N/A',offerUrlId:'0',trafficMode:'api'})]));
+    expect(html).toContain('Offer #20 · Ohne Landingpage-Zuordnung');
+    expect(html).not.toContain('N/A');
+    expect(html).toContain('sourceOpen=url-0');
+    expect(html).toContain('#url-0');
+    expect(render(items([row('0',90,{offerUrl:'N/A',offerUrlId:'0',trafficMode:'api'})]),{finance:false})).not.toContain('90,00');
+  });
   it('Cockpit-Zeilen setzen sourceOpen auf die Ziel-URL und behalten den Anker',()=>{
     const html=render(items([row('2673',-5)]),{rangeParams:'period=30d&sourcePeriod=30d'});
     expect(html).toContain('sourceOpen=url-2673');

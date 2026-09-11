@@ -10,6 +10,9 @@ const reverseTranslations=new Map<string,string>(Object.entries(translations).ma
 // Only complete, known UI messages match. Source IDs and business names are
 // never translated by replacing individual words inside arbitrary strings.
 const statusTemplates:readonly [RegExp,string,RegExp,string][]=[
+ [/^1 Direktpfad$/,'1 direct path',/^1 direct path$/,'1 Direktpfad'],
+ [/^(\d+) Direktpfade$/,'$1 direct paths',/^(\d+) direct paths$/,'$1 Direktpfade'],
+ [/^Offer #(\d+) · Ohne Landingpage-Zuordnung$/,'Offer #$1 · No landing-page assignment',/^Offer #(\d+) · No landing-page assignment$/,'Offer #$1 · Ohne Landingpage-Zuordnung'],
  [/^Campaign-Empfehlung · ([\d./–]+)$/,'Campaign recommendation · $1',/^Campaign recommendation · ([\d./–]+)$/,'Campaign-Empfehlung · $1'],
  [/^Lead-Herkunft für LP #(\d+)$/,'Lead origin for LP #$1',/^Lead origin for LP #(\d+)$/,'Lead-Herkunft für LP #$1'],
  [/^(Source|Sub1|ADV1|ADV2) ([\s\S]+) kopieren$/,'Copy $1 $2',/^Copy (Source|Sub1|ADV1|ADV2) ([\s\S]+)$/,'$1 $2 kopieren'],

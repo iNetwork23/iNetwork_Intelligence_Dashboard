@@ -4,6 +4,7 @@ import {useEffect,useMemo,useRef,useState,useTransition} from 'react';
 import {usePathname,useRouter,useSearchParams} from 'next/navigation';
 import {filterAffiliateChoices,parseAffiliatePins,sortAffiliateChoices,toggleAffiliatePin,type AffiliateTrafficFilter} from '@/lib/affiliate-pins';
 import {isSameRouteTarget} from '@/lib/navigation-target';
+import {directPathCount} from './affiliate-format';
 import {useHydratedLocale} from '@/app/components/LanguageProvider';
 
 export type AffiliatePickerPartner={id:string;name:string;hasDirect:boolean;directCount:number;campaignCount:number;profit:number};
@@ -28,7 +29,7 @@ export default function AffiliatePartnerPicker({partners,currentId,rangeParams}:
  const select=(partner:AffiliatePickerPartner)=>{const params=new URLSearchParams(rangeParams);params.set('affiliate',partner.id);params.set('mode',trafficFilter==='all'?(partner.hasDirect?'direct':'smartlinks'):trafficFilter);const target=`/affiliates?${params.toString()}`;setOpen(false);setQuery('');setNavigationTimedOut(false);setTimedOutTarget('');if(isSameRouteTarget(target,routeKey)){setPendingPartner(null);setPendingTarget('');return}setPendingPartner(partner);setPendingTarget(target);startTransition(()=>router.push(target))};
  const renderPartner=(partner:AffiliatePickerPartner)=><div className={`affiliatePickerRow ${partner.id===currentId?'selected':''}`} key={partner.id}>
   <button type="button" className="affiliatePickerSelect" onClick={()=>select(partner)} aria-current={partner.id===currentId?'true':undefined}>
-   <span className="affiliatePickerAvatar">{partner.name.slice(0,1).toUpperCase()}</span><span><strong>{partner.name}</strong><small>Affiliate #{partner.id} · {partner.directCount} direkte LPs · {partner.campaignCount} Smartlinks</small></span><em className={partner.profit>=0?'up':'down'}>{euro(partner.profit)}</em>
+   <span className="affiliatePickerAvatar">{partner.name.slice(0,1).toUpperCase()}</span><span><strong>{partner.name}</strong><small>Affiliate #{partner.id} · {directPathCount(partner.directCount)} · {partner.campaignCount} Smartlinks</small></span><em className={partner.profit>=0?'up':'down'}>{euro(partner.profit)}</em>
   </button>
   <button type="button" className={`affiliatePinButton ${pins.includes(partner.id)?'pinned':''}`} onClick={()=>togglePin(partner.id)} aria-label={locale==='en'?`${pins.includes(partner.id)?'Unpin':'Pin'} ${partner.name}`:pins.includes(partner.id)?`${partner.name} lösen`:`${partner.name} anpinnen`} title={pins.includes(partner.id)?'Nicht mehr anpinnen':'Oben anpinnen'}><PinIcon active={pins.includes(partner.id)}/></button>
  </div>;
