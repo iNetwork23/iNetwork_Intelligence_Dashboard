@@ -27,6 +27,8 @@ import { buildCampaignOptions, type CampaignOption } from "@/lib/campaign-picker
 import { mergeAffiliateWorkspaces, overlayPeriodFinancialMappings } from "@/lib/affiliate-smartlinks";
 import { affiliateCampaignRefreshHref, affiliateOptimizerCurrentHref, contextlessSmartlinkFavoriteHref, legacySmartlinkRedirectHref } from "@/lib/optimization-workflow";
 import { resolveAffiliatePeriod } from "@/lib/affiliate-period";
+import { IncompleteBerlinReportingRangeError } from "@/lib/berlin-reporting-contract";
+import AffiliateLoadFailure from "./AffiliateLoadFailure";
 import { resolveSourcePeriod } from "@/lib/source-period";
 import { getAffiliateRebillEvents } from "@/lib/rebill-concentration-service";
 import { analyzeRebillConcentration, buildRebillCustomerIndex, firstSaleCustomerIdsFromIndex, rebillCustomerIdsFromIndex, type RebillConcentration, type RebillEvent } from "@/lib/rebill-concentration";
@@ -270,23 +272,17 @@ export default async function AffiliateOptimizerPage({
         : Promise.resolve(undefined),
     ]);
   } catch (e) {
-    console.error(e);
-    if (e instanceof Error && e.message.includes("403"))
+    const incomplete = e instanceof IncompleteBerlinReportingRangeError;
+    if (incomplete) console.warn(e);
+    else console.error(e);
+    if (!incomplete && e instanceof Error && e.message.includes("403"))
       return (
         <main className="fatal">
           <h1>403 · Scope nicht sicher auswertbar</h1>
           <AccessDeniedHint />
         </main>
       );
-    return (
-      <main className="fatal">
-        <div className="eyebrow">REPORTING-CACHE NICHT VERFÜGBAR</div>
-        <h1>Affiliate Optimizer konnte nicht aus Supabase geladen werden</h1>
-        <InstantLink href={`/affiliates?${rangeParams}`}>
-          Erneut versuchen
-        </InstantLink>
-      </main>
-    );
+    return <AffiliateLoadFailure query={query} period={period} incomplete={incomplete}/>;
   }
   // Canonical two-argument range contracts remain the source-window semantics; AccessMetadata is the added authorization boundary:
   // getAffiliateSourceBreakdown(selected.affiliateId,{from:sourcePeriod.from,to:sourcePeriod.to})

@@ -14,8 +14,8 @@ afterEach(async()=>{if(root)await act(async()=>root!.unmount());root=undefined;v
 it('hydrates streamed account content before translating server-rendered headings and amounts',async()=>{
  let delayed=false,resolve!:()=>void;
  const ready=new Promise<void>(done=>{resolve=done});
- // RSC sends the rendered host tree, not the server-only header function, to the client boundary.
- const header=DashboardPageHeader({kicker:'ME Media · Everflow Monitor',title:'Gesamter Account',description:'Alle Offers, Affiliates, Smartlinks und Direkt-Traffic auf einen Blick.',status:'Synchronisierung läuft',tone:'neutral',icon:'monitor'});
+ // The shared header now owns its locale inside the delayed client boundary.
+ const header=<DashboardPageHeader kicker="ME Media · Everflow Monitor" title="Gesamter Account" description="Alle Offers, Affiliates, Smartlinks und Direkt-Traffic auf einen Blick." status="Synchronisierung läuft" tone="neutral" icon="monitor"/>;
  function Deferred(){if(delayed)use(ready);return <LocalizedMain className="dashboard">{header}<table><tbody><tr><td data-label="Profit"><b>56954,22 €</b></td></tr></tbody></table></LocalizedMain>}
  function Switch(){const{locale,setLocale}=useLanguage();return <button id="switch-locale" onClick={()=>setLocale(locale==='en'?'de':'en')}>Switch</button>}
  const tree=<LanguageProvider><Switch/><Suspense fallback={<p>Bitte warten</p>}><Deferred/></Suspense></LanguageProvider>;

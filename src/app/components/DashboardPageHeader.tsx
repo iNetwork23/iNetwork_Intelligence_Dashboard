@@ -1,4 +1,7 @@
+'use client';
 import type {ReactNode} from 'react';
+import {useHydratedLocale} from './LanguageProvider';
+import {localizeClientRoot} from './LocalizedLinkContent';
 
 type HeaderIcon="monitor"|"affiliate"|"smartlink"|"automation"|"cohorts"|"access"|"security";
 type HeaderStatusTone='live'|'neutral'|'protected'|'warning';
@@ -14,12 +17,13 @@ const icons:Record<HeaderIcon,ReactNode>={
 };
 
 export default function DashboardPageHeader({kicker,title,description,status,icon,tone='neutral'}:{kicker:string;title:string;description:string;status?:string;icon:HeaderIcon;tone?:HeaderStatusTone}){
- return <header className="dashboardPageHeader">
+ const locale=useHydratedLocale();
+ return localizeClientRoot(<header className="dashboardPageHeader">
   <div className="dashboardPageIcon" aria-hidden="true"><svg viewBox="0 0 24 24">{icons[icon]}</svg></div>
   <div className="dashboardPageCopy">
    <div className="dashboardPageKicker">{kicker}</div>
    <div className="dashboardPageTitle"><h1>{title}</h1>{status&&<span className={`dashboardPageStatus ${tone}`}><i/>{status}</span>}</div>
    <p className="dashboardPageDescription">{description}</p>
   </div>
- </header>
+ </header>,locale)
 }
