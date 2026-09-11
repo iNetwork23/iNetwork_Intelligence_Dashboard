@@ -1,5 +1,10 @@
 // Generated central UI dictionary; German is the canonical source language.
 export const translations = {
+  "Source, Sub1, ADV1 oder ADV2 suchen": "Search Source, Sub1, ADV1 or ADV2",
+  "Source oder Sub1 in der Maßnahmenliste suchen": "Search Source or Sub1 in the action list",
+  "ADV1 oder ADV2 suchen": "Search ADV1 or ADV2",
+  "Source oder Sub1 suchen": "Search Source or Sub1",
+  "Quellensuche zurücksetzen": "Reset source search",
   "← Anderen Smartlink auswählen": "← Choose another smartlink",
   "Quellenanalyse": "Source analysis",
   "Datenabdeckung Quellenanalyse:": "Source analysis coverage:",
