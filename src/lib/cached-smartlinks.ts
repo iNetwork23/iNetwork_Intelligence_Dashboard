@@ -5,7 +5,7 @@ import {buildSmartlinkInsight,type SmartlinkReportRow} from './smartlink';
 import{attachSmartlinkSourceActivity,attachSmartlinkSourceBreakdowns,buildSelectedRangeAttribution,filterSmartlinkSourceFactsAfterDay,groupSmartlinkSources,summarizeSmartlinkRows,type SmartlinkSourceFact}from'./smartlink-transparency';
 import {loadCampaignShapesFromCache} from './campaign-snapshots';
 import{resolveActivityCoverage,resolveSnapshotFreshness}from'./snapshot-generation';
-import{activityMemoFingerprint,isValidActivityMemo,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotCoverage,loadSourceSnapshotFreshness}from'./cached-evaluations';
+import{activityMemoFingerprint,isValidActivityMemo,loadAffiliateSourceRowsRangeFromCache,loadSourceSnapshotCoverage,loadSourceSnapshotFreshness,visitAffiliateSourceRowsRangeFromCache}from'./cached-evaluations';
 import{availableSourceSnapshotDays}from'./affiliate-source-cache';
 import{resolveSourceSnapshotCoverage,restrictSourceSnapshotCoverage}from'./affiliate-source-cache';
 import{buildSelectedRevenueOrigins,smartlinkEventCoverageComplete,type RevenueOriginFact}from'./smartlink-revenue-origin';
@@ -31,30 +31,35 @@ function sourceFact(row:SmartlinkReportRow):SmartlinkSourceFact{const mode=dimId
 export async function loadSmartlinkInsightFromCache(campaignId:number,now=new Date()){const[shapes,rows]=await Promise.all([loadCampaignShapesFromCache([campaignId]),metrics([campaignId],now)]);if(!shapes[0])throw new Error(`Campaign #${campaignId}: synchronisierte Metadaten fehlen`);return buildSmartlinkInsight(shapes[0],rows.base,rows.events,now)}
 
 type SmartlinkActivityEntry={campaignId:string;fact:SmartlinkSourceFact;lastLeadDate:string|null};
-function buildSmartlinkActivityEntries(rows:SmartlinkReportRow[]):SmartlinkActivityEntry[]{
- const map=new Map<string,SmartlinkActivityEntry>();
+function addSmartlinkActivityEntries(map:Map<string,SmartlinkActivityEntry>,rows:SmartlinkReportRow[],campaigns:ReadonlySet<string>|undefined){
  for(const row of rows){
-  const campaignId=dimId(row,'campaign'),fact=sourceFact(row),
+  const campaignId=dimId(row,'campaign');
+  if(campaigns&&!campaigns.has(campaignId))continue;
+  const fact=sourceFact(row),
    key=[campaignId,fact.offer_url_id,fact.raw?.traffic_mode||'',fact.source_id,fact.sub_source,fact.raw?.adv1||'',fact.raw?.adv2||''].join('\u0000'),
    day=String(fact.metric_date||''),current=map.get(key)||{campaignId,fact:{...fact,metric_date:'',clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0},lastLeadDate:null};
   if(Number(fact.sois)>0&&/^\d{4}-\d{2}-\d{2}$/.test(day)&&(!current.lastLeadDate||day>current.lastLeadDate))current.lastLeadDate=day;
   map.set(key,current);
  }
- return[...map.values()];
 }
 const entryToFact=(entry:SmartlinkActivityEntry):SmartlinkSourceFact=>({...entry.fact,metric_date:entry.lastLeadDate||'',sois:entry.lastLeadDate?1:0});
 /** Tupel: [campaignId,offer_url_id,traffic_mode,source_id,sub_source,adv1,adv2,lastLeadDate] */
 type SmartlinkMemoTuple=[string,string,string,string,string,string,string,string|null];
 const encodeSmartlinkEntries=(entries:SmartlinkActivityEntry[]):SmartlinkMemoTuple[]=>entries.map(e=>[e.campaignId,e.fact.offer_url_id,String(e.fact.raw?.traffic_mode||'tracked'),e.fact.source_id,e.fact.sub_source,String(e.fact.raw?.adv1||''),String(e.fact.raw?.adv2||''),e.lastLeadDate]);
 const decodeSmartlinkEntries=(tuples:unknown[]):SmartlinkActivityEntry[]=>(tuples as SmartlinkMemoTuple[]).map(([campaignId,url,mode,source,sub,adv1,adv2,lastLeadDate])=>({campaignId,lastLeadDate,fact:{metric_date:'',offer_url_id:url,offer_id:'',offer_name:'',source_id:source,sub_source:sub,clicks:0,sois:0,first_sales:0,rebills:0,coin_spend:0,payout:0,revenue:0,profit:0,raw:{traffic_mode:mode==='api'?'api':'tracked',adv1,adv2}}}));
-async function loadSmartlinkActivityEntries(affiliateId:string,range:{from:string;to:string}):Promise<SmartlinkActivityEntry[]>{
+export async function loadSmartlinkActivityEntries(affiliateId:string,range:{from:string;to:string},campaignIds?:number[]):Promise<SmartlinkActivityEntry[]>{
  const markerQuery=await getSupabaseAdmin().from('sync_state').select('value').gte('key',`source_day_generation:${range.from}`).lte('key',`source_day_generation:${range.to}`).order('key');
  if(markerQuery.error)throw new Error(`Supabase smartlink activity markers: ${markerQuery.error.message}`);
  const markers=(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}});
- const available=availableSourceSnapshotDays(range,markers,{minimumVersion:5}),fingerprint=activityMemoFingerprint(available),memoKey=`smartlink_activity_memo:berlin-v5:${affiliateId}:${range.from}:${range.to}`;
+ const ids=campaignIds===undefined?undefined:Array.from(new Set(campaignIds)).sort((a,b)=>a-b).map(String),campaigns=ids?new Set(ids):undefined;
+ const available=availableSourceSnapshotDays(range,markers,{minimumVersion:5}),fingerprint=activityMemoFingerprint(available),memoKey=`smartlink_activity_memo:berlin-v6:${affiliateId}:${ids?.join(',')??'all'}:${range.from}:${range.to}`;
  const memo=await getSupabaseAdmin().from('sync_state').select('value').eq('key',memoKey).maybeSingle();
  if(!memo.error&&isValidActivityMemo(memo.data?.value,fingerprint))return decodeSmartlinkEntries(memo.data!.value.entries);
- const entries=buildSmartlinkActivityEntries(await loadAffiliateSourceRowsRangeFromCache(range,affiliateId));
+ // Fold each bounded snapshot response immediately; retaining the expanded
+ // annual history caused the native Campaign drilldown to exhaust its heap.
+ const reduced=new Map<string,SmartlinkActivityEntry>();
+ await visitAffiliateSourceRowsRangeFromCache(range,affiliateId,rows=>addSmartlinkActivityEntries(reduced,rows,campaigns));
+ const entries=[...reduced.values()];
  const write=await getSupabaseAdmin().from('sync_state').upsert({key:memoKey,value:{fingerprint,entries:encodeSmartlinkEntries(entries)}},{onConflict:'key'});
  if(write.error)console.warn('Smartlink activity memo write failed',write.error.message);
  return entries;
@@ -64,7 +69,7 @@ export async function loadAffiliateSmartlinkInsightsFromCache(affiliateId:string
  const[shapes,rows,selectedRows,originResult,sourceConversions]=await Promise.all([loadCampaignShapesFromCache(ids),metrics(ids,now,affiliateId),metricRange(ids,range.from,range.to,affiliateId),conversionRevenueOrigins(ids,range.from,range.to,affiliateId).then(facts=>({facts,complete:true as const})).catch(error=>{console.warn('Affiliate smartlink revenue origin enrichment unavailable',error);return{facts:[] as Array<RevenueOriginFact&{campaignId:string}>,complete:false as const}}),includeSources?canonicalSourceConversions(ids,sourceRange.from,sourceRange.to,affiliateId).catch(error=>{console.warn('Affiliate canonical source conversion enrichment unavailable',error);return[]}):Promise.resolve([])]);
  let sourceRows:Awaited<ReturnType<typeof loadAffiliateSourceRowsRangeFromCache>>=[],activityEntries:SmartlinkActivityEntry[]=[],sourceCoverage=resolveSourceSnapshotCoverage(sourceRange,[],{minimumVersion:5}),activityFreshness=resolveSnapshotFreshness(activityRange.from,activityRange.to,[]);
  if(includeSources){
-  const[sourceResult,activityResult,sourceCoverageResult,freshnessResult]=await Promise.allSettled([loadAffiliateSourceRowsRangeFromCache(sourceRange,affiliateId),loadSmartlinkActivityEntries(affiliateId,activityRange),loadSourceSnapshotCoverage(sourceRange),loadSourceSnapshotFreshness(activityRange)]);
+  const[sourceResult,activityResult,sourceCoverageResult,freshnessResult]=await Promise.allSettled([loadAffiliateSourceRowsRangeFromCache(sourceRange,affiliateId),loadSmartlinkActivityEntries(affiliateId,activityRange,ids),loadSourceSnapshotCoverage(sourceRange),loadSourceSnapshotFreshness(activityRange)]);
   if(sourceResult.status==='rejected')console.warn('Affiliate smartlink source enrichment unavailable',sourceResult.reason);
   if(activityResult.status==='rejected')console.warn('Affiliate smartlink activity enrichment unavailable',activityResult.reason);
   if(freshnessResult.status==='rejected')console.warn('Affiliate smartlink freshness enrichment unavailable',freshnessResult.reason);

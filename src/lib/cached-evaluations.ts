@@ -31,7 +31,7 @@ export async function loadAffiliateSourceRowsRangeFromCache(range:{from:string;t
   return rows;
 }
 /** Consume immutable daily snapshots without retaining expanded annual history. */
-async function visitAffiliateSourceRowsRangeFromCache(range:{from:string;to:string},affiliateId:string,visit:(rows:ReportRow[])=>void,options:{batchSize?:number;directOnly?:boolean}={}){
+export async function visitAffiliateSourceRowsRangeFromCache(range:{from:string;to:string},affiliateId:string,visit:(rows:ReportRow[])=>void,options:{batchSize?:number;directOnly?:boolean}={}){
   const markerPrefix='source_day_generation:',markerQuery=await getSupabaseAdmin().from('sync_state').select('key,value').gte('key',`${markerPrefix}${range.from}`).lte('key',`${markerPrefix}${range.to}`).order('key');
   if(markerQuery.error)throw new Error(`Supabase source generations: ${markerQuery.error.message}`);
   const available=availableSourceSnapshotDays(range,(markerQuery.data||[]).map(item=>{const value=item.value as{version?:number;timezoneId?:number;date?:string;generation?:string};return{version:Number(value.version||0),timezoneId:value.timezoneId,date:value.date||'',generation:value.generation||''}}),{minimumVersion:5}),keys=available.map(marker=>`source_day:${marker.date}:${marker.generation}:${affiliateId}`);
