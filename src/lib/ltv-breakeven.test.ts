@@ -1,6 +1,7 @@
 import{describe,expect,it}from'vitest';
 import{breakEvenSummary,buildLtvCurve,cohortMature,entityRates,findBreakEven,LTV_WINDOWS,ltvBreakevenHref,ltvSparklinePoints,type LtvCurve}from'./ltv-breakeven';
 import type{LtvCohort}from'./cohorts';
+import{localizeDisplayText,translateText}from'./i18n';
 
 const NOW=new Date('2026-09-04T10:00:00Z');
 const cohort=(month:string,affiliate:string,registrations:number,revenue:[number,number,number,number,number],extra:Partial<LtvCohort>={}):LtvCohort=>({registration_month:month,affiliate_id:affiliate,offer_id:'o1',campaign_id:'0',source_id:'s',sub_source:'',registrations,revenue_30d:revenue[0],revenue_60d:revenue[1],revenue_90d:revenue[2],revenue_180d:revenue[3],revenue_365d:revenue[4],...extra});
@@ -80,6 +81,21 @@ describe('Break-even',()=>{
   expect(breakEvenSummary(findBreakEven(curve([0.8,0.9,1,1.1,1.15]),null),euro)).toBe('Break-even nicht berechenbar · CPL ohne SOIs im Zeitraum');
   expect(findBreakEven(curve([null,null,null,null,null],0),1.2)).toMatchObject({status:'no_data'});
   expect(breakEvenSummary(findBreakEven(curve([null,null,null,null,null],0),1.2),euro)).toBe('Break-even nicht berechenbar · keine reifen Kohorten');
+ });
+ it('preserves the financial result and missing-data distinctions when switching languages',()=>{
+  const cases:[LtvCurve,number|null,string][]=[
+   [curve([0.8,1.1,1.35,1.6,1.9]),1.2,'Break-even after 90 days · CPL €1.20 · LTV 90 days €1.35'],
+   [curve([0.8,0.9,1,1.1,1.15]),1.2,'Break-even not reached · CPL €1.20 · LTV 365 days €1.15'],
+   [curve([0.8,0.9,1,null,null]),1.2,'Break-even pending · CPL €1.20 · LTV 90 days €1.00 · windows from 180 days are not mature yet'],
+   [curve([0.8,0.9,1,1.1,1.15]),null,'Break-even cannot be calculated · no SOIs for CPL in this period'],
+   [curve([null,null,null,null,null],0),1.2,'Break-even cannot be calculated · no mature cohorts'],
+  ];
+  for(const [input,cpl,expected]of cases){
+   const german=breakEvenSummary(findBreakEven(input,cpl),euro);
+   const english=localizeDisplayText(translateText(german,'en'),'en');
+   expect(english).toBe(expected);
+   expect(localizeDisplayText(translateText(english,'de'),'de')).toBe(german);
+  }
  });
 });
 
