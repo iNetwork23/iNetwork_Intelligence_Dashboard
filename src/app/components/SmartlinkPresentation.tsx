@@ -13,6 +13,7 @@ import{buildCampaignSourceRows,type CampaignSourceRow}from'../../lib/smartlink-s
 import{cvrTone,signTone,type Volume}from'../../lib/verdict-vocabulary';
 import{toneClass}from'../../lib/verdict-trust';
 import{useHydratedLocale}from'./LanguageProvider';
+import{localizeClientRoot}from'./LocalizedLinkContent';
 import{localizeDisplayText,translateText}from'../../lib/i18n';
 
 /** Vorzeichenfarbe nur bei reifer Evidenz (D15): Volumen der Zeile/Gruppe entscheidet, ob ein Vorzeichen eine Farbe bekommt. */
@@ -31,7 +32,8 @@ const statusActionLabel:{[K in SlotRecommendation['action']]:string}={stop:'Stop
 type Windows={traffic:string;economics:string;maturity:string;source?:string};
 
 export function KpiValue({label,value,detail,scope,size='m',tone='neutral'}:{label:string;value:string;detail?:string;scope?:string;size?:'l'|'m'|'s';tone?:'positive'|'negative'|'neutral'}){
- return <div className={`sharedKpi size-${size} tone-${tone}`}><span>{label}</span><strong>{value}</strong>{detail&&<small>{detail}</small>}{scope&&<em>{scope}</em>}</div>;
+ const locale=useHydratedLocale();
+ return localizeClientRoot(<div className={`sharedKpi size-${size} tone-${tone}`}><span>{label}</span><strong>{value}</strong>{detail&&<small>{detail}</small>}{scope&&<em>{scope}</em>}</div>,locale);
 }
 
 export function TimeWindowSection({title,subtitle,children,className=''}:{title:string;subtitle?:string;children:ReactNode;className?:string}){
