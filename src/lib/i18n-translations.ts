@@ -1500,6 +1500,7 @@ export const translations = {
   "Noch keine belastbare Stop- oder Scale-Evidenz.": "There is not enough evidence to stop or scale yet.",
   "Firmen suchen": "Search companies",
   "Firma oder Affiliate-ID": "Company or affiliate ID",
+  "Firma / Affiliate": "Company / Affiliate",
   "Keine Firma gefunden": "No company found",
   "Suchbegriff oder Affiliate-ID prüfen.": "Check the search term or affiliate ID.",
   "Keine aktiven Firmen": "No active companies",
