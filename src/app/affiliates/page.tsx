@@ -514,6 +514,8 @@ export default async function AffiliateOptimizerPage({
       );
   const dataStatus = await getDataStatus(),
     header = headerStatus(dataStatus);
+  const StopCard = stopVariants.length ? "a" : "article";
+  const ScaleCard = scaleVariants.length ? "a" : "article";
   return (
     <main className="dashboard affiliateOptimizer affiliateDecisionDesk">
       {finance || canManageSources ? (
@@ -806,21 +808,21 @@ export default async function AffiliateOptimizerPage({
             )}
           </nav>
           <section className="profitCommand">
-            <a className="danger" href="#next-actions">
+            <StopCard className="danger" href={stopVariants.length ? "#next-actions" : undefined}>
               <span>Direkt handeln</span>
               <strong>{stopVariants.length}</strong>
               <small>Direktpfade zum Prüfen</small>
-            </a>
+            </StopCard>
             <article>
               <span>Erkennbares Sparpotenzial</span>
               <strong className={finance ? "up" : ""}>{money(saving)}</strong>
               <small>{finance ? "negativer Profit im gewählten Zeitraum" : "nur mit Finanzrecht"}</small>
             </article>
-            <a href="#next-actions">
+            <ScaleCard href={scaleVariants.length ? "#next-actions" : undefined}>
               <span>Skalierungskandidaten</span>
               <strong>{scaleVariants.length}</strong>
               <small>mit belastbarer Sales-Evidenz</small>
-            </a>
+            </ScaleCard>
             <article>
               <span>Profitstärkster Direktpfad</span>
               <strong
