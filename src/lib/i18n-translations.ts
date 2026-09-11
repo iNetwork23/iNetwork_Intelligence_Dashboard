@@ -590,6 +590,7 @@ export const translations = {
   "403 · Scope nicht sicher auswertbar": "403 · Scope cannot be safely evaluated",
   "REPORTING-CACHE NICHT VERFÜGBAR": "REPORTING CACHE NOT AVAILABLE",
   "Affiliate Optimizer konnte nicht aus Supabase geladen werden": "Affiliate Optimizer could not be loaded from Supabase",
+  "Affiliate Optimizer konnte nicht geladen werden": "Affiliate Optimizer could not be loaded",
   "ME Media · Partnerbereich": "ME Media · Partner area",
   "Freigegebene Partner": "Released partners",
   "Operative Übersicht ohne interne Umsatz-, Kosten- oder Profitdaten.": "Operational overview without internal revenue, cost or profit data.",
