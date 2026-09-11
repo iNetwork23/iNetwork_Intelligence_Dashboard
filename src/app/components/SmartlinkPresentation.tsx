@@ -1,6 +1,6 @@
 'use client';
 
-import {Fragment,useId,useMemo,useState,type KeyboardEvent,type ReactNode} from 'react';
+import {Fragment,useCallback,useEffect,useId,useMemo,useRef,useState,type KeyboardEvent,type ReactNode} from 'react';
 import {groupSmartlinkSourcesByMain,latestLeadActivity,leadBadge,nextAnalysisTab,smartlinkInstanceKey,sortSmartlinkSlots,sortSourceBreakdownRows,type AnalysisTab,type SmartlinkSort,type SmartlinkSourceGroup,type SortDirection,type SourceMetricSort} from '../../lib/smartlink-presentation';
 import {rankSourceMatches} from '../../lib/source-search';
 import type {SlotRecommendation,SmartSlot,SmartlinkSourceBreakdown,SmartlinkSourceCoverage} from '../../lib/smartlink';
@@ -205,7 +205,7 @@ function LandingpageDetail({slot,recommendation,windows,affiliateId,affiliateNam
   <section className="lpDetailTabPanel" role="tabpanel" id={overviewPanelId} aria-labelledby={overviewTabId} hidden={mode!=='overview'}>
    <div className="primaryKpis"><KpiValue label="LP-Profit" value={euro(slot.metrics14.profit)} detail="Anderer Zeitraum als der Campaign-Profit · nicht addieren" scope={windows.maturity} size="l" tone={signTone(slot.metrics14.profit,volumeOf(slot.metrics14))}/><KpiValue label="Anmelderate (CVR)" value={pct(slot.metrics24.cvr)} detail={`${num(slot.metrics24.sois)} SOIs aus ${num(slot.metrics24.clicks)} Klicks`} scope={windows.traffic} size="l" tone={cvrTone(slot.metrics24.clicks,slot.metrics24.cvr,cvrBenchmark)}/></div>
    <section className="lpEvidenceStrip"><header><b>LP #{slot.id} · Sales und Nachzahlungen</b><span>{windows.maturity}</span></header><div><KpiValue label="SOIs" value={num(slot.metrics14.sois)}/><KpiValue label="First-Sales" value={num(slot.metrics14.firstSales)}/><KpiValue label="Anteil SOI → First-Sale" value={slot.metrics14.sois?pct(slot.metrics14.firstSaleRate):'n/a'} detail={`${num(slot.metrics14.firstSales)} First-Sales aus ${num(slot.metrics14.sois)} SOIs`}/><KpiValue label="Rebills" value={num(slot.metrics14.rebills)} detail="Nachzahlungen bestehender Kunden"/><KpiValue label="Coin-Spend-Events" value={num(slot.metrics14.coinSpend)} detail="Eventanzahl, keine eindeutigen Kunden"/></div></section>
-   <section className="lpEconomics"><header><b>LP #{slot.id} · Kosten, Umsatz und Prognose</b><span>Umsatz – SOI-Vergütung = Profit</span></header><div><KpiValue label="Profit je Klick" value={euro(slot.metrics14.profitEpc)} size="s" tone={signTone(slot.metrics14.profitEpc,volumeOf(slot.metrics14))}/><KpiValue label={`Umsatz · ${windows.economics}`} value={euro(slot.metrics72.revenue)} size="s"/><KpiValue label={`Payout · ${windows.economics}`} value={euro(slot.metrics72.payout)} size="s"/><KpiValue label="Geschätzte Zeit bis 50 SOIs" value={slot.hoursTo50Sois===null?'Noch keine Prognose':`${slot.hoursTo50Sois} Std.`} size="s"/></div></section>
+   <section className="lpEconomics"><header><b>LP #{slot.id} · Kosten, Umsatz und Prognose</b><span>Umsatz – SOI-Vergütung = Profit</span></header><div><KpiValue label="Profit je Klick" value={euro(slot.metrics14.profitEpc)} size="s" tone={signTone(slot.metrics14.profitEpc,volumeOf(slot.metrics14))}/><KpiValue label={`Umsatz · ${windows.economics}`} value={euro(slot.metrics72.revenue)} size="s"/><KpiValue label={`Payout · ${windows.economics}`} value={euro(slot.metrics72.payout)} size="s"/><KpiValue label="Geschätzte Zeit bis 50 SOIs" value={slot.hoursTo50Sois===null?'Noch keine Prognose':`${num(slot.hoursTo50Sois)} Std.`} size="s"/></div></section>
   </section>
   <section className="lpDetailTabPanel" role="tabpanel" id={sourcesPanelId} aria-labelledby={sourcesTabId} hidden={mode!=='sources'}><LandingpageSourceBreakdown embedded rows={slot.sourceBreakdown||[]} coverage={slot.sourceCoverage} scope={windows.source||windows.maturity} totalSois={slot.metrics14.sois} landingpageId={slot.id} affiliateId={affiliateId} affiliateName={affiliateName} offerId={slot.offerId} offerName={`Offer #${slot.offerId}`} campaignId={campaignId} canManage={canManage}/></section>
  </article>;
@@ -233,13 +233,35 @@ export function SmartlinkRotationCards({slots,recommendations,rotationLabel,wind
  const workspaceId=useId(),landingpagesTabId=`${workspaceId}-landingpages-tab`,sourcesTabId=`${workspaceId}-sources-tab`,landingpagesPanelId=`${workspaceId}-landingpages-panel`,sourcesPanelId=`${workspaceId}-sources-panel`;
  const onWorkspaceKeyDown=(event:KeyboardEvent<HTMLButtonElement>)=>{const next=nextAnalysisTab(workspace==='landingpages'?'overview':'sources',event.key);if(!next)return;event.preventDefault();setWorkspace(next==='overview'?'landingpages':'sources');document.getElementById(next==='overview'?landingpagesTabId:sourcesTabId)?.focus()};
  const [selectedId,setSelectedId]=useState(slots[0]?.id||'');
+ const scrollFrame=useRef<number|null>(null);
+ const scrollToSelection=useCallback((id:string)=>{
+  if(scrollFrame.current!==null)cancelAnimationFrame(scrollFrame.current);
+  const target=`lp-detail-${smartlinkInstanceKey(campaignId,id)}`;
+  scrollFrame.current=requestAnimationFrame(()=>{
+   if(window.location.hash===`#${target}`)document.getElementById(target)?.scrollIntoView({block:'start'});
+  });
+ },[campaignId]);
+ useEffect(()=>{
+  const restore=()=>{
+   const hash=window.location.hash,slot=slots.find(value=>hash===`#lp-detail-${smartlinkInstanceKey(campaignId,value.id)}`);
+   if(slot){setSelectedId(slot.id);setWorkspace('landingpages');scrollToSelection(slot.id)}
+   else if(!hash.startsWith('#lp-detail-')||hash.startsWith(`#lp-detail-${smartlinkInstanceKey(campaignId,'')}`))setSelectedId(slots[0]?.id||'');
+  };
+  restore();window.addEventListener('hashchange',restore);window.addEventListener('popstate',restore);
+  return()=>{window.removeEventListener('hashchange',restore);window.removeEventListener('popstate',restore);if(scrollFrame.current!==null)cancelAnimationFrame(scrollFrame.current)};
+ },[campaignId,slots,scrollToSelection]);
  const sorted=useMemo(()=>sortSmartlinkSlots(slots,sort),[slots,sort]);
  const cvrBenchmark=useMemo(()=>campaignCvrBenchmark(slots),[slots]);
  const byId=useMemo(()=>new Map(recommendations.map(x=>[x.slotId,x])),[recommendations]);
  const sourceRows=useMemo(()=>buildCampaignSourceRows(slots),[slots]);
  const [selectedSourceKey,setSelectedSourceKey]=useState(sourceRows[0]?.key||'');
  const selectedSlot=slots.find(slot=>slot.id===selectedId)||sorted[0];
- const select=(id:string)=>{setSelectedId(id);if(typeof document!=='undefined')requestAnimationFrame(()=>document.getElementById(`lp-detail-${smartlinkInstanceKey(campaignId,id)}`)?.scrollIntoView({behavior:'smooth',block:'start'}))};
+ const select=(id:string)=>{
+  if(!slots.some(slot=>slot.id===id))return;
+  const hash=`#lp-detail-${smartlinkInstanceKey(campaignId,id)}`;
+  if(window.location.hash!==hash)history.pushState({...history.state},'',`${window.location.pathname}${window.location.search}${hash}`);
+  setSelectedId(id);setWorkspace('landingpages');scrollToSelection(id);
+ };
  return <section className="sharedRotation">
   <div className="campaignWorkspaceTabs" role="tablist" aria-label="Campaign-Analyse"><button type="button" role="tab" id={landingpagesTabId} aria-selected={workspace==='landingpages'} aria-controls={landingpagesPanelId} tabIndex={workspace==='landingpages'?0:-1} onKeyDown={onWorkspaceKeyDown} onClick={()=>setWorkspace('landingpages')}>Landingpages</button><button type="button" role="tab" id={sourcesTabId} aria-selected={workspace==='sources'} aria-controls={sourcesPanelId} tabIndex={workspace==='sources'?0:-1} onKeyDown={onWorkspaceKeyDown} onClick={()=>setWorkspace('sources')}>Sources über Landingpages <small>{sourceRows.length}</small></button></div>
   <div id={landingpagesPanelId} role="tabpanel" aria-labelledby={landingpagesTabId} hidden={workspace!=='landingpages'}>
